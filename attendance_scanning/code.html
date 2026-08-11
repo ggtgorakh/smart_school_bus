@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Student Attendance Scanner</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700&amp;family=Inter:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "outline-variant": "#c3c6d2",
+                        "error": "#ba1a1a",
+                        "safety-blue": "#1A4F95",
+                        "on-secondary-fixed-variant": "#753400",
+                        "tertiary-container": "#00595f",
+                        "error-container": "#ffdad6",
+                        "tertiary": "#004044",
+                        "secondary-container": "#fb7800",
+                        "on-tertiary-container": "#58d3de",
+                        "inverse-on-surface": "#eef1f3",
+                        "on-primary-fixed-variant": "#08458b",
+                        "on-primary-container": "#a3c3ff",
+                        "outline": "#737782",
+                        "primary-container": "#1a4f95",
+                        "on-secondary-container": "#592600",
+                        "on-primary-fixed": "#001b3e",
+                        "surface-container-low": "#f1f4f6",
+                        "alert-orange": "#FF7A00",
+                        "primary": "#003874",
+                        "surface-dim": "#d7dadc",
+                        "surface-tint": "#2e5ea5",
+                        "on-secondary-fixed": "#321200",
+                        "success-green": "#2D8A29",
+                        "on-secondary": "#ffffff",
+                        "surface-variant": "#e0e3e5",
+                        "secondary": "#994700",
+                        "surface-container-highest": "#e0e3e5",
+                        "background": "#f7fafc",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed": "#002022",
+                        "on-surface": "#181c1e",
+                        "surface": "#f7fafc",
+                        "inverse-primary": "#aac7ff",
+                        "secondary-fixed-dim": "#ffb68b",
+                        "on-error": "#ffffff",
+                        "surface-bright": "#f7fafc",
+                        "surface-container-high": "#e5e9eb",
+                        "on-surface-variant": "#424751",
+                        "surface-container": "#ebeef0",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed-dim": "#5dd8e2",
+                        "secondary-fixed": "#ffdbc8",
+                        "on-error-container": "#93000a",
+                        "primary-fixed": "#d6e3ff",
+                        "tertiary-fixed": "#7df4ff",
+                        "on-background": "#181c1e",
+                        "primary-fixed-dim": "#aac7ff",
+                        "inverse-surface": "#2d3133",
+                        "surface-gray": "#F4F7F9",
+                        "text-main": "#121C2D",
+                        "on-tertiary-fixed-variant": "#004f54"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "margin-mobile": "16px",
+                        "base": "8px",
+                        "card-padding": "16px",
+                        "gutter-mobile": "12px",
+                        "stack-gap": "12px"
+                    },
+                    fontFamily: {
+                        "headline-sm": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "headline-lg-mobile": ["Manrope"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-lg": ["Manrope"]
+                    },
+                    fontSize: {
+                        "headline-sm": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["22px", { "lineHeight": "28px", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        };
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .scanner-overlay {
+            background: linear-gradient(to bottom, rgba(26, 79, 149, 0.1) 0%, rgba(26, 79, 149, 0) 50%, rgba(26, 79, 149, 0.1) 100%);
+        }
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #FF7A00;
+            box-shadow: 0 0 8px #FF7A00;
+            animation: scan 2s linear infinite;
+        }
+        @keyframes scan {
+            0% { top: 0; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-surface-gray text-on-surface font-body-md antialiased min-h-screen flex flex-col pb-24 md:pb-0">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-surface dark:bg-on-surface shadow-sm z-40">
+<div class="flex items-center justify-between px-margin-mobile h-16 w-full">
+<div class="flex items-center gap-3">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="A small, professional headshot of a friendly school bus driver wearing a safety vest, bright natural lighting, clear and sharp focus. Set against a clean white background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyPg1F1YIhJ9ZXSQvCCY3EVaG0JBhagR6FYVRSnWC118eWbUDFM8IxgtqoyAmi3MDwFBq0sLkIEIOhlLVEgeILysLm5s2hIVmeYmo5D4sqGUuZ8q85t0VA9zsqmbxc8xcBhC5A_aDjiTjiMcDPN07UuUFquYWLB4rOHd_3WtEWI3zkVaRPUWI0olBhD196Q7XaKLVh22vAycBM1Z-ph5TrisModVsmSAhxN044QiZIKK8TuRCr5wtWFg"/>
+<span class="font-headline-md text-headline-md font-bold text-safety-blue dark:text-primary-fixed">SchoolBus Safe</span>
+</div>
+<button class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-container dark:hover:bg-surface-container-highest transition-colors active:scale-95 duration-100">
+<span class="material-symbols-outlined text-primary dark:text-primary-fixed">notifications</span>
+</button>
+</div>
+</header>
+<main class="flex-1 w-full max-w-7xl mx-auto md:px-margin-mobile pt-4 md:pt-8 flex flex-col md:flex-row gap-6">
+<!-- Scanner Area -->
+<section class="w-full md:w-1/2 flex flex-col px-margin-mobile md:px-0">
+<div class="bg-surface-container-lowest rounded-xl shadow-lg p-4 flex flex-col h-full min-h-[400px] relative overflow-hidden">
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-headline-sm text-headline-sm text-primary">Active Scanner</h2>
+<span class="bg-success-green/10 text-success-green px-3 py-1 rounded-full font-label-md text-label-md flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">wifi</span> Online
+                    </span>
+</div>
+<div class="flex-1 relative rounded-lg overflow-hidden bg-surface-variant flex items-center justify-center">
+<!-- Simulated Camera Feed -->
+<div class="absolute inset-0 bg-cover bg-center opacity-40" data-alt="A slightly blurred view from a front-facing camera looking out of a school bus door towards a suburban sidewalk on a sunny morning. The image is framed as if seen through a digital scanner viewfinder." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBj-cF48V03RhWVCQXQFPD0cFenrFj0gTmIVgYqj-DhevPZWFFlXUQ3ad0ngECtpO8TquxDgBtERFQcaPaAzqVsGlX60-D4sItNg4DPkzivQl3BbF0cnhZsdGtbL7AVdNN2oMv9opYv3mWtJTymQtcRMeQv-nnGZbyq-dIu0mLAVTU9lcvRXQ0-GhWIHQMO_BcHObGrBlPAz7mtzdjCvrIgc9ws9Oo6sC7sE6DcJ0BqytmFvg7p17cl1w')"></div>
+<div class="absolute inset-0 scanner-overlay"></div>
+<!-- Scanner Reticle -->
+<div class="relative w-64 h-64 border-2 border-safety-blue/50 rounded-lg">
+<div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-safety-blue rounded-tl-lg"></div>
+<div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-safety-blue rounded-tr-lg"></div>
+<div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-safety-blue rounded-bl-lg"></div>
+<div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-safety-blue rounded-br-lg"></div>
+<div class="scan-line"></div>
+</div>
+<div class="absolute bottom-6 left-0 w-full flex justify-center">
+<p class="bg-surface-container-lowest/80 backdrop-blur-sm px-4 py-2 rounded-full font-label-md text-label-md text-on-surface">
+                            Ready to scan Student ID or Boarding Pass
+                        </p>
+</div>
+</div>
+<div class="mt-4 flex gap-4 justify-center">
+<button class="flex flex-col items-center gap-1 text-safety-blue p-2 rounded-lg hover:bg-primary-container/10 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-3xl">qr_code_scanner</span>
+<span class="font-label-md text-label-md">QR Mode</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant p-2 rounded-lg hover:bg-surface-variant active:scale-95 transition-all">
+<span class="material-symbols-outlined text-3xl">contactless</span>
+<span class="font-label-md text-label-md">RFID Mode</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Manifest Area -->
+<section class="w-full md:w-1/2 flex flex-col px-margin-mobile md:px-0">
+<div class="bg-surface-container-lowest rounded-xl shadow-lg p-4 flex flex-col h-full max-h-[calc(100vh-140px)]">
+<div class="flex justify-between items-center mb-6">
+<div>
+<h2 class="font-headline-sm text-headline-sm text-primary">Stop 3: Oak St &amp; Maple Ave</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">2 of 5 boarded</p>
+</div>
+<div class="w-12 h-12 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-headline-md text-headline-md">
+                        2/5
+                    </div>
+</div>
+<!-- Student List -->
+<div class="flex-1 overflow-y-auto pr-2 space-y-3">
+<!-- Boarded Student -->
+<div class="bg-surface flex items-center p-3 rounded-lg border-l-4 border-success-green shadow-sm">
+<img class="w-12 h-12 rounded-full object-cover mr-4" data-alt="A small, professional headshot of a smiling elementary school boy with short brown hair, wearing a blue t-shirt, bright natural lighting. Set against a clean white background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBckPDbggOmfCR6VhrG8fNsKIoztht-meIN_2sefdFmkad1xtLVL8jlf7QUES_pTWOuMXhkDAiAZKNAmWdkydRFbXQpBy3LZdjEUc5LqwrGf_mMpQ_HAKp-rZ1d4R0fwMgQGflxTow4JsL_nhtYGjxgFyml06TfzKv7BXaD7JRcWVZ9RFY-Y0r2KFMKoGWWJe_ZB6hkfuZ6hFp81BvpGR5ihHg09BL4Z2S1D2Mvck-hQAFJUv9gDcFzFQ"/>
+<div class="flex-1">
+<h3 class="font-headline-sm text-[16px] leading-[24px] font-semibold text-on-surface">Liam Johnson</h3>
+<p class="font-label-md text-label-md text-on-surface-variant">Grade 3 • Seat 4A</p>
+</div>
+<span class="material-symbols-outlined text-success-green text-3xl">check_circle</span>
+</div>
+<!-- Boarded Student -->
+<div class="bg-surface flex items-center p-3 rounded-lg border-l-4 border-success-green shadow-sm">
+<img class="w-12 h-12 rounded-full object-cover mr-4" data-alt="A small, professional headshot of an elementary school girl with braided hair and glasses, wearing a yellow sweater, bright natural lighting. Set against a clean white background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBbotSd_O-op9ADXUJt2NhdZm-4sidrblv-Yxo8MEYVax_XLLDGu5FBzwyobVjbBuyZeN7pytq_cL8M24NKfu0JF5pOb_bwP8-Oinjpd42Osze7p3vM93kkSh97iU7Woy5pAxHof5rOuOiTxpIAyCdsP9fxJ-6XAQrVwIUcHJsRHZmcy_1-jO1MNFkjayMCtlI4TD-rbG3L7sbIjEY_g5EzRiGfFJy52ZhGCc1-lRim6xbw_LQ09Vp1sQ"/>
+<div class="flex-1">
+<h3 class="font-headline-sm text-[16px] leading-[24px] font-semibold text-on-surface">Maya Patel</h3>
+<p class="font-label-md text-label-md text-on-surface-variant">Grade 4 • Seat 2B</p>
+</div>
+<span class="material-symbols-outlined text-success-green text-3xl">check_circle</span>
+</div>
+<!-- Pending Student -->
+<div class="bg-surface-container-low flex items-center p-3 rounded-lg border border-outline-variant">
+<div class="w-12 h-12 rounded-full bg-surface-variant flex items-center justify-center mr-4">
+<span class="material-symbols-outlined text-outline">person</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline-sm text-[16px] leading-[24px] font-semibold text-on-surface">Ethan Williams</h3>
+<p class="font-label-md text-label-md text-on-surface-variant">Grade 5 • Seat 8C</p>
+</div>
+<span class="bg-surface-variant text-on-surface-variant px-2 py-1 rounded-full font-label-md text-[10px]">Pending</span>
+</div>
+<!-- Pending Student -->
+<div class="bg-surface-container-low flex items-center p-3 rounded-lg border border-outline-variant">
+<div class="w-12 h-12 rounded-full bg-surface-variant flex items-center justify-center mr-4">
+<span class="material-symbols-outlined text-outline">person</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline-sm text-[16px] leading-[24px] font-semibold text-on-surface">Sophia Garcia</h3>
+<p class="font-label-md text-label-md text-on-surface-variant">Grade 2 • Seat 1A</p>
+</div>
+<span class="bg-surface-variant text-on-surface-variant px-2 py-1 rounded-full font-label-md text-[10px]">Pending</span>
+</div>
+<!-- Alert Student -->
+<div class="bg-error-container/20 flex items-center p-3 rounded-lg border-l-4 border-alert-orange shadow-sm">
+<div class="w-12 h-12 rounded-full bg-alert-orange/20 flex items-center justify-center mr-4">
+<span class="material-symbols-outlined text-alert-orange">person_alert</span>
+</div>
+<div class="flex-1">
+<h3 class="font-headline-sm text-[16px] leading-[24px] font-semibold text-on-surface">Jackson Davis</h3>
+<p class="font-label-md text-label-md text-on-surface-variant">Grade 3 • Seat 5D</p>
+</div>
+<button class="bg-alert-orange text-white px-3 py-1 rounded-full font-label-md text-label-md active:scale-95 transition-transform">Override</button>
+</div>
+</div>
+<!-- Action Button -->
+<div class="mt-4 pt-4 border-t border-outline-variant">
+<button class="w-full bg-safety-blue text-on-primary font-headline-sm text-headline-sm py-4 rounded-xl shadow-md hover:bg-primary active:scale-95 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+<span class="material-symbols-outlined">directions_bus</span>
+                        Confirm All Boarded
+                    </button>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar (Hidden on md and up) -->
+<nav class="fixed bottom-0 w-full z-50 md:hidden bg-surface-container-lowest dark:bg-on-surface border-t border-outline-variant dark:border-outline shadow-lg">
+<div class="flex justify-around items-center w-full h-20 px-2 pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest rounded-full active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]">distance</span>
+<span class="font-label-md text-label-md mt-1">Map</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">group</span>
+<span class="font-label-md text-label-md mt-1">Students</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest rounded-full active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]">directions_bus</span>
+<span class="font-label-md text-label-md mt-1">Fleet</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest rounded-full active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]">person</span>
+<span class="font-label-md text-label-md mt-1">Profile</span>
+</a>
+</div>
+</nav>
+</body></html>

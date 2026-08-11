@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fleet &amp; Route Management | SchoolBus Safe</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;family=Inter:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline-variant": "#c3c6d2",
+                      "error": "#ba1a1a",
+                      "safety-blue": "#1A4F95",
+                      "on-secondary-fixed-variant": "#753400",
+                      "tertiary-container": "#00595f",
+                      "error-container": "#ffdad6",
+                      "tertiary": "#004044",
+                      "secondary-container": "#fb7800",
+                      "on-tertiary-container": "#58d3de",
+                      "inverse-on-surface": "#eef1f3",
+                      "on-primary-fixed-variant": "#08458b",
+                      "on-primary-container": "#a3c3ff",
+                      "outline": "#737782",
+                      "primary-container": "#1a4f95",
+                      "on-secondary-container": "#592600",
+                      "on-primary-fixed": "#001b3e",
+                      "surface-container-low": "#f1f4f6",
+                      "alert-orange": "#FF7A00",
+                      "primary": "#003874",
+                      "surface-dim": "#d7dadc",
+                      "surface-tint": "#2e5ea5",
+                      "on-secondary-fixed": "#321200",
+                      "success-green": "#2D8A29",
+                      "on-secondary": "#ffffff",
+                      "surface-variant": "#e0e3e5",
+                      "secondary": "#994700",
+                      "surface-container-highest": "#e0e3e5",
+                      "background": "#f7fafc",
+                      "on-primary": "#ffffff",
+                      "on-tertiary-fixed": "#002022",
+                      "on-surface": "#181c1e",
+                      "surface": "#f7fafc",
+                      "inverse-primary": "#aac7ff",
+                      "secondary-fixed-dim": "#ffb68b",
+                      "on-error": "#ffffff",
+                      "surface-bright": "#f7fafc",
+                      "surface-container-high": "#e5e9eb",
+                      "on-surface-variant": "#424751",
+                      "surface-container": "#ebeef0",
+                      "surface-container-lowest": "#ffffff",
+                      "on-tertiary": "#ffffff",
+                      "tertiary-fixed-dim": "#5dd8e2",
+                      "secondary-fixed": "#ffdbc8",
+                      "on-error-container": "#93000a",
+                      "primary-fixed": "#d6e3ff",
+                      "tertiary-fixed": "#7df4ff",
+                      "on-background": "#181c1e",
+                      "primary-fixed-dim": "#aac7ff",
+                      "inverse-surface": "#2d3133",
+                      "surface-gray": "#F4F7F9",
+                      "text-main": "#121C2D",
+                      "on-tertiary-fixed-variant": "#004f54"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-mobile": "16px",
+                      "base": "8px",
+                      "card-padding": "16px",
+                      "gutter-mobile": "12px",
+                      "stack-gap": "12px"
+              },
+              "fontFamily": {
+                      "headline-sm": [
+                              "Manrope"
+                      ],
+                      "headline-md": [
+                              "Manrope"
+                      ],
+                      "headline-lg-mobile": [
+                              "Manrope"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Manrope"
+                      ]
+              },
+              "fontSize": {
+                      "headline-sm": [
+                              "18px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "22px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.02em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+            },
+          }
+        }
+      </script>
+</head>
+<body class="bg-surface-gray text-text-main font-body-md h-screen flex flex-col antialiased selection:bg-safety-blue selection:text-white">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky bg-surface dark:bg-on-surface shadow-sm z-40">
+<div class="flex items-center justify-between px-margin-mobile h-16 w-full">
+<div class="flex items-center gap-3">
+<img class="w-8 h-8 rounded-full object-cover shadow-sm ring-2 ring-white" data-alt="A small, professional avatar of a school administrator in a bright, modern corporate setting, exuding trust and efficiency." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJIgC7Bdo6INlVSpYmDcyhUbtFhknjqMHg8Wa-28Jvn-O5q5uhUZ7U8QS_4oQhvgMcF4z-RYGeXRQM2BCgABGOLkEwgsNu74q424OB7ySofVJTpNM9OQDCJ3Ua3TsJLXPIgUxKFBBagnDI9Pyr6coPf-P80P9ycVEP_vA8tWsGVmro1pyCgaIPDm7sqkMYvB7Z-PlIcypGID6I804Rug_H82jQcrjZukkx0mJmbo48vYxJsaVrq8ED8Q"/>
+<span class="font-headline-md text-headline-md font-bold text-safety-blue dark:text-primary-fixed">SchoolBus Safe</span>
+</div>
+<nav class="hidden md:flex gap-6">
+<a class="text-on-surface-variant dark:text-outline-variant hover:bg-surface-container dark:hover:bg-surface-container-highest transition-colors rounded-md px-3 py-2 flex items-center gap-2 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined text-[20px]">distance</span>
+                    Map
+                </a>
+<a class="text-on-surface-variant dark:text-outline-variant hover:bg-surface-container dark:hover:bg-surface-container-highest transition-colors rounded-md px-3 py-2 flex items-center gap-2 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined text-[20px]">group</span>
+                    Students
+                </a>
+<a class="text-primary dark:text-primary-fixed font-bold hover:bg-surface-container dark:hover:bg-surface-container-highest transition-colors rounded-md px-3 py-2 flex items-center gap-2 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined text-[20px] shadow-sm bg-primary-container text-on-primary-container rounded-full p-1">directions_bus</span>
+                    Fleet
+                </a>
+<a class="text-on-surface-variant dark:text-outline-variant hover:bg-surface-container dark:hover:bg-surface-container-highest transition-colors rounded-md px-3 py-2 flex items-center gap-2 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined text-[20px]">person</span>
+                    Profile
+                </a>
+</nav>
+<button class="active:scale-95 duration-100 hover:bg-surface-container dark:hover:bg-surface-container-highest transition-colors p-2 rounded-full text-primary dark:text-primary-fixed">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 overflow-y-auto px-margin-mobile py-6 md:px-8 max-w-7xl mx-auto w-full pb-28 md:pb-8">
+<!-- Header Section -->
+<div class="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-text-main mb-1">Fleet Overview</h1>
+<p class="text-on-surface-variant font-body-md text-body-md">Live monitoring of 42 active vehicles and routes.</p>
+</div>
+<div class="flex gap-3">
+<button class="bg-white border border-outline-variant text-primary font-label-md text-label-md px-4 py-2 rounded-lg shadow-sm hover:bg-surface-container-low transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                    Export Report
+                </button>
+<button class="bg-safety-blue text-white font-label-md text-label-md px-4 py-2 rounded-lg shadow-md hover:bg-primary transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                    Dispatch Bus
+                </button>
+</div>
+</div>
+<!-- KPI Grid -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-gutter-mobile md:gap-4 mb-8">
+<!-- Active Buses -->
+<div class="bg-white rounded-xl p-card-padding shadow-[0_4px_12px_rgba(26,79,149,0.06)] border border-surface-variant flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-primary-fixed rounded-lg text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">directions_bus</span>
+</div>
+<span class="bg-success-green/10 text-success-green font-label-md text-label-md px-2 py-1 rounded-full">On Time</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-headline-lg text-text-main">38</h3>
+<p class="text-on-surface-variant font-body-md text-body-md">Active Buses</p>
+</div>
+</div>
+<!-- Maintenance -->
+<div class="bg-white rounded-xl p-card-padding shadow-[0_4px_12px_rgba(26,79,149,0.06)] border border-surface-variant flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-error-container rounded-lg text-error">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">build</span>
+</div>
+<span class="bg-alert-orange/10 text-alert-orange font-label-md text-label-md px-2 py-1 rounded-full">2 Critical</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-headline-lg text-text-main">4</h3>
+<p class="text-on-surface-variant font-body-md text-body-md">In Maintenance</p>
+</div>
+</div>
+<!-- Route Completion -->
+<div class="bg-white rounded-xl p-card-padding shadow-[0_4px_12px_rgba(26,79,149,0.06)] border border-surface-variant flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-tertiary-fixed rounded-lg text-tertiary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">route</span>
+</div>
+<span class="text-tertiary font-label-md text-label-md">Morning Run</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-headline-lg text-text-main">76%</h3>
+<div class="w-full bg-surface-container h-2 rounded-full mt-2">
+<div class="bg-safety-blue h-2 rounded-full" style="width: 76%"></div>
+</div>
+</div>
+</div>
+<!-- Student Ridership -->
+<div class="bg-white rounded-xl p-card-padding shadow-[0_4px_12px_rgba(26,79,149,0.06)] border border-surface-variant flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<div class="p-2 bg-surface-container rounded-lg text-on-surface">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group</span>
+</div>
+<span class="text-success-green font-label-md text-label-md">+12 today</span>
+</div>
+<div>
+<h3 class="font-headline-lg text-headline-lg text-text-main">1,240</h3>
+<p class="text-on-surface-variant font-body-md text-body-md">Students Boarded</p>
+</div>
+</div>
+</div>
+<!-- Detailed Fleet List Section -->
+<div class="bg-white rounded-xl shadow-[0_4px_12px_rgba(26,79,149,0.06)] border border-surface-variant overflow-hidden">
+<div class="p-card-padding border-b border-surface-variant flex flex-col sm:flex-row justify-between items-center gap-4 bg-surface-bright">
+<h2 class="font-headline-md text-headline-md text-text-main">Live Telemetry &amp; Status</h2>
+<div class="flex items-center gap-2 w-full sm:w-auto">
+<div class="relative w-full sm:w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[20px]">search</span>
+<input class="w-full pl-10 pr-4 py-2 border-outline-variant rounded-lg text-body-md font-body-md focus:border-safety-blue focus:ring-1 focus:ring-safety-blue" placeholder="Search Bus ID or Driver..." type="text"/>
+</div>
+<button class="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-low text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">filter_list</span>
+</button>
+</div>
+</div>
+<!-- List Header (Desktop) -->
+<div class="hidden md:grid grid-cols-12 gap-4 p-4 border-b border-surface-variant bg-surface-container-low text-on-surface-variant font-label-md text-label-md uppercase tracking-wider">
+<div class="col-span-2">Bus ID / Driver</div>
+<div class="col-span-3">Current Route</div>
+<div class="col-span-2">Status</div>
+<div class="col-span-3">Telemetry (Speed / Fuel)</div>
+<div class="col-span-2 text-right">Actions</div>
+</div>
+<!-- List Items -->
+<div class="divide-y divide-surface-variant">
+<!-- Bus Item 1: Delayed -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 items-center hover:bg-surface-gray transition-colors">
+<div class="col-span-1 md:col-span-2 flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-alert-orange/10 flex items-center justify-center text-alert-orange flex-shrink-0">
+<span class="material-symbols-outlined">directions_bus</span>
+</div>
+<div>
+<div class="font-headline-sm text-headline-sm text-text-main">BUS-402</div>
+<div class="text-on-surface-variant font-body-md text-body-md text-sm">Sarah Jenkins</div>
+</div>
+</div>
+<div class="col-span-1 md:col-span-3">
+<div class="font-body-md text-body-md text-text-main truncate">Route 7A - Oakridge Elementary</div>
+<div class="text-on-surface-variant text-sm flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-[16px]">schedule</span> Est. Arrival: 08:15 AM
+                        </div>
+</div>
+<div class="col-span-1 md:col-span-2 flex items-center gap-2">
+<span class="bg-alert-orange/10 text-alert-orange font-label-md text-label-md px-2 py-1 rounded-md border border-alert-orange/20">Delayed (Traffic)</span>
+</div>
+<div class="col-span-1 md:col-span-3 flex items-center gap-4">
+<div class="flex flex-col">
+<span class="text-on-surface-variant text-xs uppercase tracking-wider font-label-md">Speed</span>
+<span class="font-headline-sm text-headline-sm text-text-main">15 mph</span>
+</div>
+<div class="flex flex-col">
+<span class="text-on-surface-variant text-xs uppercase tracking-wider font-label-md">Fuel</span>
+<span class="font-headline-sm text-headline-sm text-text-main">62%</span>
+</div>
+</div>
+<div class="col-span-1 md:col-span-2 flex justify-end gap-2 mt-2 md:mt-0">
+<button class="text-safety-blue hover:bg-safety-blue/10 p-2 rounded-md transition-colors" title="Message Driver">
+<span class="material-symbols-outlined">chat</span>
+</button>
+<button class="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-md transition-colors" title="View Details">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+<!-- Bus Item 2: Safe/Active -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-4 p-4 items-center hover:bg-surface-gray transition-colors">
+<div class="col-span-1 md:col-span-2 flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-safety-blue/10 flex items-center justify-center text-safety-blue flex-shrink-0">
+<span class="material-symbols-outlined">directions_bus</span>
+</div>
+<div>
+<div class="font-headline-sm text-headline-sm text-text-main">BUS-115</div>
+<div class="text-on-surface-variant font-body-md text-body-md text-sm">Mike Torres</div>
+</div>
+</div>
+<div class="col-span-1 md:col-span-3">
+<div class="font-body-md text-body-md text-text-main truncate">Route 3C - Westside High</div>
+<div class="text-on-surface-variant text-sm flex items-center gap-1 mt-1">
+<span class="material-symbols-outlined text-[16px]">schedule</span> Est. Arrival: 07:50 AM
+                        </div>
+</div>
+<div class="col-span-1 md:col-span-2 flex items-center gap-2">
+<span class="bg-success-green/10 text-success-green font-label-md text-label-md px-2 py-1 rounded-md border border-success-green/20">On Route</span>
+</div>
+<div class="col-span-1 md:col-span-3 flex items-center gap-4">
+<div class="flex flex-col">
+<span class="text-on-surface-variant text-xs uppercase tracking-wider font-label-md">Speed</span>
+<span class="font-headline-sm text-headline-sm text-text-main">35 mph</span>
+</div>
+<div class="flex flex-col">
+<span class="text-on-surface-variant text-xs uppercase tracking-wider font-label-md">Fuel</span>
+<span class="font-headline-sm text-headline-sm text-error">15%</span>
+</div>
+</div>
+<div class="col-span-1 md:col-span-2 flex justify-end gap-2 mt-2 md:mt-0">
+<button class="text-safety-blue hover:bg-safety-blue/10 p-2 rounded-md transition-colors" title="Message Driver">
+<span class="material-symbols-outlined">chat</span>
+</button>
+<button class="text-on-surface-variant hover:bg-surface-container-high p-2 rounded-md transition-colors" title="View Details">
+<span class="material-symbols-outlined">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 bg-surface-container-lowest dark:bg-on-surface border-t border-outline-variant dark:border-outline shadow-lg flex justify-around items-center h-20 px-2 pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest rounded-full active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]">distance</span>
+<span class="font-label-md text-label-md mt-1">Map</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest rounded-full active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]">group</span>
+<span class="font-label-md text-label-md mt-1">Students</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-4 py-1 active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">directions_bus</span>
+<span class="font-label-md text-label-md mt-1">Fleet</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-outline-variant px-4 py-1 hover:bg-surface-container-high dark:hover:bg-surface-container-highest rounded-full active:scale-90 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined text-[24px]">person</span>
+<span class="font-label-md text-label-md mt-1">Profile</span>
+</a>
+</nav>
+</body></html>

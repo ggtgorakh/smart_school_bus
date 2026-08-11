@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SchoolBus Safe - Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700&amp;family=Inter:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "outline-variant": "#c3c6d2",
+                        "error": "#ba1a1a",
+                        "safety-blue": "#1A4F95",
+                        "on-secondary-fixed-variant": "#753400",
+                        "tertiary-container": "#00595f",
+                        "error-container": "#ffdad6",
+                        "tertiary": "#004044",
+                        "secondary-container": "#fb7800",
+                        "on-tertiary-container": "#58d3de",
+                        "inverse-on-surface": "#eef1f3",
+                        "on-primary-fixed-variant": "#08458b",
+                        "on-primary-container": "#a3c3ff",
+                        "outline": "#737782",
+                        "primary-container": "#1a4f95",
+                        "on-secondary-container": "#592600",
+                        "on-primary-fixed": "#001b3e",
+                        "surface-container-low": "#f1f4f6",
+                        "alert-orange": "#FF7A00",
+                        "primary": "#003874",
+                        "surface-dim": "#d7dadc",
+                        "surface-tint": "#2e5ea5",
+                        "on-secondary-fixed": "#321200",
+                        "success-green": "#2D8A29",
+                        "on-secondary": "#ffffff",
+                        "surface-variant": "#e0e3e5",
+                        "secondary": "#994700",
+                        "surface-container-highest": "#e0e3e5",
+                        "background": "#f7fafc",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed": "#002022",
+                        "on-surface": "#181c1e",
+                        "surface": "#f7fafc",
+                        "inverse-primary": "#aac7ff",
+                        "secondary-fixed-dim": "#ffb68b",
+                        "on-error": "#ffffff",
+                        "surface-bright": "#f7fafc",
+                        "surface-container-high": "#e5e9eb",
+                        "on-surface-variant": "#424751",
+                        "surface-container": "#ebeef0",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed-dim": "#5dd8e2",
+                        "secondary-fixed": "#ffdbc8",
+                        "on-error-container": "#93000a",
+                        "primary-fixed": "#d6e3ff",
+                        "tertiary-fixed": "#7df4ff",
+                        "on-background": "#181c1e",
+                        "primary-fixed-dim": "#aac7ff",
+                        "inverse-surface": "#2d3133",
+                        "surface-gray": "#F4F7F9",
+                        "text-main": "#121C2D",
+                        "on-tertiary-fixed-variant": "#004f54"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "margin-mobile": "16px",
+                        "base": "8px",
+                        "card-padding": "16px",
+                        "gutter-mobile": "12px",
+                        "stack-gap": "12px"
+                    },
+                    fontFamily: {
+                        "headline-sm": ["Manrope"],
+                        "headline-md": ["Manrope"],
+                        "headline-lg-mobile": ["Manrope"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-lg": ["Manrope"]
+                    },
+                    fontSize: {
+                        "headline-sm": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["22px", { "lineHeight": "28px", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .role-button {
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .role-button[aria-selected="true"] {
+            border-color: #1A4F95;
+            background-color: #f1f4f6;
+            color: #1A4F95;
+        }
+        
+        .input-field:focus-within {
+            border-color: #1A4F95;
+            border-width: 2px;
+        }
+    </style>
+</head>
+<body class="bg-surface-gray text-on-surface h-full flex flex-col items-center justify-center p-margin-mobile relative overflow-hidden">
+<!-- Decorative Background Elements -->
+<div class="absolute top-0 left-0 w-full h-64 bg-safety-blue opacity-10 blur-3xl transform -translate-y-1/2 -translate-x-1/4 rounded-full pointer-events-none"></div>
+<div class="absolute bottom-0 right-0 w-96 h-96 bg-alert-orange opacity-5 blur-3xl transform translate-y-1/4 translate-x-1/4 rounded-full pointer-events-none"></div>
+<main class="w-full max-w-md z-10 flex flex-col gap-8">
+<!-- Header / Branding -->
+<div class="text-center flex flex-col items-center gap-2">
+<div class="w-16 h-16 bg-safety-blue rounded-full flex items-center justify-center shadow-lg shadow-safety-blue/20 mb-2">
+<span class="material-symbols-outlined text-on-primary text-3xl" style="font-variation-settings: 'FILL' 1;">directions_bus</span>
+</div>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-safety-blue md:font-headline-lg md:text-headline-lg">SchoolBus Safe</h1>
+<p class="font-body-md text-body-md text-on-surface-variant">Secure entry for transportation management</p>
+</div>
+<!-- Login Card -->
+<div class="glass-panel rounded-xl p-card-padding md:p-8 shadow-sm flex flex-col gap-6 w-full">
+<!-- Role Selection -->
+<div class="flex flex-col gap-2">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Select Role</span>
+<div aria-label="Role selection" class="grid grid-cols-3 gap-2" role="group">
+<button aria-selected="true" class="role-button flex flex-col items-center justify-center p-3 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low focus:outline-none" onclick="selectRole(this)" type="button">
+<span class="material-symbols-outlined mb-1 text-safety-blue" style="font-variation-settings: 'FILL' 1;">family_restroom</span>
+<span class="font-label-md text-label-md">Parent</span>
+</button>
+<button aria-selected="false" class="role-button flex flex-col items-center justify-center p-3 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low focus:outline-none" onclick="selectRole(this)" type="button">
+<span class="material-symbols-outlined mb-1 text-outline" style="font-variation-settings: 'FILL' 1;">local_shipping</span>
+<span class="font-label-md text-label-md">Driver</span>
+</button>
+<button aria-selected="false" class="role-button flex flex-col items-center justify-center p-3 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low focus:outline-none" onclick="selectRole(this)" type="button">
+<span class="material-symbols-outlined mb-1 text-outline" style="font-variation-settings: 'FILL' 1;">admin_panel_settings</span>
+<span class="font-label-md text-label-md">Admin</span>
+</button>
+</div>
+</div>
+<!-- Credentials Form -->
+<form class="flex flex-col gap-stack-gap" onsubmit="event.preventDefault();">
+<!-- Email Input -->
+<div class="flex flex-col gap-1">
+<label class="font-label-md text-label-md text-on-surface" for="email">Email or ID</label>
+<div class="input-field flex items-center border border-outline-variant rounded-lg bg-surface-container-lowest px-3 py-3 transition-colors">
+<span class="material-symbols-outlined text-outline mr-2">person</span>
+<input class="w-full bg-transparent border-none p-0 focus:ring-0 font-body-lg text-body-lg text-on-surface placeholder-outline" id="email" placeholder="Enter your credentials" required="" type="text"/>
+</div>
+</div>
+<!-- Password Input -->
+<div class="flex flex-col gap-1 mt-2">
+<div class="flex justify-between items-center">
+<label class="font-label-md text-label-md text-on-surface" for="password">Password</label>
+<a class="font-label-md text-label-md text-alert-orange hover:underline" href="#">Forgot Password?</a>
+</div>
+<div class="input-field flex items-center border border-outline-variant rounded-lg bg-surface-container-lowest px-3 py-3 transition-colors">
+<span class="material-symbols-outlined text-outline mr-2">lock</span>
+<input class="w-full bg-transparent border-none p-0 focus:ring-0 font-body-lg text-body-lg text-on-surface placeholder-outline" id="password" placeholder="Enter your password" required="" type="password"/>
+<button class="text-outline hover:text-on-surface focus:outline-none ml-2" type="button">
+<span class="material-symbols-outlined">visibility_off</span>
+</button>
+</div>
+</div>
+<!-- Primary Action -->
+<button class="w-full bg-safety-blue text-on-primary font-headline-sm text-headline-sm py-4 rounded-lg mt-4 shadow-md shadow-safety-blue/30 hover:bg-primary transition-colors active:scale-95" type="submit">
+                    Sign In
+                </button>
+<!-- Biometric Alternative -->
+<div class="flex flex-col items-center mt-4">
+<span class="font-body-md text-body-md text-on-surface-variant mb-3">Or login with</span>
+<button class="w-16 h-16 rounded-full border border-outline-variant bg-surface-container-lowest flex items-center justify-center hover:bg-surface-container-low transition-colors focus:outline-none active:scale-95 shadow-sm" type="button">
+<span class="material-symbols-outlined text-primary text-3xl" style="font-variation-settings: 'FILL' 1;">fingerprint</span>
+</button>
+</div>
+</form>
+</div>
+<div class="text-center text-on-surface-variant font-label-md text-label-md">
+            Need an account? <a class="text-safety-blue font-bold hover:underline" href="#">Contact Administrator</a>
+</div>
+</main>
+<script>
+        function selectRole(selectedButton) {
+            // Get all role buttons
+            const buttons = document.querySelectorAll('.role-button');
+            
+            // Reset all buttons
+            buttons.forEach(btn => {
+                btn.setAttribute('aria-selected', 'false');
+                const icon = btn.querySelector('.material-symbols-outlined');
+                icon.classList.remove('text-safety-blue');
+                icon.classList.add('text-outline');
+            });
+            
+            // Set selected state for clicked button
+            selectedButton.setAttribute('aria-selected', 'true');
+            const selectedIcon = selectedButton.querySelector('.material-symbols-outlined');
+            selectedIcon.classList.remove('text-outline');
+            selectedIcon.classList.add('text-safety-blue');
+        }
+    </script>
+</body></html>
