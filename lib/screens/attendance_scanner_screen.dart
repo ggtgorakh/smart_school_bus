@@ -12,7 +12,9 @@ class AttendanceScannerScreen extends StatefulWidget {
 }
 
 class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
-  String _scanMode = 'QR'; // QR or RFID
+  // RFID removed from codebase for now; reserved for future scope.
+  // Scanner currently operates in QR-only mode.
+
   final List<Student> _students = [
     Student(
       id: 'S1',
@@ -212,22 +214,15 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Mode toggle buttons (QR vs RFID)
+          // QR-only mode (RFID removed — reserved for future scope)
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ElevatedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _scanMode = 'QR';
-                  });
-                },
+                onPressed: null, // disabled; QR is the only active scanner mode
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _scanMode == 'QR'
-                      ? AppColors.safetyBlue
-                      : AppColors.surfaceContainerLow,
-                  foregroundColor:
-                      _scanMode == 'QR' ? Colors.white : AppColors.textMain,
+                  backgroundColor: AppColors.safetyBlue,
+                  foregroundColor: Colors.white,
                   elevation: 0,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -239,28 +234,7 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
                 label: const Text('QR Mode'),
               ),
               const SizedBox(width: 12),
-              ElevatedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _scanMode = 'RFID';
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _scanMode == 'RFID'
-                      ? AppColors.safetyBlue
-                      : AppColors.surfaceContainerLow,
-                  foregroundColor:
-                      _scanMode == 'RFID' ? Colors.white : AppColors.textMain,
-                  elevation: 0,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                icon: const Icon(Icons.contactless, size: 20),
-                label: const Text('RFID Mode'),
-              ),
+              // RFID mode removed from UI; kept as future scope
             ],
           ),
         ],
