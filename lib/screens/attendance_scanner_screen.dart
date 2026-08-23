@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/student.dart';
-import '../widgets/scanner_reticle.dart';
 
 class AttendanceScannerScreen extends StatefulWidget {
   const AttendanceScannerScreen({super.key});
@@ -12,8 +11,9 @@ class AttendanceScannerScreen extends StatefulWidget {
 }
 
 class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
-  // RFID removed from codebase for now; reserved for future scope.
-  // Scanner currently operates in QR-only mode.
+  // Manual conductor check-in/check-out system
+  // Replaces RFID scanner with tap-to-confirm interface
+  // Each student tap logs boarding/offboarding - parents notified in real-time
 
   final List<Student> _students = [
     Student(
@@ -22,7 +22,7 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
       grade: 'Grade 3',
       seat: 'Seat 4A',
       photoUrl: 'https://i.pravatar.cc/150?img=12',
-      status: StudentStatus.boarded,
+      status: StudentStatus.pending,
       stopName: 'Oak St & Maple Ave',
     ),
     Student(
@@ -31,7 +31,7 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
       grade: 'Grade 4',
       seat: 'Seat 2B',
       photoUrl: 'https://i.pravatar.cc/150?img=47',
-      status: StudentStatus.boarded,
+      status: StudentStatus.pending,
       stopName: 'Oak St & Maple Ave',
     ),
     Student(
@@ -58,19 +58,30 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
       grade: 'Grade 3',
       seat: 'Seat 5D',
       photoUrl: 'https://i.pravatar.cc/150?img=60',
-      status: StudentStatus.alert,
+      status: StudentStatus.pending,
       stopName: 'Oak St & Maple Ave',
     ),
   ];
 
-  void _overrideStudent(Student student) {
+  String _filterStatus = 'pending'; // Filter: pending, boarded, all
+
+  void _toggleStudentStatus(Student student) {
     setState(() {
-      student.status = StudentStatus.boarded;
+      if (student.status == StudentStatus.pending) {
+        student.status = StudentStatus.boarded;
+      } else if (student.status == StudentStatus.boarded) {
+        student.status = StudentStatus.pending;
+      }
     });
+    
+    final action = student.status == StudentStatus.boarded ? 'Boarded' : 'Offboarded';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Override applied: ${student.name} marked as Boarded'),
-        backgroundColor: AppColors.successGreen,
+        content: Text('${student.name} marked as $action | Parent notified'),
+        backgroundColor: student.status == StudentStatus.boarded
+            ? AppColors.successGreen
+            : AppColors.alertOrange,
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -83,371 +94,396 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('All students confirmed boarded! Route resumed.'),
-        backgroundColor: AppColors.safetyBlue,
+        content: Text('✓ All students boarded. Route can proceed.'),
+        backgroundColor: AppColors.successGreen,
       ),
     );
+  }
+
+  List<Student> _getFilteredStudents() {
+    if (_filterStatus == 'all') {
+      return _students;
+    }
+    return _students
+        .where((s) =>
+            s.status.toString().split('.').last == _filterStatus)
+        .toList();
   }
 
   @override
   Widget build(BuildContext context) {
     final boardedCount =
         _students.where((s) => s.status == StudentStatus.boarded).length;
+    final pendingCount =
+        _students.where((s) => s.status == StudentStatus.pending).length;
+    final filteredStudents = _getFilteredStudents();
 
     return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          bool isDesktop = constraints.maxWidth >= 768;
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: isDesktop
-                ? Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: _buildScannerArea()),
-                      const SizedBox(width: 16),
-                      Expanded(child: _buildManifestArea(boardedCount)),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      _buildScannerArea(),
-                      const SizedBox(height: 16),
-                      _buildManifestArea(boardedCount),
-                    ],
-                  ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildScannerArea() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Active Scanner',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: AppColors.safetyBlue,
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.successGreen.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(
-                      Icons.wifi,
-                      size: 14,
-                      color: AppColors.successGreen,
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      'Online',
-                      style: TextStyle(
-                        color: AppColors.successGreen,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Camera feed simulation viewport
-          Container(
-            height: 280,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E2638),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                const ScannerReticle(isScanning: true),
-                Positioned(
-                  bottom: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      'Ready to scan Student ID or Boarding Pass',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: AppColors.textMain,
-                            fontSize: 11,
-                          ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // QR-only mode (RFID removed — reserved for future scope)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton.icon(
-                onPressed: null, // disabled; QR is the only active scanner mode
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.safetyBlue,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                icon: const Icon(Icons.qr_code_scanner, size: 20),
-                label: const Text('QR Mode'),
-              ),
-              const SizedBox(width: 12),
-              // RFID mode removed from UI; kept as future scope
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildManifestArea(int boardedCount) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Manifest header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Stop 3: Oak St & Maple Ave',
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: AppColors.safetyBlue,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                  ),
-                  Text(
-                    '$boardedCount of ${_students.length} boarded',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.onSurfaceVariant,
-                          fontSize: 13,
-                        ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with stats
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.safetyBlue,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
                   ),
                 ],
               ),
-              Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(
-                  color: AppColors.primaryContainer,
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Stop 3: Oak St & Maple Ave',
+                            style:
+                                Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Manual Check-in/Check-out',
+                            style:
+                                Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: Colors.white70,
+                                    ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '$boardedCount/${_students.length}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Progress bar
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: boardedCount / _students.length,
+                      minHeight: 8,
+                      backgroundColor: Colors.white.withValues(alpha: 0.3),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                          Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '✓ Boarded: $boardedCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        '⏳ Pending: $pendingCount',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Filter chips
+            Row(
+              spacing: 8,
+              children: [
+                _buildFilterChip('Pending', 'pending', pendingCount),
+                _buildFilterChip('Boarded', 'boarded', boardedCount),
+                _buildFilterChip('All', 'all', _students.length),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Student list with tap-to-toggle
+            if (filteredStudents.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 32),
                   child: Text(
-                    '$boardedCount/${_students.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    'No students in this category',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                  ),
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: filteredStudents.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final student = filteredStudents[index];
+                  return _buildStudentCard(student);
+                },
+              ),
+            const SizedBox(height: 16),
+
+            // Confirm all boarded button
+            if (pendingCount > 0)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _confirmAllBoarded,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.successGreen,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.check_circle,
+                      color: Colors.white, size: 20),
+                  label: const Text(
+                    'Mark All Boarded & Start Route',
+                    style: TextStyle(
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.successGreen.withValues(alpha: 0.5),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  label: const Text(
+                    '✓ All Students Boarded',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
                     ),
                   ),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Student roster list
-          ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _students.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final student = _students[index];
-              return _buildStudentTile(student);
-            },
-          ),
-          const SizedBox(height: 16),
-
-          // Action button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _confirmAllBoarded,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.safetyBlue,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              icon: const Icon(Icons.directions_bus, color: Colors.white),
-              label: const Text(
-                'Confirm All Boarded',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStudentTile(Student student) {
-    Color borderColor;
-    Widget statusWidget;
-
-    switch (student.status) {
-      case StudentStatus.boarded:
-        borderColor = AppColors.successGreen;
-        statusWidget = const Icon(
-          Icons.check_circle,
-          color: AppColors.successGreen,
-          size: 26,
-        );
-        break;
-      case StudentStatus.pending:
-        borderColor = AppColors.outlineVariant;
-        statusWidget = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainerHigh,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Text(
-            'Pending',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: AppColors.onSurfaceVariant,
-            ),
-          ),
-        );
-        break;
-      case StudentStatus.alert:
-        borderColor = AppColors.alertOrange;
-        statusWidget = ElevatedButton(
-          onPressed: () => _overrideStudent(student),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.alertOrange,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: const Text(
-            'Override',
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-          ),
-        );
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: student.status == StudentStatus.alert
-            ? AppColors.errorContainer.withOpacity(0.3)
-            : AppColors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(10),
-        border: Border(
-          left: BorderSide(color: borderColor, width: 4),
-        ),
+  Widget _buildFilterChip(String label, String value, int count) {
+    final isSelected = _filterStatus == value;
+    return FilterChip(
+      label: Text('$label ($count)'),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() {
+          _filterStatus = value;
+        });
+      },
+      backgroundColor: Colors.grey[100],
+      selectedColor: AppColors.safetyBlue.withValues(alpha: 0.2),
+      labelStyle: TextStyle(
+        color: isSelected ? AppColors.safetyBlue : AppColors.onSurfaceVariant,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: AppColors.surfaceContainerHighest,
-            ),
-            child: const Icon(
-              Icons.person,
-              color: AppColors.outline,
-            ),
+      side: BorderSide(
+        color: isSelected ? AppColors.safetyBlue : Colors.grey[300]!,
+      ),
+    );
+  }
+
+  Widget _buildStudentCard(Student student) {
+    final isBoarded = student.status == StudentStatus.boarded;
+    final boardingTime = isBoarded ? DateTime.now() : null;
+    final timeStr = boardingTime != null
+        ? '${boardingTime.hour}:${boardingTime.minute.toString().padLeft(2, '0')}'
+        : '';
+
+    return GestureDetector(
+      onTap: () => _toggleStudentStatus(student),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isBoarded
+              ? AppColors.successGreen.withValues(alpha: 0.08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isBoarded
+                ? AppColors.successGreen
+                : AppColors.outlineVariant,
+            width: 2,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Student avatar with status
+            Stack(
               children: [
-                Text(
-                  student.name,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.surfaceContainerHigh,
+                    border: Border.all(
+                      color: isBoarded
+                          ? AppColors.successGreen
+                          : AppColors.outline,
+                      width: 2,
+                    ),
+                  ),
+                  child: ClipOval(
+                    child: Icon(
+                      Icons.person,
+                      color: AppColors.outline,
+                      size: 28,
+                    ),
+                  ),
                 ),
-                Text(
-                  '${student.grade} • ${student.seat}',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: AppColors.onSurfaceVariant,
-                        fontSize: 11,
+                if (isBoarded)
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 18,
+                      height: 18,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.successGreen,
                       ),
-                ),
+                      child: const Icon(
+                        Icons.check,
+                        size: 12,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
               ],
             ),
-          ),
-          statusWidget,
-        ],
+            const SizedBox(width: 12),
+
+            // Student info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    student.name,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  Text(
+                    '${student.grade} • ${student.seat}',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                  ),
+                  if (isBoarded && timeStr.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        'Boarded at $timeStr',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: AppColors.successGreen,
+                              fontWeight: FontWeight.w500,
+                            ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // Tap indicator
+            if (!isBoarded)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryContainer,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Tap to Board',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.successGreen.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Tap to Unboard',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.successGreen,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

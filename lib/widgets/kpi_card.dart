@@ -35,7 +35,7 @@ class KpiCard extends StatelessWidget {
         border: Border.all(color: AppColors.surfaceContainerHighest),
         boxShadow: [
           BoxShadow(
-            color: AppColors.safetyBlue.withOpacity(0.05),
+            color: AppColors.safetyBlue.withValues(alpha: 0.05),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),

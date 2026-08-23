@@ -202,7 +202,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 border: Border.all(color: AppColors.surfaceContainerHighest),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.safetyBlue.withOpacity(0.04),
+                    color: AppColors.safetyBlue.withValues(alpha: 0.04),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -265,7 +265,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: filteredFleet.length,
-                    separatorBuilder: (_, __) =>
+                    separatorBuilder: (_, _) =>
                         const Divider(color: AppColors.surfaceContainerHighest, height: 1),
                     itemBuilder: (context, index) {
                       final bus = filteredFleet[index];

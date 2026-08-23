@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../models/bus_fleet.dart';
 import '../widgets/live_map_canvas.dart';
+import '../widgets/route_progress_track.dart';
 
 class LiveTrackingScreen extends StatelessWidget {
   const LiveTrackingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final stop = StopInfo(
+      stopNumber: 3,
+      totalStops: 8,
+      stopName: 'Elm Street',
+      minsAway: '4 mins away',
+    );
+
     return Scaffold(
       body: Stack(
         children: [
-          // Main Interactive Map Canvas
           const Positioned.fill(
             child: LiveMapCanvas(
               busStatus: 'On Route',
@@ -18,7 +26,6 @@ class LiveTrackingScreen extends StatelessWidget {
               busNumber: 'Bus 42',
             ),
           ),
-          // Bottom Information Sheet Card
           Positioned(
             left: 16,
             right: 16,
@@ -26,24 +33,25 @@ class LiveTrackingScreen extends StatelessWidget {
             child: Center(
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 480),
-                padding: const EdgeInsets.all(16),
-                decoration: AppTheme.glassDecoration(borderRadius: 16),
+                padding: const EdgeInsets.all(18),
+                decoration: AppTheme.glassDecoration(borderRadius: 22),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Next Stop Info Row
+                    // Next-stop headline row
                     Row(
                       children: [
                         Container(
-                          width: 42,
-                          height: 42,
+                          width: 44,
+                          height: 44,
                           decoration: BoxDecoration(
-                            color: AppColors.alertOrange.withOpacity(0.12),
+                            color: AppColors.amberSoft,
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
-                            Icons.location_on,
-                            color: AppColors.alertOrange,
+                            Icons.location_on_rounded,
+                            color: AppColors.alertOrangeDark,
                             size: 24,
                           ),
                         ),
@@ -53,22 +61,16 @@ class LiveTrackingScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Coming to Elm Street',
+                                'Coming to ${stop.stopName}',
                                 style: Theme.of(context)
                                     .textTheme
                                     .headlineSmall
-                                    ?.copyWith(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                    ?.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                'Stop 3 of 8 • 4 mins away',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
+                                'Stop ${stop.stopNumber} of ${stop.totalStops} • ${stop.minsAway}',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                       color: AppColors.onSurfaceVariant,
                                       fontSize: 13,
                                     ),
@@ -78,17 +80,28 @@ class LiveTrackingScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
+
+                    // Signature route-progress track.
+                    RouteProgressTrack(
+                      totalStops: stop.totalStops,
+                      currentStopIndex: stop.stopNumber - 1,
+                      currentStopLabel: 'Next: ${stop.stopName}',
+                      etaLabel: stop.minsAway,
+                    ),
+
+                    const SizedBox(height: 14),
                     const Divider(color: AppColors.outlineVariant, height: 1),
-                    const SizedBox(height: 12),
-                    // Student Info Box
+                    const SizedBox(height: 14),
+
+                    // Student info row
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: AppColors.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: AppColors.outlineVariant.withOpacity(0.4),
+                          color: AppColors.outlineVariant.withValues(alpha: 0.5),
                         ),
                       ),
                       child: Row(
@@ -96,18 +109,14 @@ class LiveTrackingScreen extends StatelessWidget {
                           Container(
                             width: 44,
                             height: 44,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: AppColors.safetyBlue,
+                              gradient: AppTheme.brandGradient,
                             ),
-                            child: const ClipRRect(
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(22)),
-                              child: Icon(
-                                Icons.face,
-                                color: Colors.white,
-                                size: 28,
-                              ),
+                            child: const Icon(
+                              Icons.face_rounded,
+                              color: Colors.white,
+                              size: 26,
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -120,20 +129,14 @@ class LiveTrackingScreen extends StatelessWidget {
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodyLarge
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15,
-                                      ),
+                                      ?.copyWith(fontWeight: FontWeight.bold, fontSize: 15),
                                 ),
                                 Text(
                                   '4th Grade • Seat 3A',
                                   style: Theme.of(context)
                                       .textTheme
                                       .labelMedium
-                                      ?.copyWith(
-                                        color: AppColors.onSurfaceVariant,
-                                        fontSize: 12,
-                                      ),
+                                      ?.copyWith(color: AppColors.onSurfaceVariant, fontSize: 12),
                                 ),
                               ],
                             ),
@@ -142,20 +145,18 @@ class LiveTrackingScreen extends StatelessWidget {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: Colors.white,
-                              border:
-                                  Border.all(color: AppColors.outlineVariant),
+                              border: Border.all(color: AppColors.outlineVariant),
                             ),
                             child: IconButton(
                               icon: const Icon(
-                                Icons.call,
+                                Icons.call_rounded,
                                 color: AppColors.safetyBlue,
                                 size: 20,
                               ),
                               onPressed: () {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text(
-                                        'Calling Bus Driver (Sarah Jenkins)...'),
+                                    content: Text('Calling Bus Driver (Sarah Jenkins)...'),
                                   ),
                                 );
                               },

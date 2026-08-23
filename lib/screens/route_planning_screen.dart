@@ -44,7 +44,7 @@ class RoutePlanningScreen extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppColors.safetyBlue.withOpacity(0.1),
+                    color: AppColors.safetyBlue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Row(
@@ -191,7 +191,7 @@ class RoutePlanningScreen extends StatelessWidget {
                 boxShadow: isCurrent
                     ? [
                         BoxShadow(
-                          color: AppColors.alertOrange.withOpacity(0.4),
+                          color: AppColors.alertOrange.withValues(alpha: 0.4),
                           blurRadius: 6,
                         ),
                       ]

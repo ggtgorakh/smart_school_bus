@@ -40,18 +40,44 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     final role = widget.userRole;
 
     if (role == 'Driver') {
+      // Driver now only sees navigation (conductor handles attendance)
       return [
         AuthorizedTab(
-          title: 'Student Attendance Scanner',
+          title: 'Bus Route Navigation',
+          screen: const LiveTrackingScreen(),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.map_outlined),
+            activeIcon: Icon(Icons.map),
+            label: 'Route',
+          ),
+        ),
+        AuthorizedTab(
+          title: 'Driver Profile',
+          screen: ProfileScreen(
+            activeRole: role,
+            onSignOut: widget.onSignOut,
+          ),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ),
+      ];
+    } else if (role == 'Conductor') {
+      // Conductor handles manual student check-in/check-out
+      return [
+        AuthorizedTab(
+          title: 'Student Check-in/Check-out',
           screen: const AttendanceScannerScreen(),
           navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.qr_code_scanner_outlined),
-            activeIcon: Icon(Icons.qr_code_scanner),
+            icon: Icon(Icons.how_to_reg_outlined),
+            activeIcon: Icon(Icons.how_to_reg),
             label: 'Students',
           ),
         ),
         AuthorizedTab(
-          title: 'Bus Route Navigation',
+          title: 'Bus Route Map',
           screen: const LiveTrackingScreen(),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.map_outlined),
@@ -60,7 +86,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           ),
         ),
         AuthorizedTab(
-          title: 'Driver Profile',
+          title: 'Conductor Profile',
           screen: ProfileScreen(
             activeRole: role,
             onSignOut: widget.onSignOut,
@@ -102,15 +128,6 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           ),
         ),
         AuthorizedTab(
-          title: 'Student Boarding Manifest',
-          screen: const AttendanceScannerScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.qr_code_scanner_outlined),
-            activeIcon: Icon(Icons.qr_code_scanner),
-            label: 'Students',
-          ),
-        ),
-        AuthorizedTab(
           title: 'Admin System Profile',
           screen: ProfileScreen(
             activeRole: role,
@@ -127,7 +144,16 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       // Default: Parent Role
       return [
         AuthorizedTab(
-          title: 'Live Child Bus Tracking',
+          title: 'Child Boarding Status',
+          screen: const LiveTrackingScreen(),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.info_outlined),
+            activeIcon: Icon(Icons.info),
+            label: 'Status',
+          ),
+        ),
+        AuthorizedTab(
+          title: 'Live Bus Tracking',
           screen: const LiveTrackingScreen(),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.map_outlined),
@@ -165,39 +191,46 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         children: tabs.map((t) => t.screen).toList(),
       ),
       bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            top: BorderSide(color: AppColors.surfaceContainerHighest, width: 1),
+        padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+        decoration: const BoxDecoration(color: Colors.transparent),
+        child: Container(
+          height: 64,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryDark.withValues(alpha: 0.12),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 8,
-              offset: Offset(0, -2),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: BottomNavigationBar(
+              currentIndex: safeIndex,
+              onTap: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              },
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: Colors.white,
+              elevation: 0,
+              selectedItemColor: AppColors.safetyBlue,
+              unselectedItemColor: AppColors.outline,
+              selectedLabelStyle: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.bold,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+              items: tabs.map((t) => t.navItem).toList(),
             ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: safeIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: AppColors.safetyBlue,
-          unselectedItemColor: AppColors.outline,
-          selectedLabelStyle: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
           ),
-          unselectedLabelStyle: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-          items: tabs.map((t) => t.navItem).toList(),
         ),
       ),
     );

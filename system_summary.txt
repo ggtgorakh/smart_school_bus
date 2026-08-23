@@ -1,0 +1,109 @@
+Smart School Bus — Detailed System Summary
+
+1. Overview
+The Smart School Bus system provides end-to-end solutions for student transport safety, real-time tracking, and operational analytics. Core goals: ensure student safety, provide timely parent/administrator notifications, optimize routing, and maintain audit trails for compliance.
+
+2. System Components
+- On-vehicle Devices: GPS module, IMU (optional), door sensors, seat occupancy sensors, optional camera (privacy-sensitive), microphone (optional). Devices publish telemetry and events.
+- Edge Unit (In-bus): A small single-board computer (e.g., Raspberry Pi / industrial MCU) responsible for local aggregation, ephemeral buffering, device health checks, time synchronization, and secure transport to cloud (TLS). Runs a lightweight agent that supports MQTT/HTTP and local rules (e.g., door open alert when bus moving).
+- Connectivity: Cellular (4G/5G) primary, Wi-Fi fallback at depots, fallback store-and-forward capability when offline.
+- Cloud Backend: API gateway, ingestion pipeline, real-time stream processor (Kafka/managed streaming), rules engine for alerts, metrics pipeline, relational DB (PostgreSQL) for persistent records, timeseries DB (optional) for telemetry, object store for multimedia (if enabled), and background workers (Celery/Kue/Cloud functions) for notifications and batch jobs.
+- Clients: Driver interface (tablet/mobile) for route instructions and confirmations; Admin dashboard (web) for fleet and student management; Parent mobile app for live location and alerts; School admin tools for reporting and compliance.
+- Security & Auth: Identity provider (OIDC) or JWT tokens, RBAC for different clients, TLS for transport, DB credentials rotation, audit logging.
+
+3. Data Model & Data Collected
+- Telemetry: timestamp, device_id, lat, lon, speed, heading, hdop, battery, signal_strength. (JSON over HTTPS/MQTT)
+- Events: door_open, door_close, seatbelt_status, seat_occupancy_change, route_start/stop, stop_arrival/departure, driver_acknowledgement. Each event: event_id, type, timestamp, device_id, metadata.
+- Media (optional): image/video blobs stored in object storage with signed URLs, metadata stored in DB referencing object keys.
+- User/Config: bus_id, driver_id, route_id, stop_list, students_assigned (student_id -> stop mapping), notification_preferences.
+- Logs & Audit: system logs, device logs, API access logs, alert history.
+
+Suggested minimal DB schema (high-level):
+- buses(id, vin, model, edge_hwid, last_seen)
+- telemetry(id, bus_id, ts, lat, lon, speed, raw_payload)
+- events(id, bus_id, ts, type, payload)
+- routes(id, name, stops json)
+- students(id, name, guardian_contact, assigned_stop_id)
+- notifications(id, target, type, payload, status, sent_at)
+
+4. End-to-End Flow
+1. Device sampling: sensors sample at configured intervals (GPS 1Hz, events immediate).
+2. Local preprocessing: edge agent deduplicates, compresses (optional), and signs telemetry and events.
+3. Secure transport: edge submits batched payloads via TLS to ingestion endpoint; fallback to local storage if offline.
+4. Ingestion: API gateway authenticates and places messages into streaming layer.
+5. Stream processing: rules detect conditions (e.g., unauthorized movement, door open while moving) and emit alerts to workers.
+6. Persistence: telemetry aggregated into timeseries store; events persisted in relational DB; media stored in object store.
+7. Notification: workers send push (FCM/APNs), SMS, and email based on rules and user preferences.
+8. Client update: dashboards consume real-time updates via WebSocket or polling; parent apps receive push notifications and can query location history.
+9. Reporting & Analytics: scheduled jobs compute performance, attendance reconciliation, and generate compliance reports.
+
+5. Operational Considerations
+- Monitoring: health checks for edge units, device heartbeats, ingestion latency, error rates, and alerting (PagerDuty/SMS).
+- Backups: regular DB and object store backups; retention policies for telemetry and media.
+- Scaling: partition streams by fleet/region; autoscale ingestion and workers; use CDNs for media.
+- Cost controls: throttle media capture; sample telemetry adaptively; triage high-value telemetry.
+
+6. Privacy & Compliance
+- Minimize captured PII. Prefer metadata over raw media unless necessary.
+- Obtain parental consent for any audio/video capture; add opt-in/opt-out flags per student/account.
+- Anonymize or redact faces/audio when required; store derived insights rather than raw data when possible.
+- Follow regional regulations (COPPA, GDPR, local data retention laws).
+
+7. Limitations
+- Connectivity: cellular blind spots can delay telemetry and alerts; store-and-forward increases post-facto reconciliation complexity.
+- Hardware variability: sensor accuracy differs across units; calibration needed.
+- Edge compute constraints: low-power units limit complex local ML or encryption-heavy workloads.
+- Media storage cost and privacy risk if cameras are enabled.
+- Real-time guarantees: end-to-end latency depends on mobile networks and backend load—true real-time (<1s) is not always achievable.
+- Student boarding verification: seat sensors can mis-detect (loose clothing, backpacks), leading to false positives.
+
+8. Known/Typical Bugs & Failure Modes
+- Duplicate events: network retries without idempotency keys can create duplicates; use event_id and dedupe in backend.
+- Timestamp drift: edge units with wrong clocks produce out-of-order telemetry—sync with NTP and prefer server-side ingestion-time fallback.
+- Partial uploads: large media uploads can fail mid-transfer; use resumable uploads and atomic commit model.
+- Incorrect geofencing: poor GPS accuracy near tall buildings causes stop arrival false positives—use distance buffers and stop confirmation logic.
+- Memory leaks on long-running edge agent processes; require watchdog and auto-restart.
+- Notification storms: rules misconfiguration can send duplicate alerts; include dedupe windows and rate limits.
+
+9. Recent/Pending Updates & Recommendations
+- Enforce idempotent ingestion using event_id UUIDs and dedupe at ingestion layer.
+- Add NTP/time-sync during edge startup. Record both device_ts and server_ts for forensic analysis.
+- Implement resumable uploads for media and confirm complete upload before processing.
+- Improve seat-occupancy logic: combine seat sensors with door-open event and driver confirmation to reduce false positives.
+- Add RBAC for admin actions and stronger logging for privileged operations.
+- Introduce feature flags to enable/disable cameras per-route or per-bus to manage privacy and costs.
+
+10. Short-term Roadmap (next 3 months)
+- Harden ingestion: dedupe + idempotency, rate limiting, and better error responses.
+- Add device provisioning flow with unique hardware tokens and secure onboarding.
+- Implement driver app acknowledgement flow for student pick-up/drop-off.
+- Basic analytics dashboard: daily attendance, route punctuality, and exception summaries.
+
+11. Long-term Future Scope
+- Predictive routing: ML models to suggest route and timing improvements using historical telemetry and traffic data.
+- Computer vision (optional): automated student boarding detection (privacy-first; process on edge, store only metadata).
+- Anomaly detection pipeline: unsupervised models to detect unusual behavior (detours, unauthorized stops).
+- Integration with school MIS (Student Information Systems) for automated roster sync and attendance reconciliation.
+- Fleet optimization: predictive maintenance using telemetry and engine data.
+- Add encrypted-at-rest for sensitive media and customer-managed keys (KMS) for high-compliance deployments.
+
+12. Testing & Validation
+- Unit tests for ingestion, rules, and notification logic.
+- Integration tests simulating edge behavior, network partitions, and repeated retries.
+- Hardware-in-the-loop testing with a sample bus for end-to-end verification.
+- Load testing to validate ingestion throughput and scaling thresholds.
+
+13. Troubleshooting Checklist
+- If device offline: check SIM status, edge agent logs, and power supply.
+- If duplicate alerts: check event_id generation and ingestion dedupe logs.
+- If GPS jitter: check antenna placement, hdop values, and apply smoothing filters.
+- If notification not received: verify push certificate (APNs/FCM), user token validity, and notification worker logs.
+
+14. Appendices
+- Suggested retention: telemetry 90 days (raw), 1 year (aggregated); event history 3-5 years for compliance; media retention per policy.
+- Suggested security posture: TLS 1.2+, short-lived JWTs, key rotation every 90 days, audit log retention 1 year.
+
+Contact/Notes
+Document prepared as a comprehensive snapshot. Tailor the details (DB schema, streaming tech, ML models) to team skillset and budget. Review privacy and legal constraints before enabling media capture.
+
+End of document.

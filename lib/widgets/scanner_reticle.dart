@@ -39,10 +39,10 @@ class _ScannerReticleState extends State<ScannerReticle>
       width: 260,
       height: 260,
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.15),
+        color: Colors.black.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppColors.safetyBlue.withOpacity(0.4),
+          color: AppColors.safetyBlue.withValues(alpha: 0.4),
           width: 2,
         ),
       ),
@@ -126,7 +126,7 @@ class _ScannerReticleState extends State<ScannerReticle>
                       borderRadius: BorderRadius.circular(2),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.alertOrange.withOpacity(0.8),
+                          color: AppColors.alertOrange.withValues(alpha: 0.8),
                           blurRadius: 10,
                           spreadRadius: 2,
                         ),

@@ -5,28 +5,32 @@ import '../theme/app_theme.dart';
 class RouteMapPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    // Background grid lines / map streets
-    final bgPaint = Paint()
-      ..color = const Color(0xFFD0D7E1)
+    // Background streets — softer, slightly varied widths for a less
+    // mechanical grid feel.
+    final minorRoad = Paint()
+      ..color = const Color(0xFFDCE3EF)
       ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final majorRoad = Paint()
+      ..color = const Color(0xFFCBD5E8)
+      ..strokeWidth = 5
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
 
-    final roadPath = Path()
-      ..moveTo(size.width * 0.1, size.height * 0.2)
-      ..lineTo(size.width * 0.9, size.height * 0.2)
-      ..moveTo(size.width * 0.3, size.height * 0.1)
-      ..lineTo(size.width * 0.3, size.height * 0.9)
-      ..moveTo(size.width * 0.7, size.height * 0.1)
-      ..lineTo(size.width * 0.7, size.height * 0.9)
-      ..moveTo(size.width * 0.1, size.height * 0.7)
-      ..lineTo(size.width * 0.9, size.height * 0.7);
+    canvas.drawLine(Offset(size.width * 0.1, size.height * 0.2),
+        Offset(size.width * 0.9, size.height * 0.2), majorRoad);
+    canvas.drawLine(Offset(size.width * 0.3, size.height * 0.08),
+        Offset(size.width * 0.3, size.height * 0.92), minorRoad);
+    canvas.drawLine(Offset(size.width * 0.7, size.height * 0.08),
+        Offset(size.width * 0.7, size.height * 0.92), minorRoad);
+    canvas.drawLine(Offset(size.width * 0.08, size.height * 0.7),
+        Offset(size.width * 0.92, size.height * 0.7), minorRoad);
 
-    canvas.drawPath(roadPath, bgPaint);
-
-    // Completed Route path (Solid Safety Blue)
+    // Completed route path.
     final completedPaint = Paint()
       ..color = AppColors.safetyBlue
-      ..strokeWidth = 5
+      ..strokeWidth = 5.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
@@ -40,13 +44,12 @@ class RouteMapPainter extends CustomPainter {
         size.width * 0.55,
         size.height * 0.45,
       );
-
     canvas.drawPath(completedPath, completedPaint);
 
-    // Remaining Route path (Dashed Safety Orange)
+    // Remaining route path, dashed in amber.
     final remainingPaint = Paint()
       ..color = AppColors.alertOrange
-      ..strokeWidth = 5
+      ..strokeWidth = 5.5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
@@ -61,8 +64,7 @@ class RouteMapPainter extends CustomPainter {
         size.height * 0.2,
       );
 
-    // Draw dashed effect for remaining path
-    double dashWidth = 10, dashSpace = 8, distance = 0.0;
+    double dashWidth = 9, dashSpace = 7, distance = 0.0;
     for (PathMetric pathMetric in remainingPath.computeMetrics()) {
       while (distance < pathMetric.length) {
         canvas.drawPath(
@@ -73,25 +75,21 @@ class RouteMapPainter extends CustomPainter {
       }
     }
 
-    // Draw Bus Stop Pins
-    final stopPinPaintCompleted = Paint()..color = const Color(0xFFC3C6D2);
+    final stopPinPaintCompleted = Paint()..color = const Color(0xFFB9C4DC);
     final stopPinPaintNext = Paint()..color = AppColors.alertOrange;
     final whiteBorder = Paint()
       ..color = Colors.white
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke;
 
-    // Stop 1 (Completed)
     Offset stop1 = Offset(size.width * 0.15, size.height * 0.85);
     canvas.drawCircle(stop1, 8, stopPinPaintCompleted);
     canvas.drawCircle(stop1, 8, whiteBorder);
 
-    // Stop 2 (Completed)
     Offset stop2 = Offset(size.width * 0.35, size.height * 0.68);
     canvas.drawCircle(stop2, 8, stopPinPaintCompleted);
     canvas.drawCircle(stop2, 8, whiteBorder);
 
-    // Stop 3 (Next Stop)
     Offset stop3 = Offset(size.width * 0.85, size.height * 0.2);
     canvas.drawCircle(stop3, 12, stopPinPaintNext);
     canvas.drawCircle(stop3, 12, whiteBorder);
@@ -130,11 +128,9 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
       duration: const Duration(seconds: 2),
     )..repeat();
 
-    _pulseAnimation =
-        Tween<double>(begin: 0.8, end: 2.2).animate(CurvedAnimation(
-      parent: _pulseController,
-      curve: Curves.easeOut,
-    ));
+    _pulseAnimation = Tween<double>(begin: 0.8, end: 2.3).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeOut),
+    );
   }
 
   @override
@@ -146,33 +142,28 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFFE0E6ED),
+      color: const Color(0xFFE7ECF6),
       child: Stack(
         children: [
-          // Background custom map routes
           Positioned.fill(
-            child: CustomPaint(
-              painter: RouteMapPainter(),
-            ),
+            child: CustomPaint(painter: RouteMapPainter()),
           ),
-          // Animated Pulse Bus Marker
+          // Animated pulse bus marker.
           Positioned(
             top: 180,
             left: 200,
             child: Column(
               children: [
-                // Status Badge
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.safetyBlue,
+                    gradient: AppTheme.brandGradient,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.safetyBlue.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
+                        color: AppColors.safetyBlue.withValues(alpha: 0.35),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
                       ),
                     ],
                   ),
@@ -200,7 +191,6 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                   ),
                 ),
                 const SizedBox(height: 8),
-                // Pulse bus circle
                 Stack(
                   alignment: Alignment.center,
                   children: [
@@ -210,13 +200,13 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                         return Transform.scale(
                           scale: _pulseAnimation.value,
                           child: Opacity(
-                            opacity: (2.2 - _pulseAnimation.value) / 1.4,
+                            opacity: (2.3 - _pulseAnimation.value) / 1.5,
                             child: Container(
                               width: 44,
                               height: 44,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: AppColors.safetyBlue.withOpacity(0.5),
+                                color: AppColors.safetyBlue.withValues(alpha: 0.45),
                               ),
                             ),
                           ),
@@ -227,22 +217,21 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                       width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        gradient: AppTheme.brandGradient,
                         shape: BoxShape.circle,
-                        border: Border.all(
-                            color: AppColors.safetyBlue, width: 2.5),
+                        border: Border.all(color: Colors.white, width: 3),
                         boxShadow: const [
                           BoxShadow(
-                            color: Colors.black12,
-                            blurRadius: 8,
+                            color: Colors.black26,
+                            blurRadius: 10,
                             offset: Offset(0, 4),
                           ),
                         ],
                       ),
                       child: const Icon(
-                        Icons.directions_bus,
-                        color: AppColors.safetyBlue,
-                        size: 26,
+                        Icons.directions_bus_filled_rounded,
+                        color: Colors.white,
+                        size: 24,
                       ),
                     ),
                   ],
@@ -250,7 +239,7 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
               ],
             ),
           ),
-          // Top Floating ETA Card
+          // Floating ETA card with tabular time.
           Positioned(
             top: 16,
             left: 16,
@@ -258,9 +247,8 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
             child: Center(
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 380),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: AppTheme.glassDecoration(borderRadius: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                decoration: AppTheme.glassDecoration(borderRadius: 18),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -269,22 +257,18 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                       children: [
                         Text(
                           'ESTIMATED ARRIVAL',
-                          style:
-                              Theme.of(context).textTheme.labelMedium?.copyWith(
-                                    fontSize: 11,
-                                    letterSpacing: 0.5,
-                                  ),
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                fontSize: 10.5,
+                                letterSpacing: 0.6,
+                              ),
                         ),
+                        const SizedBox(height: 2),
                         Text(
                           widget.etaTime,
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(
-                                color: AppColors.alertOrange,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 24,
-                              ),
+                          style: AppTheme.tabularTime(
+                            fontSize: 25,
+                            color: AppColors.alertOrangeDark,
+                          ),
                         ),
                       ],
                     ),
@@ -293,32 +277,29 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                       children: [
                         Text(
                           widget.busNumber,
-                          style:
-                              Theme.of(context).textTheme.labelMedium?.copyWith(
-                                    color: AppColors.onSurfaceVariant,
-                                  ),
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                color: AppColors.onSurfaceVariant,
+                              ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 4),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 2),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: AppColors.successGreen.withOpacity(0.12),
+                            color: AppColors.mintSoft,
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: const Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                Icons.check_circle,
-                                size: 14,
-                                color: AppColors.successGreen,
-                              ),
+                              Icon(Icons.check_circle_rounded,
+                                  size: 13, color: AppColors.successGreen),
                               SizedBox(width: 4),
                               Text(
                                 'On Schedule',
                                 style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
                                   color: AppColors.successGreen,
                                 ),
                               ),

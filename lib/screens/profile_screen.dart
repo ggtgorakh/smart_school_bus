@@ -27,9 +27,21 @@ class ProfileScreen extends StatelessWidget {
         _ProfileStat(label: 'Max Capacity', value: '48 Seats'),
       ];
       authorizedScope = [
-        'Student Attendance Scanner',
-        'Live Bus Navigation',
+        'Bus Route Navigation',
         'Driver Profile',
+      ];
+    } else if (activeRole == 'Conductor') {
+      profileName = 'Priya Nair';
+      profileEmail = 'conductor@schoolsafe.org';
+      statsWidgets = const [
+        _ProfileStat(label: 'Assigned Vehicle', value: 'BUS-115'),
+        _ProfileStat(label: 'Active Route', value: 'Route 3C'),
+        _ProfileStat(label: 'Roster Size', value: '5 Students'),
+      ];
+      authorizedScope = [
+        'Student Check-in/Check-out',
+        'Bus Route Map',
+        'Conductor Profile',
       ];
     } else if (activeRole == 'Admin') {
       profileName = 'Sarah Jenkins';
@@ -47,7 +59,6 @@ class ProfileScreen extends StatelessWidget {
         'Admin Settings & Dispatch',
       ];
     } else {
-      // Parent Role
       profileName = 'Sarah Johnson';
       profileEmail = 'parent@schoolsafe.org';
       statsWidgets = const [
@@ -62,6 +73,7 @@ class ProfileScreen extends StatelessWidget {
     }
 
     return Scaffold(
+      backgroundColor: AppColors.surfaceGray,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -69,54 +81,52 @@ class ProfileScreen extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 500),
             child: Column(
               children: [
-                // Profile Avatar & Info Card
+                // Profile avatar & info card
                 Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(22),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.surfaceContainerHighest),
-                    boxShadow: const [
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: [
                       BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 10,
-                        offset: Offset(0, 4),
+                        color: AppColors.primaryDark.withValues(alpha: 0.08),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
                       ),
                     ],
                   ),
                   child: Column(
                     children: [
                       Container(
-                        width: 80,
-                        height: 80,
+                        width: 84,
+                        height: 84,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: AppColors.primaryContainer,
+                          gradient: AppTheme.brandGradient,
                           border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: const [
+                          boxShadow: [
                             BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 8,
+                              color: AppColors.safetyBlue.withValues(alpha: 0.3),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
                             ),
                           ],
                         ),
                         child: const Center(
                           child: Icon(
-                            Icons.person,
-                            size: 48,
+                            Icons.person_rounded,
+                            size: 46,
                             color: Colors.white,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
                       Text(
                         profileName,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
-                            ?.copyWith(
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: AppColors.textMain,
+                              letterSpacing: -0.3,
                             ),
                       ),
                       Text(
@@ -126,16 +136,15 @@ class ProfileScreen extends StatelessWidget {
                           color: AppColors.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
                         decoration: BoxDecoration(
-                          color: AppColors.safetyBlue.withOpacity(0.1),
+                          color: AppColors.safetyBlue.withValues(alpha: 0.09),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          'Authenticated Role: $activeRole',
+                          'Signed in as $activeRole',
                           style: const TextStyle(
                             color: AppColors.safetyBlue,
                             fontWeight: FontWeight.bold,
@@ -143,11 +152,9 @@ class ProfileScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 18),
                       const Divider(color: AppColors.surfaceContainerHighest),
-                      const SizedBox(height: 12),
-
-                      // Quick info metrics
+                      const SizedBox(height: 14),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: statsWidgets,
@@ -155,55 +162,68 @@ class ProfileScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
-                // Role Permissions Card (No unauthenticated role switcher)
+                // Role permissions card
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.surfaceContainerHighest),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryDark.withValues(alpha: 0.05),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.admin_panel_settings_outlined,
-                              color: AppColors.safetyBlue, size: 20),
-                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: AppColors.safetyBlue.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.shield_rounded,
+                                color: AppColors.safetyBlue, size: 17),
+                          ),
+                          const SizedBox(width: 10),
                           Text(
-                            'Role Authorized Views',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
-                                ?.copyWith(
+                            'What you can access',
+                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
                                 ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       const Text(
-                        'Your views are restricted based on your login session. To switch roles, sign out and select a different account on the login screen.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppColors.onSurfaceVariant,
-                        ),
+                        'Your view is tied to this login session. Sign out to switch roles.',
+                        style: TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
                       ),
-                      const SizedBox(height: 12),
-                      const Divider(color: AppColors.surfaceContainerHighest),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 14),
                       ...authorizedScope.map(
                         (scope) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          padding: const EdgeInsets.symmetric(vertical: 5),
                           child: Row(
                             children: [
-                              const Icon(Icons.check_circle_outline,
-                                  color: AppColors.successGreen, size: 18),
-                              const SizedBox(width: 8),
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.mintSoft,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.check_rounded,
+                                    color: AppColors.successGreen, size: 13),
+                              ),
+                              const SizedBox(width: 10),
                               Text(
                                 scope,
                                 style: const TextStyle(
@@ -219,68 +239,67 @@ class ProfileScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
-                // Emergency & Help Contacts
+                // Emergency & help contacts
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.surfaceContainerHighest),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primaryDark.withValues(alpha: 0.05),
+                        blurRadius: 14,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Emergency Contacts & Support',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(
+                        'Emergency contacts & support',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
                             ),
                       ),
-                      const SizedBox(height: 12),
-                      ListTile(
-                        leading: const Icon(Icons.phone_in_talk,
-                            color: AppColors.alertOrange),
-                        title: const Text('School Dispatch Hotline'),
-                        subtitle: const Text('+1 (800) 555-0199'),
-                        onTap: () {},
+                      const SizedBox(height: 6),
+                      _ContactTile(
+                        icon: Icons.phone_in_talk_rounded,
+                        iconBg: AppColors.amberSoft,
+                        iconColor: AppColors.alertOrangeDark,
+                        title: 'School Dispatch Hotline',
+                        subtitle: '+1 (800) 555-0199',
                       ),
-                      ListTile(
-                        leading: const Icon(Icons.shield_outlined,
-                            color: AppColors.safetyBlue),
-                        title: const Text('Safety Policy & Terms'),
-                        onTap: () {},
+                      _ContactTile(
+                        icon: Icons.shield_outlined,
+                        iconBg: AppColors.safetyBlue.withValues(alpha: 0.1),
+                        iconColor: AppColors.safetyBlue,
+                        title: 'Safety Policy & Terms',
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 22),
 
-                // Sign Out Button
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton.icon(
+                  height: 52,
+                  child: OutlinedButton.icon(
                     onPressed: onSignOut,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.errorRed,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.errorRed,
+                      side: const BorderSide(color: AppColors.errorRed, width: 1.4),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    icon: const Icon(Icons.logout, color: Colors.white),
+                    icon: const Icon(Icons.logout_rounded),
                     label: const Text(
                       'Sign Out',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
@@ -288,6 +307,53 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ContactTile extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final Color iconColor;
+  final String title;
+  final String? subtitle;
+
+  const _ContactTile({
+    required this.icon,
+    required this.iconBg,
+    required this.iconColor,
+    required this.title,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+            child: Icon(icon, color: iconColor, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                if (subtitle != null)
+                  Text(subtitle!,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -321,4 +387,3 @@ class _ProfileStat extends StatelessWidget {
     );
   }
 }
-

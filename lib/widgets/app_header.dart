@@ -22,33 +22,34 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
       title: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.primaryContainer,
+              gradient: AppTheme.brandGradient,
               border: Border.all(color: Colors.white, width: 2),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 4,
+                  color: AppColors.safetyBlue.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(19),
               child: avatarUrl != null
                   ? Image.network(
                       avatarUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
+                      errorBuilder: (_, _, _) => const Icon(
                         Icons.person,
                         size: 20,
                         color: Colors.white,
                       ),
                     )
                   : const Icon(
-                      Icons.directions_bus,
+                      Icons.directions_bus_filled_rounded,
                       size: 20,
                       color: Colors.white,
                     ),
@@ -58,9 +59,10 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
           Text(
             title,
             style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                  color: AppColors.safetyBlue,
+                  color: AppColors.primaryDark,
                   fontWeight: FontWeight.bold,
-                  fontSize: 20,
+                  fontSize: 19,
+                  letterSpacing: -0.3,
                 ),
           ),
         ],
