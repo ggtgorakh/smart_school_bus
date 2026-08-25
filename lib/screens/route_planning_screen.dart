@@ -1,6 +1,7 @@
+import 'dart:ui'; // Needed for ImageFilter.blur if using AppTheme.glassDecoration
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
-import '../widgets/live_map_canvas.dart';
+import '../theme/app_theme.dart'; // Assuming this file exists and contains AppColors
+import '../widgets/live_map_canvas.dart'; // Assuming this widget exists
 
 // 1. Define a Data Model for the stops
 class RouteStop {
@@ -74,23 +75,26 @@ class RoutePlanningScreen extends StatelessWidget {
 
               const SizedBox(height: 16),
 
-              // Map preview
-              Container(
-                height: 220,
-                width: double.infinity,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppColors.surfaceContainerHighest,
+              // Map preview (wrapped in RepaintBoundary for performance during scroll)
+              RepaintBoundary(
+                child: Container(
+                  height: 220,
+                  width: double.infinity,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppColors.surfaceContainerHighest,
+                    ),
+                  ),
+                  child: const LiveMapCanvas(
+                    busStatus: 'Planned Route',
+                    etaTime: '07:30 AM Start',
+                    busNumber: 'Route 7A',
                   ),
                 ),
-                child: const LiveMapCanvas(
-                  busStatus: 'Planned Route',
-                  etaTime: '07:30 AM Start',
-                  busNumber: 'Route 7A',
-                ),
               ),
+
 
               const SizedBox(height: 20),
 
@@ -152,7 +156,7 @@ class RoutePlanningScreen extends StatelessWidget {
             vertical: 7,
           ),
           decoration: BoxDecoration(
-            color: AppColors.safetyBlue.withValues(alpha: 0.1),
+            color: AppColors.safetyBlue.withValues(alpha: 0.1), // Updated withValues
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
@@ -165,7 +169,9 @@ class RoutePlanningScreen extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                '$totalStops Stops Active', // Dynamic count
+                '$totalStops Stops Active',
+                maxLines: 1, // Fix for overflow here
+                overflow: TextOverflow.ellipsis, // Fix for overflow here
                 style: const TextStyle(
                   color: AppColors.safetyBlue,
                   fontWeight: FontWeight.bold,
@@ -284,7 +290,7 @@ class RoutePlanningScreen extends StatelessWidget {
                   boxShadow: isCurrent
                       ? [
                     BoxShadow(
-                      color: AppColors.alertOrange.withValues(alpha: 0.4),
+                      color: AppColors.alertOrange.withValues(alpha: 0.4), // Updated withValues
                       blurRadius: 6,
                     ),
                   ]

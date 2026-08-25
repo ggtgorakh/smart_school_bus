@@ -1,0 +1,25 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "smart-school-bus-8e7d1",
+          "appId": "1:835199128980:android:c43ecf57d49af86e54eb81",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "smart-school-bus-8e7d1",
+          "configurations": {
+            "android": "1:835199128980:android:c43ecf57d49af86e54eb81",
+            "ios": "1:835199128980:ios:5f268b3866e4d45754eb81",
+            "macos": "1:835199128980:ios:5f268b3866e4d45754eb81",
+            "web": "1:835199128980:web:9d131f886114eaf954eb81",
+            "windows": "1:835199128980:web:65186e879a68139a54eb81"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "835199128980",
+    "firebase_url": "https://smart-school-bus-8e7d1-default-rtdb.firebaseio.com",
+    "project_id": "smart-school-bus-8e7d1",
+    "storage_bucket": "smart-school-bus-8e7d1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:835199128980:android:c43ecf57d49af86e54eb81",
+        "android_client_info": {
+          "package_name": "com.schoolbussafe.schoolbus_safe"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6lgCu1v07skVYLWjqZUUAAmHa_wdap1U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
