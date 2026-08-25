@@ -40,7 +40,6 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     final role = widget.userRole;
 
     if (role == 'Driver') {
-      // Driver now only sees navigation (conductor handles attendance)
       return [
         AuthorizedTab(
           title: 'Bus Route Navigation',
@@ -64,8 +63,9 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           ),
         ),
       ];
-    } else if (role == 'Conductor') {
-      // Conductor handles manual student check-in/check-out
+    }
+
+    if (role == 'Conductor') {
       return [
         AuthorizedTab(
           title: 'Student Check-in/Check-out',
@@ -98,7 +98,9 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           ),
         ),
       ];
-    } else if (role == 'Admin') {
+    }
+
+    if (role == 'Admin') {
       return [
         AuthorizedTab(
           title: 'Fleet Management Overview',
@@ -140,59 +142,72 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           ),
         ),
       ];
-    } else {
-      // Default: Parent Role
-      return [
-        AuthorizedTab(
-          title: 'Child Boarding Status',
-          screen: const LiveTrackingScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.info_outlined),
-            activeIcon: Icon(Icons.info),
-            label: 'Status',
-          ),
-        ),
-        AuthorizedTab(
-          title: 'Live Bus Tracking',
-          screen: const LiveTrackingScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            activeIcon: Icon(Icons.map),
-            label: 'Map',
-          ),
-        ),
-        AuthorizedTab(
-          title: 'Parent Profile',
-          screen: ProfileScreen(
-            activeRole: role,
-            onSignOut: widget.onSignOut,
-          ),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ),
-      ];
     }
+
+    // Default: Parent
+    return [
+      AuthorizedTab(
+        title: 'Child Boarding Status',
+        screen: const LiveTrackingScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.info_outlined),
+          activeIcon: Icon(Icons.info),
+          label: 'Status',
+        ),
+      ),
+      AuthorizedTab(
+        title: 'Live Bus Tracking',
+        screen: const LiveTrackingScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.map_outlined),
+          activeIcon: Icon(Icons.map),
+          label: 'Map',
+        ),
+      ),
+      AuthorizedTab(
+        title: 'Parent Profile',
+        screen: ProfileScreen(
+          activeRole: role,
+          onSignOut: widget.onSignOut,
+        ),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          activeIcon: Icon(Icons.person),
+          label: 'Profile',
+        ),
+      ),
+    ];
   }
 
   @override
   Widget build(BuildContext context) {
     final tabs = _buildAuthorizedTabs();
-    final safeIndex = _currentIndex >= tabs.length ? 0 : _currentIndex;
+
+    final safeIndex =
+    _currentIndex >= tabs.length ? 0 : _currentIndex;
 
     return Scaffold(
       appBar: AppHeader(
         title: tabs[safeIndex].title,
       ),
+
       body: IndexedStack(
         index: safeIndex,
-        children: tabs.map((t) => t.screen).toList(),
+        children: tabs.map((tab) => tab.screen).toList(),
       ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-        decoration: const BoxDecoration(color: Colors.transparent),
+
+      // SafeArea prevents the bottom navigation from colliding
+      // with Android's gesture/navigation area.
+      bottomNavigationBar: SafeArea(
+        top: false,
+        left: false,
+        right: false,
+        bottom: true,
+        minimum: const EdgeInsets.only(
+          left: 12,
+          right: 12,
+          bottom: 8,
+        ),
         child: Container(
           height: 64,
           decoration: BoxDecoration(
@@ -210,25 +225,36 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
             borderRadius: BorderRadius.circular(22),
             child: BottomNavigationBar(
               currentIndex: safeIndex,
+
               onTap: (index) {
+                if (index == safeIndex) return;
+
                 setState(() {
                   _currentIndex = index;
                 });
               },
+
               type: BottomNavigationBarType.fixed,
+
               backgroundColor: Colors.white,
+
               elevation: 0,
+
               selectedItemColor: AppColors.safetyBlue,
+
               unselectedItemColor: AppColors.outline,
+
               selectedLabelStyle: const TextStyle(
-                fontSize: 11.5,
+                fontSize: 11,
                 fontWeight: FontWeight.bold,
               ),
+
               unselectedLabelStyle: const TextStyle(
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w500,
               ),
-              items: tabs.map((t) => t.navItem).toList(),
+
+              items: tabs.map((tab) => tab.navItem).toList(),
             ),
           ),
         ),
@@ -236,4 +262,3 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     );
   }
 }
-

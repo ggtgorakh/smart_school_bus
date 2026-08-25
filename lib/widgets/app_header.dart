@@ -18,16 +18,23 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0.5,
+      automaticallyImplyLeading: false,
       titleSpacing: 16,
+      toolbarHeight: kToolbarHeight,
+
       title: Row(
         children: [
+          // App logo
           Container(
             width: 38,
             height: 38,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: AppTheme.brandGradient,
-              border: Border.all(color: Colors.white, width: 2),
+              border: Border.all(
+                color: Colors.white,
+                width: 2,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.safetyBlue.withValues(alpha: 0.25),
@@ -40,67 +47,91 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
               borderRadius: BorderRadius.circular(19),
               child: avatarUrl != null
                   ? Image.network(
-                      avatarUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => const Icon(
-                        Icons.person,
-                        size: 20,
-                        color: Colors.white,
-                      ),
-                    )
+                avatarUrl!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const Icon(
+                  Icons.directions_bus_filled_rounded,
+                  size: 20,
+                  color: Colors.white,
+                ),
+              )
                   : const Icon(
-                      Icons.directions_bus_filled_rounded,
-                      size: 20,
-                      color: Colors.white,
-                    ),
+                Icons.directions_bus_filled_rounded,
+                size: 20,
+                color: Colors.white,
+              ),
             ),
           ),
+
           const SizedBox(width: 12),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                  color: AppColors.primaryDark,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 19,
-                  letterSpacing: -0.3,
-                ),
+
+          // Responsive title
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                color: AppColors.primaryDark,
+                fontWeight: FontWeight.bold,
+                fontSize: 19,
+                letterSpacing: -0.3,
+              ),
+            ),
           ),
         ],
       ),
+
+      // Notification button
       actions: [
-        Stack(
-          alignment: Alignment.center,
-          children: [
-            IconButton(
-              onPressed: onNotificationPressed ??
-                  () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('No new notifications'),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  },
-              icon: const Icon(
-                Icons.notifications_outlined,
-                color: AppColors.safetyBlue,
-                size: 26,
-              ),
-            ),
-            Positioned(
-              right: 12,
-              top: 12,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: AppColors.alertOrange,
-                  shape: BoxShape.circle,
+        SizedBox(
+          width: 48,
+          height: kToolbarHeight,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 44,
+                  minHeight: 44,
+                ),
+                onPressed: onNotificationPressed ??
+                        () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('No new notifications'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                icon: const Icon(
+                  Icons.notifications_outlined,
+                  color: AppColors.safetyBlue,
+                  size: 26,
                 ),
               ),
-            ),
-          ],
+
+              // Notification indicator
+              Positioned(
+                right: 7,
+                top: 10,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.alertOrange,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
+
         const SizedBox(width: 8),
       ],
     );
