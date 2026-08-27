@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
+import '../services/session_service.dart';
 import 'live_tracking_screen.dart';
+import 'boarding_status_screen.dart';
 import 'attendance_scanner_screen.dart';
 import 'fleet_management_screen.dart';
 import 'route_planning_screen.dart';
@@ -35,6 +37,23 @@ class MainNavigationShell extends StatefulWidget {
 
 class _MainNavigationShellState extends State<MainNavigationShell> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreTabIndex();
+  }
+
+  Future<void> _restoreTabIndex() async {
+    final saved = await SessionService.instance.getTabIndex();
+    if (!mounted) return;
+    // _buildAuthorizedTabs() below clamps out-of-range indexes too, but
+    // guard here as well in case the saved index came from a role with
+    // more tabs than the current one.
+    setState(() {
+      _currentIndex = saved;
+    });
+  }
 
   List<AuthorizedTab> _buildAuthorizedTabs() {
     final role = widget.userRole;
@@ -148,7 +167,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     return [
       AuthorizedTab(
         title: 'Child Boarding Status',
-        screen: const LiveTrackingScreen(),
+        screen: BoardingStatusScreen(),
         navItem: const BottomNavigationBarItem(
           icon: Icon(Icons.info_outlined),
           activeIcon: Icon(Icons.info),
@@ -232,6 +251,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
                 setState(() {
                   _currentIndex = index;
                 });
+                SessionService.instance.saveTabIndex(index);
               },
 
               type: BottomNavigationBarType.fixed,

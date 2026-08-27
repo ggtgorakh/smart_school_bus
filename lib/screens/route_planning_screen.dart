@@ -1,7 +1,6 @@
-import 'dart:ui'; // Needed for ImageFilter.blur if using AppTheme.glassDecoration
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart'; // Assuming this file exists and contains AppColors
-import '../widgets/live_map_canvas.dart'; // Assuming this widget exists
+import '../theme/app_theme.dart';
+import '../widgets/live_map_canvas.dart';
 
 // 1. Define a Data Model for the stops
 class RouteStop {
@@ -23,7 +22,7 @@ class RouteStop {
 class RoutePlanningScreen extends StatelessWidget {
   const RoutePlanningScreen({super.key});
 
-  // 2. Define your list of data (Replace this with Firebase data later)
+  // 2. Mock Data List
   static const List<RouteStop> mockStops = [
     RouteStop(
       time: '07:30 AM',
@@ -70,12 +69,12 @@ class RoutePlanningScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Pass the total stops to the header dynamically
+              // Dynamic Header
               _buildPageHeader(context, totalStops: mockStops.length),
 
               const SizedBox(height: 16),
 
-              // Map preview (wrapped in RepaintBoundary for performance during scroll)
+              // Map Preview Box
               RepaintBoundary(
                 child: Container(
                   height: 220,
@@ -95,22 +94,21 @@ class RoutePlanningScreen extends StatelessWidget {
                 ),
               ),
 
-
               const SizedBox(height: 20),
 
               Text(
                 'Stop Schedule Timeline',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: AppColors.textMain,
-                ),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: AppColors.textMain,
+                    ),
               ),
 
               const SizedBox(height: 12),
 
-              // 3. Pass the dynamic list to the timeline builder
-              _buildTimelineCard(mockStops),
+              // Dynamic Timeline Builder
+              _buildTimelineCard(context, mockStops),
             ],
           ),
         ),
@@ -131,10 +129,10 @@ class RoutePlanningScreen extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                color: AppColors.textMain,
-                fontWeight: FontWeight.bold,
-                fontSize: 22,
-              ),
+                    color: AppColors.textMain,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 22,
+                  ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -142,21 +140,18 @@ class RoutePlanningScreen extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.onSurfaceVariant,
-                fontSize: 13,
-                height: 1.3,
-              ),
+                    color: AppColors.onSurfaceVariant,
+                    fontSize: 13,
+                    height: 1.3,
+                  ),
             ),
           ],
         );
 
         final stopsBadge = Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 12,
-            vertical: 7,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
-            color: AppColors.safetyBlue.withValues(alpha: 0.1), // Updated withValues
+            color: AppColors.safetyBlue.withOpacity(0.1),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
@@ -170,8 +165,8 @@ class RoutePlanningScreen extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 '$totalStops Stops Active',
-                maxLines: 1, // Fix for overflow here
-                overflow: TextOverflow.ellipsis, // Fix for overflow here
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   color: AppColors.safetyBlue,
                   fontWeight: FontWeight.bold,
@@ -185,11 +180,7 @@ class RoutePlanningScreen extends StatelessWidget {
         if (isSmallScreen) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              titleSection,
-              const SizedBox(height: 10),
-              stopsBadge,
-            ],
+            children: [titleSection, const SizedBox(height: 10), stopsBadge],
           );
         }
 
@@ -205,22 +196,20 @@ class RoutePlanningScreen extends StatelessWidget {
     );
   }
 
-  // 4. Generate UI from the list of models automatically
-  Widget _buildTimelineCard(List<RouteStop> stops) {
+  Widget _buildTimelineCard(BuildContext context, List<RouteStop> stops) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 4),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.surfaceContainerHighest,
-        ),
+        border: Border.all(color: AppColors.surfaceContainerHighest),
       ),
       child: Column(
         children: List.generate(stops.length, (index) {
           final stop = stops[index];
           return _buildTimelineItem(
+            context,
             time: stop.time,
             stopName: stop.name,
             studentsCount: stop.studentsCount,
@@ -234,7 +223,8 @@ class RoutePlanningScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTimelineItem({
+  Widget _buildTimelineItem(
+    BuildContext context, {
     required String time,
     required String stopName,
     required int studentsCount,
@@ -246,108 +236,167 @@ class RoutePlanningScreen extends StatelessWidget {
     final Color nodeColor = isCompleted
         ? AppColors.safetyBlue
         : isCurrent
-        ? AppColors.alertOrange
-        : AppColors.outlineVariant;
+            ? AppColors.alertOrange
+            : AppColors.outlineVariant;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Time
-        SizedBox(
-          width: 68,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 1),
-            child: Text(
-              time,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-                color: isCurrent ? AppColors.alertOrange : AppColors.textMain,
-                fontSize: 12,
-              ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
             ),
-          ),
-        ),
-
-        const SizedBox(width: 8),
-
-        // Timeline Node/Line
-        SizedBox(
-          width: 16,
-          child: Column(
-            children: [
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
+            title: Row(
+              children: [
+                Icon(
+                  isCompleted
+                      ? Icons.check_circle
+                      : (isCurrent
+                          ? Icons.navigation_rounded
+                          : Icons.location_on),
                   color: nodeColor,
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 2,
-                  ),
-                  boxShadow: isCurrent
-                      ? [
-                    BoxShadow(
-                      color: AppColors.alertOrange.withValues(alpha: 0.4), // Updated withValues
-                      blurRadius: 6,
-                    ),
-                  ]
-                      : null,
                 ),
-              ),
-              if (!isLast)
-                Container(
-                  width: 2,
-                  height: 48,
-                  color: isCompleted
-                      ? AppColors.safetyBlue
-                      : AppColors.surfaceContainerHighest,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(stopName, style: const TextStyle(fontSize: 16)),
                 ),
-            ],
-          ),
-        ),
-
-        const SizedBox(width: 12),
-
-        // Stop details
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Column(
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  stopName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: isCurrent || isCompleted
-                        ? FontWeight.bold
-                        : FontWeight.normal,
-                    fontSize: 14,
-                    height: 1.25,
-                    color: AppColors.textMain,
+                  'Scheduled Time: $time',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
                   ),
                 ),
-                if (studentsCount > 0) ...[
-                  const SizedBox(height: 3),
-                  Text(
-                    '$studentsCount students pick-up',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.onSurfaceVariant,
-                    ),
+                const SizedBox(height: 6),
+                Text(
+                  'Assigned Students: $studentsCount',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Status: ${isCompleted ? "Completed" : (isCurrent ? "Approaching / Current Stop" : "Scheduled")}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: nodeColor,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      },
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Time Column
+          SizedBox(
+            width: 68,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Text(
+                time,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                  color: isCurrent ? AppColors.alertOrange : AppColors.textMain,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Timeline Node / Vertical Line
+          SizedBox(
+            width: 16,
+            child: Column(
+              children: [
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: nodeColor,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: isCurrent
+                        ? [
+                            BoxShadow(
+                              color: AppColors.alertOrange.withOpacity(0.4),
+                              blurRadius: 6,
+                            ),
+                          ]
+                        : null,
+                  ),
+                ),
+                if (!isLast)
+                  Container(
+                    width: 2,
+                    height: 48,
+                    color: isCompleted
+                        ? AppColors.safetyBlue
+                        : AppColors.surfaceContainerHighest,
+                  ),
               ],
             ),
           ),
-        ),
-      ],
+
+          const SizedBox(width: 12),
+
+          // Stop Name & Details
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    stopName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: isCurrent || isCompleted
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                      fontSize: 14,
+                      height: 1.25,
+                      color: AppColors.textMain,
+                    ),
+                  ),
+                  if (studentsCount > 0) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      '$studentsCount students pick-up • Tap for details',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

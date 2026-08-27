@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
+import 'admin/create_user_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String activeRole;
@@ -241,6 +243,83 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
 
+                if (activeRole == 'Admin') ...[
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryDark.withValues(alpha: 0.05),
+                          blurRadius: 14,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppColors.safetyBlue.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(Icons.admin_panel_settings_rounded,
+                                  color: AppColors.safetyBlue, size: 17),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Admin Management',
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Material(
+                          color: Colors.transparent,
+                          child: ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: AppColors.safetyBlue.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.person_add_rounded,
+                                  color: AppColors.safetyBlue, size: 18),
+                            ),
+                            title: const Text(
+                              'Provision New User',
+                              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+                            ),
+                            subtitle: const Text(
+                              'Create Driver, Conductor, Parent, or Admin credentials',
+                              style: TextStyle(fontSize: 11.5, color: AppColors.onSurfaceVariant),
+                            ),
+                            trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.outline),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const AdminCreateUserScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
                 // Emergency & help contacts
                 Container(
                   padding: const EdgeInsets.all(18),
@@ -271,13 +350,73 @@ class ProfileScreen extends StatelessWidget {
                         iconBg: AppColors.amberSoft,
                         iconColor: AppColors.alertOrangeDark,
                         title: 'School Dispatch Hotline',
-                        subtitle: '+1 (800) 555-0199',
+                        subtitle: '+1 (800) 555-0199 • Tap to call',
+                        onTap: () async {
+                          final Uri telUri = Uri(scheme: 'tel', path: '+18005550199');
+                          try {
+                            if (await canLaunchUrl(telUri)) {
+                              await launchUrl(telUri);
+                            } else {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Hotline: +1 (800) 555-0199'),
+                                    backgroundColor: AppColors.safetyBlue,
+                                  ),
+                                );
+                              }
+                            }
+                          } catch (_) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Hotline: +1 (800) 555-0199'),
+                                  backgroundColor: AppColors.safetyBlue,
+                                ),
+                              );
+                            }
+                          }
+                        },
                       ),
                       _ContactTile(
                         icon: Icons.shield_outlined,
                         iconBg: AppColors.safetyBlue.withValues(alpha: 0.1),
                         iconColor: AppColors.safetyBlue,
                         title: 'Safety Policy & Terms',
+                        subtitle: 'Tap to review standards & protocols',
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                              title: Row(
+                                children: const [
+                                  Icon(Icons.security_rounded,
+                                      color: AppColors.safetyBlue),
+                                  SizedBox(width: 8),
+                                  Text('Safety & Transport Standards'),
+                                ],
+                              ),
+                              content: const SingleChildScrollView(
+                                child: Text(
+                                  '• Real-time GPS tracking is encrypted end-to-end.\n'
+                                  '• Conductor check-in is mandatory at every authorized stop.\n'
+                                  '• Emergency SOS hotline is staffed 24/7 by School District Dispatch.\n'
+                                  '• Speed governor alerts are triggered automatically when limit exceeds 45 mph.',
+                                  style: TextStyle(fontSize: 13, height: 1.4),
+                                ),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(ctx).pop(),
+                                  child: const Text('Close'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -318,6 +457,7 @@ class _ContactTile extends StatelessWidget {
   final Color iconColor;
   final String title;
   final String? subtitle;
+  final VoidCallback? onTap;
 
   const _ContactTile({
     required this.icon,
@@ -325,35 +465,43 @@ class _ContactTile extends StatelessWidget {
     required this.iconColor,
     required this.title,
     this.subtitle,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
-            child: Icon(icon, color: iconColor, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
-                if (subtitle != null)
-                  Text(subtitle!,
-                      style: const TextStyle(
-                          fontSize: 12, color: AppColors.onSurfaceVariant)),
-              ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
+              child: Icon(icon, color: iconColor, size: 18),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                  if (subtitle != null)
+                    Text(subtitle!,
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.onSurfaceVariant)),
+                ],
+              ),
+            ),
+            if (onTap != null)
+              const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.outline, size: 20),
+          ],
+        ),
       ),
     );
   }

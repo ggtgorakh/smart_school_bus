@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../models/app_notification.dart';
+import '../services/notification_service.dart';
+import '../screens/notifications_screen.dart';
 
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -83,53 +86,76 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
 
-      // Notification button
+      // Notification button — real unread badge, opens NotificationsScreen.
       actions: [
-        SizedBox(
-          width: 48,
-          height: kToolbarHeight,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 44,
-                  minHeight: 44,
-                ),
-                onPressed: onNotificationPressed ??
-                        () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('No new notifications'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                icon: const Icon(
-                  Icons.notifications_outlined,
-                  color: AppColors.safetyBlue,
-                  size: 26,
-                ),
-              ),
+        ValueListenableBuilder<List<AppNotification>>(
+          valueListenable: NotificationService.instance.notifications,
+          builder: (context, items, _) {
+            final unreadCount = items.where((n) => !n.isRead).length;
 
-              // Notification indicator
-              Positioned(
-                right: 7,
-                top: 10,
-                child: IgnorePointer(
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: AppColors.alertOrange,
-                      shape: BoxShape.circle,
+            return SizedBox(
+              width: 48,
+              height: kToolbarHeight,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 44,
+                    ),
+                    onPressed: onNotificationPressed ??
+                        () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const NotificationsScreen(),
+                            ),
+                          );
+                        },
+                    icon: const Icon(
+                      Icons.notifications_outlined,
+                      color: AppColors.safetyBlue,
+                      size: 26,
                     ),
                   ),
-                ),
+
+                  // Unread badge — only shown when there's something unread.
+                  if (unreadCount > 0)
+                    Positioned(
+                      right: 4,
+                      top: 6,
+                      child: IgnorePointer(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 1),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.alertOrange,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white, width: 1.5),
+                          ),
+                          child: Center(
+                            child: Text(
+                              unreadCount > 9 ? '9+' : '$unreadCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                height: 1.2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
 
         const SizedBox(width: 8),

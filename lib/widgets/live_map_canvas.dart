@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -59,10 +58,7 @@ class RouteMapPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     final completedPath = Path()
-      ..moveTo(
-        size.width * 0.15,
-        size.height * 0.85,
-      )
+      ..moveTo(size.width * 0.15, size.height * 0.85)
       ..cubicTo(
         size.width * 0.3,
         size.height * 0.75,
@@ -72,10 +68,7 @@ class RouteMapPainter extends CustomPainter {
         size.height * 0.45,
       );
 
-    canvas.drawPath(
-      completedPath,
-      completedPaint,
-    );
+    canvas.drawPath(completedPath, completedPaint);
 
     // -----------------------------
     // Remaining route
@@ -88,10 +81,7 @@ class RouteMapPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     final remainingPath = Path()
-      ..moveTo(
-        size.width * 0.55,
-        size.height * 0.45,
-      )
+      ..moveTo(size.width * 0.55, size.height * 0.45)
       ..cubicTo(
         size.width * 0.65,
         size.height * 0.35,
@@ -109,18 +99,9 @@ class RouteMapPainter extends CustomPainter {
       double distance = 0;
 
       while (distance < metric.length) {
-        final end = (distance + dashWidth).clamp(
-          0.0,
-          metric.length,
-        );
+        final end = (distance + dashWidth).clamp(0.0, metric.length);
 
-        canvas.drawPath(
-          metric.extractPath(
-            distance,
-            end,
-          ),
-          remainingPaint,
-        );
+        canvas.drawPath(metric.extractPath(distance, end), remainingPaint);
 
         distance += dashWidth + dashSpace;
       }
@@ -130,11 +111,9 @@ class RouteMapPainter extends CustomPainter {
     // Stop markers
     // -----------------------------
 
-    final completedStopPaint = Paint()
-      ..color = const Color(0xFFB9C4DC);
+    final completedStopPaint = Paint()..color = const Color(0xFFB9C4DC);
 
-    final nextStopPaint = Paint()
-      ..color = AppColors.alertOrange;
+    final nextStopPaint = Paint()..color = AppColors.alertOrange;
 
     final whiteBorder = Paint()
       ..color = Colors.white
@@ -142,58 +121,25 @@ class RouteMapPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     // Stop 1
-    final stop1 = Offset(
-      size.width * 0.15,
-      size.height * 0.85,
-    );
+    final stop1 = Offset(size.width * 0.15, size.height * 0.85);
 
-    canvas.drawCircle(
-      stop1,
-      8,
-      completedStopPaint,
-    );
+    canvas.drawCircle(stop1, 8, completedStopPaint);
 
-    canvas.drawCircle(
-      stop1,
-      8,
-      whiteBorder,
-    );
+    canvas.drawCircle(stop1, 8, whiteBorder);
 
     // Stop 2
-    final stop2 = Offset(
-      size.width * 0.35,
-      size.height * 0.68,
-    );
+    final stop2 = Offset(size.width * 0.35, size.height * 0.68);
 
-    canvas.drawCircle(
-      stop2,
-      8,
-      completedStopPaint,
-    );
+    canvas.drawCircle(stop2, 8, completedStopPaint);
 
-    canvas.drawCircle(
-      stop2,
-      8,
-      whiteBorder,
-    );
+    canvas.drawCircle(stop2, 8, whiteBorder);
 
     // Next stop
-    final stop3 = Offset(
-      size.width * 0.85,
-      size.height * 0.2,
-    );
+    final stop3 = Offset(size.width * 0.85, size.height * 0.2);
 
-    canvas.drawCircle(
-      stop3,
-      12,
-      nextStopPaint,
-    );
+    canvas.drawCircle(stop3, 12, nextStopPaint);
 
-    canvas.drawCircle(
-      stop3,
-      12,
-      whiteBorder,
-    );
+    canvas.drawCircle(stop3, 12, whiteBorder);
   }
 
   @override
@@ -202,266 +148,280 @@ class RouteMapPainter extends CustomPainter {
   }
 }
 
-
 // ============================================================
 // LIVE MAP CANVAS
 // ============================================================
 
-class LiveMapCanvas extends StatelessWidget {
+class LiveMapCanvas extends StatefulWidget {
   final String busStatus;
   final String etaTime;
   final String busNumber;
+  final double progress; // 0.0 to 1.0
+  final double speedKmph;
 
   const LiveMapCanvas({
     super.key,
     this.busStatus = 'On Route',
     this.etaTime = '8:14 AM',
     this.busNumber = 'Bus 42',
+    this.progress = 0.5,
+    this.speedKmph = 35.0,
   });
 
   @override
+  State<LiveMapCanvas> createState() => _LiveMapCanvasState();
+}
+
+class _LiveMapCanvasState extends State<LiveMapCanvas>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1600),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFE7ECF6),
-      child: Stack(
-        children: [
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final height = constraints.maxHeight;
 
-          // ====================================================
-          // MAP BACKGROUND
-          // ====================================================
+        // Calculate approximate bus marker position based on progress along the route
+        final p = widget.progress.clamp(0.0, 1.0);
+        final startX = width * 0.15;
+        final startY = height * 0.85;
+        final midX = width * 0.55;
+        final midY = height * 0.45;
+        final endX = width * 0.85;
+        final endY = height * 0.20;
+        final topMin = 70.0;
+        final topMax = (height - 220.0) < topMin ? topMin : (height - 220.0);
+        final leftMin = 10.0;
+        final leftMax = (width - 110.0) < leftMin ? leftMin : (width - 110.0);
 
-          Positioned.fill(
-            child: RepaintBoundary(
-              child: CustomPaint(
-                painter: RouteMapPainter(),
+        double busX;
+        double busY;
+        if (p < 0.5) {
+          final t = p / 0.5;
+          busX = startX + (midX - startX) * t;
+          busY = startY + (midY - startY) * t;
+        } else {
+          final t = (p - 0.5) / 0.5;
+          busX = midX + (endX - midX) * t;
+          busY = midY + (endY - midY) * t;
+        }
+
+        return Container(
+          color: const Color(0xFFE7ECF6),
+          child: Stack(
+            children: [
+              // MAP BACKGROUND
+              Positioned.fill(
+                child: RepaintBoundary(
+                  child: CustomPaint(painter: RouteMapPainter()),
+                ),
               ),
-            ),
-          ),
 
-          // ====================================================
-          // ETA CARD
-          // ====================================================
-
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: Center(
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 380,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
-                decoration: AppTheme.glassDecoration(
-                  borderRadius: 18,
-                ),
-                child: Row(
-                  mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-                  children: [
-
-                    // ETA
-                    Column(
-                      crossAxisAlignment:
-                      CrossAxisAlignment.start,
+              // ETA CARD
+              Positioned(
+                top: 16,
+                left: 16,
+                right: 16,
+                child: Center(
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 380),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 14,
+                    ),
+                    decoration: AppTheme.glassDecoration(borderRadius: 18),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-
-                        Text(
-                          'ESTIMATED ARRIVAL',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelMedium
-                              ?.copyWith(
-                            fontSize: 10.5,
-                            letterSpacing: 0.6,
-                          ),
+                        // ETA
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'ESTIMATED ARRIVAL',
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(
+                                    fontSize: 10.5,
+                                    letterSpacing: 0.6,
+                                  ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.etaTime,
+                              style: AppTheme.tabularTime(
+                                fontSize: 24,
+                                color: AppColors.alertOrangeDark,
+                              ),
+                            ),
+                          ],
                         ),
 
-                        const SizedBox(height: 2),
-
-                        Text(
-                          etaTime,
-                          style: AppTheme.tabularTime(
-                            fontSize: 25,
-                            color: AppColors.alertOrangeDark,
-                          ),
+                        // Bus information
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '${widget.busNumber} • ${widget.speedKmph.toStringAsFixed(0)} km/h',
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(
+                                    color: AppColors.onSurfaceVariant,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.mintSoft,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.check_circle_rounded,
+                                    size: 13,
+                                    color: AppColors.successGreen,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    widget.busStatus,
+                                    style: const TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.successGreen,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ),
 
-                    // Bus information
-                    Column(
-                      crossAxisAlignment:
-                      CrossAxisAlignment.end,
+              // DYNAMIC BUS MARKER
+              Positioned(
+                left: (busX - 50).clamp(leftMin, leftMax),
+                top: (busY - 70).clamp(topMin, topMax),
+                child: AnimatedBuilder(
+                  animation: _pulseController,
+                  builder: (context, _) {
+                    final pulseScale = 1.0 + (_pulseController.value * 0.15);
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-
-                        Text(
-                          busNumber,
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelMedium
-                              ?.copyWith(
-                            color:
-                            AppColors.onSurfaceVariant,
-                          ),
-                        ),
-
-                        const SizedBox(height: 4),
-
+                        // Status badge
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
+                            horizontal: 9,
                             vertical: 3,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.mintSoft,
-                            borderRadius:
-                            BorderRadius.circular(12),
+                            gradient: AppTheme.brandGradient,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.safetyBlue.withOpacity(0.35),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                           ),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-
-                              Icon(
-                                Icons.check_circle_rounded,
-                                size: 13,
-                                color:
-                                AppColors.successGreen,
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  color: AppColors.successGreen,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-
-                              SizedBox(width: 4),
-
+                              const SizedBox(width: 5),
                               Text(
-                                'On Schedule',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  fontWeight:
-                                  FontWeight.w700,
-                                  color:
-                                  AppColors.successGreen,
+                                widget.busStatus,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ],
                           ),
                         ),
+                        const SizedBox(height: 6),
+                        // Pulsing Bus Icon
+                        Transform.scale(
+                          scale: pulseScale,
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.safetyBlue.withOpacity(0.20),
+                            ),
+                            child: Center(
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  gradient: AppTheme.brandGradient,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2.5,
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black26,
+                                      blurRadius: 8,
+                                      offset: Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.directions_bus_filled_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
-            ),
+            ],
           ),
-
-          // ====================================================
-          // BUS MARKER
-          // ====================================================
-
-          Positioned(
-            top: 145,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-
-                  // Bus status label
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: AppTheme.brandGradient,
-                      borderRadius:
-                      BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.safetyBlue
-                              .withOpacity(0.35),
-                          blurRadius: 10,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration:
-                          const BoxDecoration(
-                            color:
-                            AppColors.successGreen,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-
-                        const SizedBox(width: 6),
-
-                        Text(
-                          busStatus,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Static bus marker
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: AppColors.safetyBlue
-                          .withOpacity(0.15),
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient:
-                          AppTheme.brandGradient,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 3,
-                          ),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black26,
-                              blurRadius: 10,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons
-                              .directions_bus_filled_rounded,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

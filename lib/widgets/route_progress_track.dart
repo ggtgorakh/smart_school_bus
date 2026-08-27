@@ -54,7 +54,7 @@ class RouteProgressTrack extends StatelessWidget {
                   boxShadow: isCurrent
                       ? [
                           BoxShadow(
-                            color: AppColors.alertOrange.withValues(alpha: 0.35),
+                            color: AppColors.alertOrange.withOpacity(0.35),
                             blurRadius: 6,
                           ),
                         ]

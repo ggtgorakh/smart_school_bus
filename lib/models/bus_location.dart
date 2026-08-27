@@ -1,20 +1,6 @@
 /// Live telemetry for a single bus, as pushed by the ESP32
 /// (NEO-6M GPS + SIM800L GSM) to Firebase Realtime Database at:
 ///   /buses/{busId}
-///
-/// Expected RTDB node shape:
-/// {
-///   "lat": 20.9333,
-///   "lng": 77.7794,
-///   "speedKmph": 28.5,
-///   "status": "on_route",           // on_route | delayed | arrived | idle
-///   "lastUpdated": 1735000000000,   // server epoch millis
-///   "currentStopIndex": 2,          // 0-based, stops already passed
-///   "totalStops": 8,
-///   "currentStopLabel": "Elm Street",
-///   "etaMinutes": 4,
-///   "busNumber": "Bus 42"
-/// }
 enum BusRunStatus { onRoute, delayed, arrived, idle }
 
 BusRunStatus _statusFromString(String? raw) {
@@ -56,9 +42,7 @@ class BusLocation {
     required this.busNumber,
   });
 
-  /// True if the last GPS push was more than [staleAfter] ago — used to
-  /// warn parents if the ESP32 has gone offline rather than silently
-  /// showing an old position as if it were current.
+  /// True if the last GPS push was more than [staleAfter] ago
   bool isStale({Duration staleAfter = const Duration(minutes: 2)}) {
     return DateTime.now().difference(lastUpdated) > staleAfter;
   }
@@ -83,20 +67,43 @@ class BusLocation {
   }
 
   factory BusLocation.fromMap(Map<dynamic, dynamic> map) {
+    // 1. Safe parsing for timestamps (Handles epoch millis, ISO strings, and invalid placeholders)
+    DateTime parseLastUpdated(dynamic raw) {
+      if (raw is num) {
+        return DateTime.fromMillisecondsSinceEpoch(raw.toInt());
+      } else if (raw is String) {
+        final parsed = DateTime.tryParse(raw);
+        if (parsed != null) return parsed;
+      }
+      return DateTime.now();
+    }
+
     return BusLocation(
       lat: (map['lat'] as num?)?.toDouble() ?? 0.0,
       lng: (map['lng'] as num?)?.toDouble() ?? 0.0,
       speedKmph: (map['speedKmph'] as num?)?.toDouble() ?? 0.0,
       status: _statusFromString(map['status'] as String?),
-      lastUpdated: map['lastUpdated'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(
-              (map['lastUpdated'] as num).toInt())
-          : DateTime.now(),
+      lastUpdated: parseLastUpdated(map['lastUpdated']),
       currentStopIndex: (map['currentStopIndex'] as num?)?.toInt() ?? 0,
       totalStops: (map['totalStops'] as num?)?.toInt() ?? 1,
       currentStopLabel: map['currentStopLabel'] as String? ?? '—',
       etaMinutes: (map['etaMinutes'] as num?)?.toInt() ?? 0,
       busNumber: map['busNumber'] as String? ?? 'Bus',
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'lat': lat,
+      'lng': lng,
+      'speedKmph': speedKmph,
+      'status': status.name,
+      'lastUpdated': lastUpdated.millisecondsSinceEpoch,
+      'currentStopIndex': currentStopIndex,
+      'totalStops': totalStops,
+      'currentStopLabel': currentStopLabel,
+      'etaMinutes': etaMinutes,
+      'busNumber': busNumber,
+    };
   }
 }

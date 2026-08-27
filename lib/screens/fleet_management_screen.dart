@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/bus_fleet.dart';
+import '../models/app_notification.dart';
+import '../services/notification_service.dart';
 import '../widgets/kpi_card.dart';
+import 'admin/create_user_screen.dart';
 
 class FleetManagementScreen extends StatefulWidget {
   const FleetManagementScreen({super.key});
@@ -118,14 +121,43 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           ],
         );
 
-        final dispatchButton = ElevatedButton.icon(
+        final addUserButton = OutlinedButton.icon(
           onPressed: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Dispatching replacement bus...'),
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const AdminCreateUserScreen(),
               ),
             );
           },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.safetyBlue,
+            side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
+            backgroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          icon: const Icon(
+            Icons.person_add_rounded,
+            size: 18,
+            color: AppColors.safetyBlue,
+          ),
+          label: const Text(
+            'Add User',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.safetyBlue,
+            ),
+          ),
+        );
+
+        final dispatchButton = ElevatedButton.icon(
+          onPressed: () => _openDispatchModal(context),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.safetyBlue,
             padding: const EdgeInsets.symmetric(
@@ -157,7 +189,14 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             children: [
               titleSection,
               const SizedBox(height: 14),
-              dispatchButton,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  addUserButton,
+                  dispatchButton,
+                ],
+              ),
             ],
           );
         }
@@ -167,6 +206,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           children: [
             Expanded(child: titleSection),
             const SizedBox(width: 12),
+            addUserButton,
+            const SizedBox(width: 8),
             dispatchButton,
           ],
         );
@@ -297,7 +338,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.safetyBlue.withValues(alpha: 0.04),
+            color: AppColors.safetyBlue.withOpacity(0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -782,11 +823,302 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
     );
   }
 
+  void _openDispatchModal(BuildContext context) {
+    String selectedRoute = 'Route 7A - Oakridge Elementary';
+    String selectedBus = 'BUS-901 (Standby Reserve)';
+    String selectedDriver = 'Marcus Vance (Standby)';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 20,
+            ),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Icon(Icons.add_road_rounded,
+                        color: AppColors.safetyBlue, size: 24),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Dispatch Replacement Vehicle',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Select Target Route:',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedRoute,
+                  decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  items: [
+                    'Route 7A - Oakridge Elementary',
+                    'Route 3C - Westside High',
+                    'Route 12B - Pinecrest Academy',
+                    'Route 5F - Lincoln Middle',
+                  ].map((r) => DropdownMenuItem(value: r, child: Text(r, style: const TextStyle(fontSize: 13)))).toList(),
+                  onChanged: (val) {
+                    if (val != null) setModalState(() => selectedRoute = val);
+                  },
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Assign Reserve Bus & Driver:',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 6),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedBus,
+                  decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  items: [
+                    'BUS-901 (Standby Reserve)',
+                    'BUS-804 (Standby Reserve)',
+                  ].map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 13)))).toList(),
+                  onChanged: (val) {
+                    if (val != null) setModalState(() => selectedBus = val);
+                  },
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      final newBus = BusFleet(
+                        busId: selectedBus.split(' ').first,
+                        driverName: selectedDriver.split(' ').first,
+                        routeName: selectedRoute,
+                        estArrival: '08:05 AM',
+                        status: FleetStatus.onRoute,
+                        speedMph: 24,
+                        fuelPercent: 95,
+                      );
+
+                      setState(() {
+                        _fleetList.insert(0, newBus);
+                      });
+
+                      NotificationService.instance.add(
+                        kind: NotificationKind.info,
+                        title: 'Replacement Bus Dispatched',
+                        message: '${newBus.busId} assigned to $selectedRoute.',
+                      );
+
+                      Navigator.of(ctx).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('✓ Dispatched ${newBus.busId} to $selectedRoute'),
+                          backgroundColor: AppColors.successGreen,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.safetyBlue,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.check_circle_rounded, size: 18),
+                    label: const Text(
+                      'Confirm & Dispatch Immediately',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   void _openDriverChat(BusFleet bus) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Opening chat with ${bus.driverName}...',
+    final textController = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Icon(Icons.chat_bubble_rounded,
+                    color: AppColors.safetyBlue, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Dispatch Dispatcher ↔ ${bus.driverName}',
+                        style: const TextStyle(
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textMain,
+                        ),
+                      ),
+                      Text(
+                        '${bus.busId} • ${bus.routeName}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Quick Dispatch Canned Messages:',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                'Hold at next stop',
+                'Traffic detour ahead',
+                'Confirm student manifest',
+                'Return to depot',
+              ].map((msg) {
+                return ActionChip(
+                  label: Text(msg, style: const TextStyle(fontSize: 12)),
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    NotificationService.instance.add(
+                      kind: NotificationKind.info,
+                      title: 'Dispatch Msg sent to ${bus.driverName}',
+                      message: '"$msg" (${bus.busId})',
+                    );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Sent: "$msg" to ${bus.driverName}'),
+                        backgroundColor: AppColors.safetyBlue,
+                      ),
+                    );
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: textController,
+                    decoration: InputDecoration(
+                      hintText: 'Type dispatch message...',
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    final txt = textController.text.trim();
+                    if (txt.isEmpty) return;
+                    Navigator.of(ctx).pop();
+                    NotificationService.instance.add(
+                      kind: NotificationKind.info,
+                      title: 'Dispatch Msg sent to ${bus.driverName}',
+                      message: '"$txt" (${bus.busId})',
+                    );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Sent: "$txt" to ${bus.driverName}'),
+                        backgroundColor: AppColors.safetyBlue,
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.safetyBlue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('Send'),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
