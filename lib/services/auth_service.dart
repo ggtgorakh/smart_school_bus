@@ -67,7 +67,36 @@ class AuthService {
     return defaultRole;
   }
 
-  /// Sets or updates the user role in Realtime Database.
+  /// Fetch the bus a Driver is assigned to from `/users/$uid/busId`.
+  ///
+  /// Bug #4 fix: Drivers are restricted (by Firebase Rules) to writing only
+  /// their assigned bus, identified by this field. Falls back to
+  /// [defaultBusId] if the user has no assignment yet or on error.
+  Future<String> fetchBusId(String uid, {String defaultBusId = 'bus_01'}) async {
+    try {
+      final snap = await _db.child('users/$uid/busId').get();
+      if (snap.exists && snap.value != null) {
+        final val = snap.value.toString().trim();
+        if (val.isNotEmpty) return val;
+      }
+    } catch (e) {
+      assert(() {
+        // ignore: avoid_print
+        print('Error fetching busId for $uid from RTDB: $e');
+        return true;
+      }());
+    }
+    return defaultBusId;
+  }
+
+  /// Re-persists a user's own already-known role/profile fields.
+  ///
+  /// Bug #5 fix: this intentionally does NOT let the caller promote a role
+  /// out of thin air for an existing account — it's only ever called with a
+  /// role that was just read back from `/users/$uid/role` (see
+  /// LoginScreen). The actual authorization boundary lives in the Firebase
+  /// Rules, which reject any write where a non-admin tries to change
+  /// `role` to a value different from the value already stored.
   Future<void> setUserRole(String uid, String role, {String? email, String? name}) async {
     try {
       final Map<String, dynamic> data = {'role': role};
@@ -81,11 +110,16 @@ class AuthService {
   ///
   /// Uses a temporary secondary [FirebaseApp] instance to ensure the currently
   /// logged-in Admin is NOT signed out during creation.
+  ///
+  /// [busId] (Bug #4 fix): when provisioning a Driver, the Admin assigns the
+  /// bus the Driver is allowed to write to. This is stored on the user
+  /// record and enforced server-side by the `/buses/{busId}` write rule.
   Future<UserCredential> createUserByAdmin({
     required String email,
     required String password,
     required String name,
     required String role,
+    String? busId,
   }) async {
     final secondaryAppName = 'AdminUserCreation_${DateTime.now().millisecondsSinceEpoch}';
     FirebaseApp? secondaryApp;
@@ -106,12 +140,16 @@ class AuthService {
       final newUid = userCredential.user?.uid;
       if (newUid != null) {
         // Write the new user metadata & role into Realtime Database using the primary app
-        await _db.child('users/$newUid').set({
+        final Map<String, dynamic> profile = {
           'name': name.trim(),
           'email': email.trim(),
           'role': role,
           'createdAt': ServerValue.timestamp,
-        });
+        };
+        if (role == 'Driver' && busId != null && busId.trim().isNotEmpty) {
+          profile['busId'] = busId.trim();
+        }
+        await _db.child('users/$newUid').set(profile);
       }
 
       return userCredential;

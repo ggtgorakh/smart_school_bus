@@ -1,0 +1,51 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "users": {
+      "$uid": {
+        // A user can read their own record; Admins can read any record
+        // (needed for the Fleet/Admin screens and role lookups).
+        ".read": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'Admin')",
+
+        // A user can write their own record; Admins can write any record.
+        // NOTE: this is the outer gate only — the `role` and `busId`
+        // children below add a second, stricter check on top of this.
+        ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'Admin')",
+
+        // BUG #5 FIX: a user may set their own role once (first sign-in /
+        // self-provisioning has no prior record), and may always re-write
+        // the SAME value they already have (e.g. LoginScreen persisting the
+        // role it just read). Any attempt to change an EXISTING role to a
+        // different value is rejected unless the requester is an Admin.
+        // This is what stops a Parent/Driver from promoting themselves to
+        // Admin by writing directly to /users/{uid}/role.
+        "role": {
+          ".validate": "!data.exists() || newData.val() === data.val() || root.child('users').child(auth.uid).child('role').val() === 'Admin'"
+        },
+
+        // BUG #4 FIX (supporting rule): a Driver cannot assign themselves
+        // to a different bus. Only an Admin may set/change busId; a
+        // Driver's own client never has permission to alter it.
+        "busId": {
+          ".validate": "!data.exists() || newData.val() === data.val() || root.child('users').child(auth.uid).child('role').val() === 'Admin'"
+        }
+      }
+    },
+
+    "buses": {
+      "$busId": {
+        // Any signed-in user can read bus telemetry (Parent/Driver/
+        // Conductor/Admin all need to view Live Tracking).
+        ".read": "auth != null",
+
+        // BUG #4 FIX: a Driver may write ONLY the bus that matches their
+        // own /users/{auth.uid}/busId. Admins may write any bus. This
+        // replaces the old rule, which only checked role (Driver/Admin)
+        // and let any Driver write any bus, e.g. bus_02.
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId))"
+      }
+    }
+  }
+}

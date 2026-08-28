@@ -17,6 +17,23 @@ BusRunStatus _statusFromString(String? raw) {
   }
 }
 
+/// Single source of truth for the Firebase wire format of [BusRunStatus].
+/// Firebase always stores/expects: on_route | delayed | arrived | idle.
+/// (BusRunStatus.onRoute.name is "onRoute", which does NOT match the
+/// Firebase contract, so this must be used instead of `.name` when writing.)
+String _statusToString(BusRunStatus status) {
+  switch (status) {
+    case BusRunStatus.onRoute:
+      return 'on_route';
+    case BusRunStatus.delayed:
+      return 'delayed';
+    case BusRunStatus.arrived:
+      return 'arrived';
+    case BusRunStatus.idle:
+      return 'idle';
+  }
+}
+
 class BusLocation {
   final double lat;
   final double lng;
@@ -97,7 +114,7 @@ class BusLocation {
       'lat': lat,
       'lng': lng,
       'speedKmph': speedKmph,
-      'status': status.name,
+      'status': _statusToString(status),
       'lastUpdated': lastUpdated.millisecondsSinceEpoch,
       'currentStopIndex': currentStopIndex,
       'totalStops': totalStops,

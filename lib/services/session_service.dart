@@ -10,6 +10,7 @@ class SessionService {
 
   static const _kUserRole = 'session_user_role';
   static const _kTabIndex = 'session_tab_index';
+  static const _kBusId = 'session_bus_id';
 
   /// Retrieves the cached role for instant rendering while auth resolves.
   Future<String?> getCachedRole() async {
@@ -21,6 +22,19 @@ class SessionService {
   Future<void> saveRole(String role) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kUserRole, role);
+  }
+
+  /// Retrieves the cached assigned bus ID (Bug #4) for instant rendering
+  /// while the fresh value is fetched from Realtime Database.
+  Future<String?> getCachedBusId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kBusId);
+  }
+
+  /// Caches the current user's assigned bus ID.
+  Future<void> saveBusId(String busId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kBusId, busId);
   }
 
   /// Retrieves the persisted navigation tab index.
@@ -40,5 +54,6 @@ class SessionService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kUserRole);
     await prefs.remove(_kTabIndex);
+    await prefs.remove(_kBusId);
   }
 }

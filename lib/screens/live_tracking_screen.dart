@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
@@ -29,16 +30,38 @@ class LiveTrackingScreen extends StatefulWidget {
 
 class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   late final Stream<BusLocation?> _locationStream;
+  // Bug #2 fix: the notification side-effect subscription is now stored and
+  // explicitly cancelled in dispose(). Previously it was never cancelled,
+  // so a screen instance kept alive by IndexedStack (or recreated on
+  // navigation) could accumulate listeners on /buses/{busId} over time.
+  StreamSubscription<BusLocation?>? _statusSub;
   BusRunStatus? _lastNotifiedStatus;
 
   @override
   void initState() {
     super.initState();
+    // Bug #2 fix: a single Firebase stream is created for this screen
+    // instance. StreamBuilder below subscribes to it for rendering, and
+    // exactly one additional subscription (stored in _statusSub) listens
+    // purely for notification side effects. Both listeners share the same
+    // underlying broadcast stream/Firebase subscription rather than each
+    // opening their own.
     _locationStream =
         FirebaseService.instance.streamBusLocation(widget.busId);
 
-    // Separate subscription purely for side effects (notifications).
-    _locationStream.listen(_maybeNotifyStatusChange);
+    _statusSub = _locationStream.listen(
+      _maybeNotifyStatusChange,
+      onError: (_) {
+        // Errors are handled by the StreamBuilder's `hasError` branch;
+        // this listener only needs to not crash on them.
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _statusSub?.cancel();
+    super.dispose();
   }
 
   void _maybeNotifyStatusChange(BusLocation? location) {
@@ -123,18 +146,25 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
           }
 
           if (snapshot.hasError) {
-            return const _TrackingStateMessage(
+            // Bug #1 fix: this now reflects a real Firebase error (e.g.
+            // PERMISSION_DENIED) rather than never firing because errors
+            // were being swallowed and masked with fake data.
+            return _TrackingStateMessage(
               icon: Icons.wifi_off_rounded,
               title: 'Can\'t reach live tracking',
-              subtitle: 'Check your connection and try again shortly.',
+              subtitle: 'Firebase error: ${snapshot.error}',
             );
           }
 
           final location = snapshot.data;
           if (location == null) {
+            // Bug #1 fix: previously this branch was unreachable in
+            // practice because missing data was auto-seeded with fake
+            // coordinates. Now a genuinely missing /buses/{busId} node is
+            // shown honestly instead of looking "live".
             return const _TrackingStateMessage(
               icon: Icons.directions_bus_filled_rounded,
-              title: 'No signal from the bus yet',
+              title: 'Bus data not available',
               subtitle:
                   'The bus hasn\'t started its route or the tracker is offline.',
             );

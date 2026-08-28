@@ -23,11 +23,16 @@ class AuthorizedTab {
 
 class MainNavigationShell extends StatefulWidget {
   final String userRole;
+  // Bug #4 fix: the bus this session is scoped to. For a Driver this is
+  // their assigned bus (from /users/{uid}/busId); other roles default to
+  // 'bus_01' to preserve current single-bus behavior.
+  final String busId;
   final VoidCallback onSignOut;
 
   const MainNavigationShell({
     super.key,
     required this.userRole,
+    this.busId = 'bus_01',
     required this.onSignOut,
   });
 
@@ -62,7 +67,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       return [
         AuthorizedTab(
           title: 'Bus Route Navigation',
-          screen: const LiveTrackingScreen(),
+          screen: LiveTrackingScreen(busId: widget.busId),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.map_outlined),
             activeIcon: Icon(Icons.map),
@@ -97,7 +102,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         ),
         AuthorizedTab(
           title: 'Bus Route Map',
-          screen: const LiveTrackingScreen(),
+          screen: LiveTrackingScreen(busId: widget.busId),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.map_outlined),
             activeIcon: Icon(Icons.map),
@@ -141,7 +146,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         ),
         AuthorizedTab(
           title: 'Master GPS Bus Tracking',
-          screen: const LiveTrackingScreen(),
+          screen: LiveTrackingScreen(busId: widget.busId),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.map_outlined),
             activeIcon: Icon(Icons.map),
@@ -176,7 +181,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       ),
       AuthorizedTab(
         title: 'Live Bus Tracking',
-        screen: const LiveTrackingScreen(),
+        screen: LiveTrackingScreen(busId: widget.busId),
         navItem: const BottomNavigationBarItem(
           icon: Icon(Icons.map_outlined),
           activeIcon: Icon(Icons.map),

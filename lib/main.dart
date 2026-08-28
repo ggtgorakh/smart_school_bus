@@ -66,6 +66,7 @@ class _RoleResolutionShell extends StatefulWidget {
 
 class _RoleResolutionShellState extends State<_RoleResolutionShell> {
   String? _role;
+  String? _busId;
   bool _isLoading = true;
 
   @override
@@ -83,22 +84,30 @@ class _RoleResolutionShellState extends State<_RoleResolutionShell> {
   }
 
   Future<void> _resolveRole() async {
-    // 1. Try cached role first for immediate UI responsiveness
+    // 1. Try cached role/busId first for immediate UI responsiveness
     final cachedRole = await SessionService.instance.getCachedRole();
+    final cachedBusId = await SessionService.instance.getCachedBusId();
     if (cachedRole != null && mounted) {
       setState(() {
         _role = cachedRole;
+        _busId = cachedBusId;
         _isLoading = false;
       });
     }
 
-    // 2. Fetch fresh role from Realtime Database
+    // 2. Fetch fresh role + assigned bus from Realtime Database.
+    // Bug #4 fix: the app itself now only ever points a Driver at the bus
+    // recorded on their own user profile (server-enforced by Firebase
+    // Rules), instead of every role sharing a hardcoded 'bus_01'.
     final freshRole = await AuthService.instance.fetchRole(widget.user.uid);
+    final freshBusId = await AuthService.instance.fetchBusId(widget.user.uid);
     await SessionService.instance.saveRole(freshRole);
+    await SessionService.instance.saveBusId(freshBusId);
 
     if (mounted) {
       setState(() {
         _role = freshRole;
+        _busId = freshBusId;
         _isLoading = false;
       });
     }
@@ -117,6 +126,7 @@ class _RoleResolutionShellState extends State<_RoleResolutionShell> {
 
     return MainNavigationShell(
       userRole: _role ?? 'Parent',
+      busId: _busId ?? 'bus_01',
       onSignOut: _handleSignOut,
     );
   }

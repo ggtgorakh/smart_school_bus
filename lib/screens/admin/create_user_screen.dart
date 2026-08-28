@@ -15,6 +15,7 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _busIdController = TextEditingController(text: 'bus_01');
   String _selectedRole = 'Parent';
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -26,6 +27,7 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _busIdController.dispose();
     super.dispose();
   }
 
@@ -47,6 +49,7 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
         password: password,
         name: name,
         role: role,
+        busId: role == 'Driver' ? _busIdController.text.trim() : null,
       );
 
       if (mounted) {
@@ -67,6 +70,7 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
         _nameController.clear();
         _emailController.clear();
         _passwordController.clear();
+        _busIdController.text = 'bus_01';
         setState(() {
           _selectedRole = 'Parent';
         });
@@ -299,6 +303,30 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
                       icon: Icons.shield_outlined,
                     ),
                   ),
+
+                  // Bug #4 fix: a Driver must be assigned exactly one bus.
+                  // Firebase Rules enforce that this Driver's UID can only
+                  // ever write to /buses/{this busId}.
+                  if (_selectedRole == 'Driver') ...[
+                    const SizedBox(height: 18),
+                    _buildFieldLabel('Assigned Bus ID'),
+                    const SizedBox(height: 6),
+                    TextFormField(
+                      controller: _busIdController,
+                      enabled: !_isLoading,
+                      decoration: _inputDecoration(
+                        hint: 'e.g. bus_01',
+                        icon: Icons.directions_bus_outlined,
+                      ),
+                      validator: (val) {
+                        if (_selectedRole == 'Driver' &&
+                            (val == null || val.trim().isEmpty)) {
+                          return 'Drivers must be assigned a bus ID';
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 28),
 
                   SizedBox(

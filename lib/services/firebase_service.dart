@@ -61,52 +61,32 @@ class FirebaseService {
   ];
 
   /// Streams live telemetry for [busId] from /buses/{busId}.
+  ///
+  /// IMPORTANT (Bug #1 fix): this never fabricates or writes fallback/demo
+  /// GPS data. A `null` snapshot value means "no data for this bus yet" and
+  /// is surfaced as-is to the UI (which shows "Bus data not available").
+  /// Firebase errors (e.g. PERMISSION_DENIED) are allowed to propagate as
+  /// stream errors instead of being swallowed, so the real error state is
+  /// visible during testing rather than being masked by fake data.
   Stream<BusLocation?> streamBusLocation(String busId) {
     return _root.child('buses/$busId').onValue.map<BusLocation?>((event) {
       final rawData = event.snapshot.value;
       if (rawData == null) {
-        // Auto seed default location if missing
-        seedDefaultBusLocation(busId);
-        return _fallbackBusLocation(busId);
+        // No demo/fallback seeding here — genuinely missing data is
+        // reported upstream as `null` so the UI can say so honestly.
+        return null;
       }
 
       if (rawData is Map) {
         return BusLocation.fromMap(rawData);
       }
       return null;
-    }).handleError((error) {
-      assert(() {
-        // ignore: avoid_print
-        print('Firebase RTDB Stream Error ($busId): $error');
-        return true;
-      }());
     });
-  }
-
-  /// Default fallback telemetry object
-  BusLocation _fallbackBusLocation(String busId) {
-    return BusLocation(
-      lat: 37.7749,
-      lng: -122.4194,
-      speedKmph: 35.0,
-      status: BusRunStatus.onRoute,
-      lastUpdated: DateTime.now(),
-      currentStopIndex: 2,
-      totalStops: 6,
-      currentStopLabel: 'Oak St & Maple Ave',
-      etaMinutes: 6,
-      busNumber: busId == 'bus_01' ? 'Bus 42' : busId.toUpperCase(),
-    );
-  }
-
-  /// Seeds default bus telemetry into RTDB if not yet created
-  Future<void> seedDefaultBusLocation(String busId) async {
-    try {
-      final snap = await _root.child('buses/$busId/busNumber').get();
-      if (!snap.exists) {
-        await _root.child('buses/$busId').update(_fallbackBusLocation(busId).toMap());
-      }
-    } catch (_) {}
+    // Note: deliberately NOT using .handleError() here. Swallowing errors
+    // (as the previous implementation did) hid PERMISSION_DENIED and other
+    // Firebase failures behind a state that looked identical to "no bus
+    // yet". Letting the error propagate lets StreamBuilder's `hasError`
+    // branch show the real failure.
   }
 
   /// Streams real-time student attendance for a given bus route
@@ -220,18 +200,18 @@ class FirebaseService {
   }
 
   /// One-off read for manual refresh checks.
+  ///
+  /// Bug #1 fix: no longer masks a missing bus or a Firebase error behind
+  /// fabricated San-Francisco fallback coordinates. Missing data returns
+  /// `null`; real errors are rethrown so the caller can show them.
   Future<BusLocation?> fetchBusLocationOnce(String busId) async {
-    try {
-      final snapshot = await _root.child('buses/$busId').get();
-      final rawData = snapshot.value;
+    final snapshot = await _root.child('buses/$busId').get();
+    final rawData = snapshot.value;
 
-      if (rawData != null && rawData is Map) {
-        return BusLocation.fromMap(rawData);
-      }
-      return _fallbackBusLocation(busId);
-    } catch (e) {
-      return _fallbackBusLocation(busId);
+    if (rawData != null && rawData is Map) {
+      return BusLocation.fromMap(rawData);
     }
+    return null;
   }
 
   /// Writes driver or hardware telemetry updates to Firebase (ESP32 Simulator / Testing)
