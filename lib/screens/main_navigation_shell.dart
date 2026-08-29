@@ -93,7 +93,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       return [
         AuthorizedTab(
           title: 'Student Check-in/Check-out',
-          screen: const AttendanceScannerScreen(),
+          screen: AttendanceScannerScreen(busId: widget.busId),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.how_to_reg_outlined),
             activeIcon: Icon(Icons.how_to_reg),

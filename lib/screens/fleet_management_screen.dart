@@ -5,6 +5,8 @@ import '../models/app_notification.dart';
 import '../services/notification_service.dart';
 import '../widgets/kpi_card.dart';
 import 'admin/create_user_screen.dart';
+import 'admin/people_directory_screen.dart';
+import 'admin/manage_students_screen.dart';
 
 class FleetManagementScreen extends StatefulWidget {
   const FleetManagementScreen({super.key});
@@ -156,6 +158,76 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           ),
         );
 
+        final peopleButton = OutlinedButton.icon(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const PeopleDirectoryScreen(),
+              ),
+            );
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.safetyBlue,
+            side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
+            backgroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          icon: const Icon(
+            Icons.groups_rounded,
+            size: 18,
+            color: AppColors.safetyBlue,
+          ),
+          label: const Text(
+            'People',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.safetyBlue,
+            ),
+          ),
+        );
+
+        final manageStudentsButton = OutlinedButton.icon(
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => const ManageStudentsScreen(),
+              ),
+            );
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.safetyBlue,
+            side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
+            backgroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          icon: const Icon(
+            Icons.child_care_rounded,
+            size: 18,
+            color: AppColors.safetyBlue,
+          ),
+          label: const Text(
+            'Students',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: AppColors.safetyBlue,
+            ),
+          ),
+        );
+
         final dispatchButton = ElevatedButton.icon(
           onPressed: () => _openDispatchModal(context),
           style: ElevatedButton.styleFrom(
@@ -194,6 +266,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 runSpacing: 8,
                 children: [
                   addUserButton,
+                  peopleButton,
+                  manageStudentsButton,
                   dispatchButton,
                 ],
               ),
@@ -207,6 +281,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             Expanded(child: titleSection),
             const SizedBox(width: 12),
             addUserButton,
+            const SizedBox(width: 8),
+            peopleButton,
+            const SizedBox(width: 8),
+            manageStudentsButton,
             const SizedBox(width: 8),
             dispatchButton,
           ],

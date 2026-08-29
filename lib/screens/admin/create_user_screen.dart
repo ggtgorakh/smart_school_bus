@@ -49,7 +49,9 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
         password: password,
         name: name,
         role: role,
-        busId: role == 'Driver' ? _busIdController.text.trim() : null,
+        busId: (role == 'Driver' || role == 'Conductor')
+            ? _busIdController.text.trim()
+            : null,
       );
 
       if (mounted) {
@@ -304,10 +306,11 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
                     ),
                   ),
 
-                  // Bug #4 fix: a Driver must be assigned exactly one bus.
-                  // Firebase Rules enforce that this Driver's UID can only
-                  // ever write to /buses/{this busId}.
-                  if (_selectedRole == 'Driver') ...[
+                  // Bug #4 fix (extended): both Driver and Conductor must be
+                  // assigned exactly one bus. Firebase Rules enforce that
+                  // this account's UID can only write within that bus —
+                  // Driver to GPS/status, Conductor to the student roster.
+                  if (_selectedRole == 'Driver' || _selectedRole == 'Conductor') ...[
                     const SizedBox(height: 18),
                     _buildFieldLabel('Assigned Bus ID'),
                     const SizedBox(height: 6),
@@ -319,9 +322,9 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
                         icon: Icons.directions_bus_outlined,
                       ),
                       validator: (val) {
-                        if (_selectedRole == 'Driver' &&
+                        if ((_selectedRole == 'Driver' || _selectedRole == 'Conductor') &&
                             (val == null || val.trim().isEmpty)) {
-                          return 'Drivers must be assigned a bus ID';
+                          return '${_selectedRole}s must be assigned a bus ID';
                         }
                         return null;
                       },

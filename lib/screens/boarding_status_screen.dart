@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/student.dart';
@@ -5,35 +6,23 @@ import '../services/firebase_service.dart';
 
 /// Parent-facing "has my child boarded yet" screen.
 ///
-/// Subscribes to the live Realtime Database student stream so whenever
-/// the conductor updates the manifest, the parent's status card updates immediately.
+/// Multi-child support: subscribes to
+/// FirebaseService.streamChildrenForParent using the signed-in Parent's
+/// own uid, which resolves via /parentChildIndex (see database.rules.json
+/// and FirebaseService.streamChildrenForParent for why a Parent can't
+/// simply query the full bus roster directly — Confidentiality). Shows a
+/// child selector only when more than one child is linked, and an honest
+/// empty state if none are linked yet (a Parent account starts with no
+/// children until Admin links one via Manage Students).
 class BoardingStatusScreen extends StatefulWidget {
-  final String busId;
-  final String initialStudentId;
-
-  const BoardingStatusScreen({
-    super.key,
-    this.busId = 'bus_01',
-    this.initialStudentId = 'S2',
-  });
+  const BoardingStatusScreen({super.key});
 
   @override
   State<BoardingStatusScreen> createState() => _BoardingStatusScreenState();
 }
 
 class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
-  late String _selectedStudentId;
-
-  final List<Map<String, String>> _parentChildren = const [
-    {'id': 'S2', 'name': 'Maya Patel (Grade 4)'},
-    {'id': 'S1', 'name': 'Liam Johnson (Grade 3)'},
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedStudentId = widget.initialStudentId;
-  }
+  String? _selectedStudentId;
 
   Color _statusColor(StudentStatus status) {
     switch (status) {
@@ -81,20 +70,92 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final parentUid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (parentUid == null) {
+      return const Scaffold(
+        backgroundColor: AppColors.surfaceGray,
+        body: Center(
+          child: Text(
+            'Please sign in to view boarding status.',
+            style: TextStyle(color: AppColors.onSurfaceVariant),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.surfaceGray,
-      body: StreamBuilder<Student>(
-        stream: FirebaseService.instance.streamStudent(
-          widget.busId,
-          _selectedStudentId,
-        ),
+      body: StreamBuilder<List<Student>>(
+        stream: FirebaseService.instance.streamChildrenForParent(parentUid),
         builder: (context, snapshot) {
-          final student = snapshot.data ??
-              FirebaseService.defaultStudentRoster.firstWhere(
-                (s) => s.id == _selectedStudentId,
-                orElse: () => FirebaseService.defaultStudentRoster[1],
-              );
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.wifi_off_rounded, size: 44, color: AppColors.outline),
+                    const SizedBox(height: 14),
+                    const Text(
+                      "Can't load your child's status",
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textMain),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Firebase error: ${snapshot.error}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 12.5, color: AppColors.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
 
+          if (!snapshot.hasData) {
+            return const Center(
+              child: CircularProgressIndicator(color: AppColors.safetyBlue),
+            );
+          }
+
+          final children = snapshot.data!;
+
+          if (children.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.family_restroom_rounded, size: 48, color: AppColors.outline),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'No child linked to your account yet',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textMain),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Ask your school administrator to link your child to this account, and it will appear here automatically.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          // Keep the selection valid as the linked-children list changes
+          // (e.g. Admin links a second child while this screen is open).
+          if (_selectedStudentId == null ||
+              !children.any((c) => c.id == _selectedStudentId)) {
+            _selectedStudentId = children.first.id;
+          }
+
+          final student = children.firstWhere((c) => c.id == _selectedStudentId);
           final color = _statusColor(student.status);
           final timeLabel = student.boardedAt != null
               ? '${student.boardedAt!.hour.toString().padLeft(2, '0')}:${student.boardedAt!.minute.toString().padLeft(2, '0')}'
@@ -106,53 +167,54 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Child Selector Pill
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.outlineVariant),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedStudentId,
-                        isExpanded: true,
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                            color: AppColors.safetyBlue),
-                        items: _parentChildren.map((c) {
-                          return DropdownMenuItem(
-                            value: c['id'],
-                            child: Row(
-                              children: [
-                                const Icon(Icons.face_rounded,
-                                    color: AppColors.safetyBlue, size: 20),
-                                const SizedBox(width: 8),
-                                Text(
-                                  c['name']!,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.textMain,
+                  // Child Selector Pill — only shown when this Parent has
+                  // more than one linked child.
+                  if (children.length > 1) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.outlineVariant),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedStudentId,
+                          isExpanded: true,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                              color: AppColors.safetyBlue),
+                          items: children.map((c) {
+                            return DropdownMenuItem(
+                              value: c.id,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.face_rounded,
+                                      color: AppColors.safetyBlue, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${c.name} (${c.grade})',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textMain,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() {
-                              _selectedStudentId = val;
-                            });
-                          }
-                        },
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _selectedStudentId = val;
+                              });
+                            }
+                          },
+                        ),
                       ),
                     ),
-                  ),
-
-                  const SizedBox(height: 14),
+                    const SizedBox(height: 14),
+                  ],
 
                   // Child identity card
                   Container(
@@ -222,7 +284,7 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '${student.grade} • ${student.seat} • Bus 42',
+                                '${student.grade} • ${student.seat}',
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodyMedium

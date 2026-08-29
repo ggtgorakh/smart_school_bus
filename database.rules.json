@@ -4,6 +4,15 @@
     ".write": false,
 
     "users": {
+      // BUG FIX (People Directory): a listen at /users (the collection
+      // root) is a different permission check than a listen at
+      // /users/{uid} — RTDB does not consult child rules to authorize a
+      // parent-level read. Without this, Admin's People Directory screen
+      // (which reads the whole /users collection to list Parents/Drivers/
+      // Conductors) gets PERMISSION_DENIED even though the per-user rule
+      // below would have allowed reading any single user's record.
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
+
       "$uid": {
         // A user can read their own record; Admins can read any record
         // (needed for the Fleet/Admin screens and role lookups).
@@ -44,7 +53,55 @@
         // own /users/{auth.uid}/busId. Admins may write any bus. This
         // replaces the old rule, which only checked role (Driver/Admin)
         // and let any Driver write any bus, e.g. bus_02.
+        //
+        // NOTE: the student roster used to live nested here at
+        // /buses/{busId}/students, but RTDB rules only ever ADD
+        // permission as you go deeper — a read grant at this level
+        // unavoidably grants read of everything nested inside it,
+        // including a full child roster. That made it impossible to let
+        // every role read GPS/telemetry while restricting the roster to
+        // only Admin/Driver/Conductor/the matching Parent. The roster has
+        // been moved out to its own top-level path — see
+        // "studentRosters" below — specifically so its access can be
+        // governed independently of bus telemetry.
         ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId))"
+      }
+    },
+
+    "studentRosters": {
+      "$busId": {
+        // Full-roster read: Admin, or Driver/Conductor assigned to this
+        // specific bus. This covers the Conductor's check-in screen and
+        // Admin's People Directory, both of which list every child on a
+        // bus at once.
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId) || (root.child('users').child(auth.uid).child('role').val() === 'Conductor' && root.child('users').child(auth.uid).child('busId').val() === $busId))",
+
+        // Full-roster write: same set of roles, matching the Conductor
+        // regression fix from before (check-in writes) plus Admin/Driver.
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId) || (root.child('users').child(auth.uid).child('role').val() === 'Conductor' && root.child('users').child(auth.uid).child('busId').val() === $busId))",
+
+        "$studentId": {
+          // ADDITIONAL read grant on top of the roster-level rule above:
+          // a Parent may read this ONE student record directly by ID if
+          // it's linked to them, even though they cannot list the whole
+          // roster. This is what makes Confidentiality actually work —
+          // a Parent fetches only the specific student IDs they already
+          // know about from /parentChildIndex below.
+          ".read": "auth != null && data.child('parentUid').val() === auth.uid",
+
+          ".indexOn": ["parentUid"]
+        }
+      }
+    },
+
+    "parentChildIndex": {
+      "$parentUid": {
+        // A Parent may only read their own index entry — the list of
+        // student IDs (and which bus each is on) linked to their account.
+        // Only Admin can write this, since only Admin should be able to
+        // decide which child belongs to which Parent account.
+        ".read": "auth != null && auth.uid === $parentUid",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'"
       }
     }
   }

@@ -63,29 +63,18 @@ class _LoginScreenState extends State<LoginScreen>
     setState(() => _isLoading = true);
 
     try {
-      UserCredential credential;
-      try {
-        credential = await AuthService.instance.signInWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
-      } on FirebaseAuthException catch (authEx) {
-        if (authEx.code == 'user-not-found' ||
-            authEx.code == 'invalid-credential') {
-          // If demo user doesn't exist yet, automatically create it
-          try {
-            credential = await AuthService.instance.auth
-                .createUserWithEmailAndPassword(
-                  email: email,
-                  password: password,
-                );
-          } catch (_) {
-            rethrow;
-          }
-        } else {
-          rethrow;
-        }
-      }
+      // Bug-fix follow-up: login no longer silently creates a new Firebase
+      // Auth account on 'user-not-found' / 'invalid-credential'. Modern
+      // Firebase Auth deliberately returns 'invalid-credential' for BOTH
+      // "no such user" and "wrong password" (to avoid leaking which one it
+      // is), which made the old auto-create logic indistinguishable from a
+      // typo'd password — silently spinning up a duplicate, role-less,
+      // bus-less account instead of telling the user what went wrong.
+      // Account creation now only happens through Admin > Provision User.
+      final credential = await AuthService.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
       final uid = credential.user?.uid;
       String role = _selectedRole;
@@ -658,7 +647,7 @@ class _LoginScreenState extends State<LoginScreen>
       } else if (role == 'Conductor') {
         _emailController.text = 'conductor@schoolsafe.org';
       } else if (role == 'Admin') {
-        _emailController.text = 'admin@schoolsafe.org';
+        _emailController.text = 'admin@sbs.com';
       }
       _passwordController.text = 'password123';
     });

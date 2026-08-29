@@ -21,6 +21,11 @@ class Student {
   StudentStatus status;
   final String stopName;
   final DateTime? boardedAt;
+  // Parent-child linkage: the Firebase Auth uid of this child's Parent
+  // account. Nullable because existing/legacy student records created
+  // before this field existed won't have it set — those show up as
+  // "unlinked" in the Admin UI rather than crashing on a missing field.
+  final String? parentUid;
 
   Student({
     required this.id,
@@ -31,6 +36,7 @@ class Student {
     required this.status,
     required this.stopName,
     this.boardedAt,
+    this.parentUid,
   });
 
   Map<String, dynamic> toMap() {
@@ -43,6 +49,7 @@ class Student {
       'status': status.name,
       'stopName': stopName,
       'boardedAt': boardedAt?.millisecondsSinceEpoch,
+      'parentUid': parentUid,
     };
   }
 
@@ -66,6 +73,7 @@ class Student {
       status: studentStatusFromString(map['status']?.toString()),
       stopName: map['stopName']?.toString() ?? 'Main Stop',
       boardedAt: parseBoardedAt(map['boardedAt']),
+      parentUid: map['parentUid']?.toString(),
     );
   }
 
@@ -78,6 +86,7 @@ class Student {
     StudentStatus? status,
     String? stopName,
     DateTime? boardedAt,
+    String? parentUid,
   }) {
     return Student(
       id: id ?? this.id,
@@ -88,6 +97,7 @@ class Student {
       status: status ?? this.status,
       stopName: stopName ?? this.stopName,
       boardedAt: boardedAt ?? this.boardedAt,
+      parentUid: parentUid ?? this.parentUid,
     );
   }
 }

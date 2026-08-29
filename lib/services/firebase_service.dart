@@ -89,9 +89,14 @@ class FirebaseService {
     // branch show the real failure.
   }
 
-  /// Streams real-time student attendance for a given bus route
+  /// Streams real-time student attendance for a given bus route.
+  ///
+  /// Path note: moved from /buses/{busId}/students to its own top-level
+  /// /studentRosters/{busId} — see database.rules.json for why (RTDB read
+  /// grants cascade downward, so nesting the roster under /buses made it
+  /// impossible to scope roster access separately from bus telemetry).
   Stream<List<Student>> streamStudents(String busId) {
-    return _root.child('buses/$busId/students').onValue.map<List<Student>>((event) {
+    return _root.child('studentRosters/$busId').onValue.map<List<Student>>((event) {
       final raw = event.snapshot.value;
       if (raw == null) {
         // Automatically seed default students into RTDB
@@ -125,10 +130,11 @@ class FirebaseService {
     });
   }
 
-  /// Streams a single child's status for the Parent Boarding Status screen
+  /// Streams a single child's status for the Parent Boarding Status screen.
+  /// Path note: see streamStudents above.
   Stream<Student> streamStudent(String busId, String studentId) {
     return _root
-        .child('buses/$busId/students/$studentId')
+        .child('studentRosters/$busId/$studentId')
         .onValue
         .map<Student>((event) {
       final val = event.snapshot.value;
@@ -147,7 +153,90 @@ class FirebaseService {
     });
   }
 
-  /// Updates a student's boarding status in Realtime Database
+  /// Streams every child currently linked to [parentUid] via
+  /// /parentChildIndex/{parentUid}, resolving each entry to its live
+  /// student record under /studentRosters/{busId}/{studentId}.
+  ///
+  /// A Parent cannot list a bus's full roster (database.rules.json denies
+  /// that at the collection level), so this reads the small index of
+  /// "which student IDs are mine" first, then subscribes to each of those
+  /// specific records directly — which the per-record rule allows. This
+  /// is the standard Realtime Database pattern for row-level-filtered
+  /// reads, since RTDB security rules can't filter query results
+  /// per-item the way Firestore's can.
+  Stream<List<Student>> streamChildrenForParent(String parentUid) {
+    late StreamController<List<Student>> controller;
+    StreamSubscription<DatabaseEvent>? indexSub;
+    final Map<String, StreamSubscription<DatabaseEvent>> childSubs = {};
+    final Map<String, Student> latest = {};
+
+    void emit() {
+      final list = latest.values.toList()..sort((a, b) => a.id.compareTo(b.id));
+      if (!controller.isClosed) controller.add(list);
+    }
+
+    void subscribeToChild(String busId, String studentId) {
+      childSubs[studentId]?.cancel();
+      childSubs[studentId] = _root
+          .child('studentRosters/$busId/$studentId')
+          .onValue
+          .listen((event) {
+        final val = event.snapshot.value;
+        if (val is Map) {
+          latest[studentId] = Student.fromMap(val, id: studentId);
+        } else {
+          latest.remove(studentId);
+        }
+        emit();
+      }, onError: (_) {
+        // A single unreadable/misconfigured child shouldn't take down the
+        // whole list — just drop it from the merged view.
+        latest.remove(studentId);
+        emit();
+      });
+    }
+
+    void handleIndexUpdate(dynamic raw) {
+      final currentIds = <String>{};
+      if (raw is Map) {
+        raw.forEach((studentId, busId) {
+          if (busId is String) {
+            currentIds.add(studentId.toString());
+            subscribeToChild(busId, studentId.toString());
+          }
+        });
+      }
+      // Drop subscriptions/entries for students no longer in the index.
+      final removedIds =
+          childSubs.keys.where((id) => !currentIds.contains(id)).toList();
+      for (final id in removedIds) {
+        childSubs.remove(id)?.cancel();
+        latest.remove(id);
+      }
+      emit();
+    }
+
+    controller = StreamController<List<Student>>.broadcast(
+      onListen: () {
+        indexSub = _root.child('parentChildIndex/$parentUid').onValue.listen(
+          (event) => handleIndexUpdate(event.snapshot.value),
+          onError: (_) => emit(), // nothing readable/linked yet — show empty
+        );
+      },
+      onCancel: () {
+        indexSub?.cancel();
+        for (final sub in childSubs.values) {
+          sub.cancel();
+        }
+        childSubs.clear();
+      },
+    );
+
+    return controller.stream;
+  }
+
+  /// Updates a student's boarding status in Realtime Database.
+  /// Path note: see streamStudents above.
   Future<void> updateStudentStatus(
     String busId,
     String studentId,
@@ -162,13 +251,14 @@ class FirebaseService {
     if (stopName != null) {
       updates['stopName'] = stopName;
     }
-    await _root.child('buses/$busId/students/$studentId').update(updates);
+    await _root.child('studentRosters/$busId/$studentId').update(updates);
   }
 
-  /// Marks all students on the bus with the given status
+  /// Marks all students on the bus with the given status.
+  /// Path note: see streamStudents above.
   Future<void> markAllStudentsStatus(String busId, StudentStatus status) async {
     final now = DateTime.now().millisecondsSinceEpoch;
-    final snapshot = await _root.child('buses/$busId/students').get();
+    final snapshot = await _root.child('studentRosters/$busId').get();
     final data = snapshot.value;
 
     if (data is Map) {
@@ -177,7 +267,7 @@ class FirebaseService {
         updates['$key/status'] = status.name;
         updates['$key/boardedAt'] = status == StudentStatus.boarded ? now : null;
       });
-      await _root.child('buses/$busId/students').update(updates);
+      await _root.child('studentRosters/$busId').update(updates);
     } else {
       // Seed default list with the new status
       final updated = defaultStudentRoster.map((s) => s.copyWith(
@@ -188,15 +278,43 @@ class FirebaseService {
     }
   }
 
-  /// Seeds a list of students into RTDB
+  /// Seeds a list of students into RTDB.
+  /// Path note: see streamStudents above.
   Future<void> seedStudents(String busId, List<Student> students) async {
     try {
       final Map<String, dynamic> data = {};
       for (final s in students) {
         data[s.id] = s.toMap();
       }
-      await _root.child('buses/$busId/students').set(data);
+      await _root.child('studentRosters/$busId').set(data);
     } catch (_) {}
+  }
+
+  /// Creates or updates a single student record and, if it has a
+  /// [Student.parentUid], keeps /parentChildIndex/{parentUid}/{studentId}
+  /// in sync so that Parent can find and read this record (see
+  /// streamChildrenForParent above). Used by the Admin "Manage Students"
+  /// screen to link a child to a Parent account.
+  Future<void> upsertStudent({
+    required String busId,
+    required Student student,
+  }) async {
+    await _root.child('studentRosters/$busId/${student.id}').set(student.toMap());
+    if (student.parentUid != null && student.parentUid!.trim().isNotEmpty) {
+      await _root
+          .child('parentChildIndex/${student.parentUid}/${student.id}')
+          .set(busId);
+    }
+  }
+
+  /// Removes a child's link to a Parent account (e.g. re-assigning a
+  /// student to a different parent, or clearing a mistaken link) without
+  /// deleting the underlying student record itself.
+  Future<void> unlinkChildFromParent({
+    required String parentUid,
+    required String studentId,
+  }) async {
+    await _root.child('parentChildIndex/$parentUid/$studentId').remove();
   }
 
   /// One-off read for manual refresh checks.
