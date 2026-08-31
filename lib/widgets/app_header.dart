@@ -18,146 +18,93 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0.5,
-      automaticallyImplyLeading: false,
-      titleSpacing: 16,
-      toolbarHeight: kToolbarHeight,
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    return AppBar(
+      automaticallyImplyLeading: false,
+      backgroundColor: scheme.surface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      titleSpacing: 18,
       title: Row(
         children: [
-          // App logo
           Container(
-            width: 38,
-            height: 38,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: AppTheme.brandGradient,
-              border: Border.all(
-                color: Colors.white,
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.safetyBlue.withValues(alpha: 0.25),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
+              color: scheme.primary,
+              borderRadius: BorderRadius.circular(9),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(19),
-              child: avatarUrl != null
-                  ? Image.network(
-                avatarUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const Icon(
-                  Icons.directions_bus_filled_rounded,
-                  size: 20,
-                  color: Colors.white,
-                ),
-              )
-                  : const Icon(
-                Icons.directions_bus_filled_rounded,
-                size: 20,
-                color: Colors.white,
-              ),
-            ),
+            child: const Icon(Icons.directions_bus_rounded, color: Colors.white, size: 20),
           ),
-
-          const SizedBox(width: 12),
-
-          // Responsive title
-          Expanded(
+          const SizedBox(width: 10),
+          Flexible(
             child: Text(
               title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              softWrap: false,
-              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                color: AppColors.primaryDark,
-                fontWeight: FontWeight.bold,
-                fontSize: 19,
-                letterSpacing: -0.3,
-              ),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.onSurface,
+                  ),
             ),
           ),
         ],
       ),
-
-      // Notification button — real unread badge, opens NotificationsScreen.
       actions: [
         ValueListenableBuilder<List<AppNotification>>(
           valueListenable: NotificationService.instance.notifications,
           builder: (context, items, _) {
             final unreadCount = items.where((n) => !n.isRead).length;
-
-            return SizedBox(
-              width: 48,
-              height: kToolbarHeight,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 44,
-                      minHeight: 44,
-                    ),
-                    onPressed: onNotificationPressed ??
-                        () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const NotificationsScreen(),
-                            ),
-                          );
-                        },
-                    icon: const Icon(
-                      Icons.notifications_outlined,
-                      color: AppColors.safetyBlue,
-                      size: 26,
-                    ),
-                  ),
-
-                  // Unread badge — only shown when there's something unread.
-                  if (unreadCount > 0)
-                    Positioned(
-                      right: 4,
-                      top: 6,
-                      child: IgnorePointer(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 1),
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
+            return Stack(
+              children: [
+                IconButton(
+                  tooltip: 'Notifications',
+                  onPressed: onNotificationPressed ??
+                      () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
                           ),
-                          decoration: BoxDecoration(
-                            color: AppColors.alertOrange,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white, width: 1.5),
-                          ),
-                          child: Center(
-                            child: Text(
-                              unreadCount > 9 ? '9+' : '$unreadCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.bold,
-                                height: 1.2,
-                              ),
-                            ),
-                          ),
-                        ),
+                  icon: const Icon(Icons.notifications_none_rounded),
+                ),
+                if (unreadCount > 0)
+                  Positioned(
+                    right: 7,
+                    top: 7,
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: scheme.error,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: scheme.surface, width: 1.5),
+                      ),
+                      child: Text(
+                        unreadCount > 9 ? '9+' : '$unreadCount',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             );
           },
         ),
-
+        PopupMenuButton<ThemeMode>(
+          tooltip: 'Choose theme',
+          icon: Icon(isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined),
+          onSelected: ThemeController.instance.setMode,
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: ThemeMode.light,
+              child: Row(children: [Icon(Icons.light_mode_outlined, size: 18), SizedBox(width: 10), Text('Day theme')]),
+            ),
+            PopupMenuItem(
+              value: ThemeMode.dark,
+              child: Row(children: [Icon(Icons.dark_mode_outlined, size: 18), SizedBox(width: 10), Text('Dark theme')]),
+            ),
+          ],
+        ),
         const SizedBox(width: 8),
       ],
     );

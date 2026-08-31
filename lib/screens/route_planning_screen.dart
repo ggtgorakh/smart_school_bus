@@ -62,7 +62,7 @@ class RoutePlanningScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surfaceContainerLow,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
@@ -83,7 +83,7 @@ class RoutePlanningScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: AppColors.surfaceContainerHighest,
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
                     ),
                   ),
                   child: const LiveMapCanvas(
@@ -101,7 +101,7 @@ class RoutePlanningScreen extends StatelessWidget {
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: AppColors.textMain,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
               ),
 
@@ -129,7 +129,7 @@ class RoutePlanningScreen extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    color: AppColors.textMain,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.bold,
                     fontSize: 22,
                   ),
@@ -140,7 +140,7 @@ class RoutePlanningScreen extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.onSurfaceVariant,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 13,
                     height: 1.3,
                   ),
@@ -152,7 +152,7 @@ class RoutePlanningScreen extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
             color: AppColors.safetyBlue.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -201,9 +201,9 @@ class RoutePlanningScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 16, 14, 4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.surfaceContainerHighest),
+        border: Border.all(color: Theme.of(context).colorScheme.surfaceContainerHighest),
       ),
       child: Column(
         children: List.generate(stops.length, (index) {
@@ -314,7 +314,7 @@ class RoutePlanningScreen extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-                  color: isCurrent ? AppColors.alertOrange : AppColors.textMain,
+                  color: isCurrent ? AppColors.alertOrange : Theme.of(context).colorScheme.onSurface,
                   fontSize: 12,
                 ),
               ),
@@ -351,7 +351,7 @@ class RoutePlanningScreen extends StatelessWidget {
                     height: 48,
                     color: isCompleted
                         ? AppColors.safetyBlue
-                        : AppColors.surfaceContainerHighest,
+                        : Theme.of(context).colorScheme.surfaceContainerHighest,
                   ),
               ],
             ),
@@ -376,7 +376,7 @@ class RoutePlanningScreen extends StatelessWidget {
                           : FontWeight.normal,
                       fontSize: 14,
                       height: 1.25,
-                      color: AppColors.textMain,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   if (studentsCount > 0) ...[
@@ -385,9 +385,9 @@ class RoutePlanningScreen extends StatelessWidget {
                       '$studentsCount students pick-up • Tap for details',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.onSurfaceVariant,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],

@@ -42,12 +42,12 @@ class NotificationsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0.5,
         title: Text(
           'Notifications',
           style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                color: AppColors.primaryDark,
+                color: Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.bold,
                 fontSize: 19,
               ),
@@ -67,13 +67,13 @@ class NotificationsScreen extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.notifications_none_rounded,
-                      size: 48, color: AppColors.onSurfaceVariant),
+                  Icon(Icons.notifications_none_rounded,
+                      size: 48, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(height: 12),
                   Text(
                     'No notifications yet',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AppColors.onSurfaceVariant,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                   ),
                 ],
@@ -142,7 +142,7 @@ class NotificationsScreen extends StatelessWidget {
                                       height: 8,
                                       margin:
                                           const EdgeInsets.only(left: 6, top: 2),
-                                      decoration: const BoxDecoration(
+                                      decoration: BoxDecoration(
                                         color: AppColors.alertOrange,
                                         shape: BoxShape.circle,
                                       ),
@@ -156,7 +156,7 @@ class NotificationsScreen extends StatelessWidget {
                                     .textTheme
                                     .bodyMedium
                                     ?.copyWith(
-                                        color: AppColors.onSurfaceVariant,
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                                         fontSize: 12.5),
                               ),
                               const SizedBox(height: 6),

@@ -21,11 +21,18 @@ class SchoolBusApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'SchoolBus Safe',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      home: const AuthGate(),
+    return AnimatedBuilder(
+      animation: ThemeController.instance,
+      builder: (context, _) {
+        return MaterialApp(
+          title: 'Smart School Bus',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: ThemeController.instance.mode,
+          home: const AuthGate(),
+        );
+      },
     );
   }
 }
@@ -138,7 +145,7 @@ class _AppSplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -148,7 +155,7 @@ class _AppSplashScreen extends StatelessWidget {
               height: 72,
               decoration: BoxDecoration(
                 gradient: AppTheme.brandGradient,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
                     color: AppColors.safetyBlue.withValues(alpha: 0.3),

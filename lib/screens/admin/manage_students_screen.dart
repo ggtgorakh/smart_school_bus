@@ -41,16 +41,20 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
       final List<_ParentOption> result = [];
       raw.forEach((uid, value) {
         if (value is Map && value['role']?.toString() == 'Parent') {
-          result.add(_ParentOption(
-            uid: uid.toString(),
-            name: (value['name']?.toString().trim().isNotEmpty ?? false)
-                ? value['name'].toString()
-                : 'Unnamed parent',
-            email: value['email']?.toString() ?? '—',
-          ));
+          result.add(
+            _ParentOption(
+              uid: uid.toString(),
+              name: (value['name']?.toString().trim().isNotEmpty ?? false)
+                  ? value['name'].toString()
+                  : 'Unnamed parent',
+              email: value['email']?.toString() ?? '—',
+            ),
+          );
         }
       });
-      result.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      result.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
       return result;
     });
   }
@@ -71,11 +75,11 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surfaceContainerLow,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       appBar: AppBar(
-        backgroundColor: AppColors.surfaceContainerLowest,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
-        foregroundColor: AppColors.textMain,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         title: const Text(
           'Manage Students',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
@@ -100,7 +104,9 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
                 child: Text(
                   "Can't load students.\nFirebase error: ${snapshot.error}",
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.onSurfaceVariant),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             );
@@ -114,13 +120,15 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
 
           final students = snapshot.data!;
           if (students.isEmpty) {
-            return const Center(
+            return Center(
               child: Padding(
                 padding: EdgeInsets.all(32),
                 child: Text(
                   'No students yet. Tap "Add Student" to create the first one.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.onSurfaceVariant),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
             );
@@ -132,12 +140,13 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, index) {
               final student = students[index];
-              final linked = student.parentUid != null && student.parentUid!.isNotEmpty;
+              final linked =
+                  student.parentUid != null && student.parentUid!.isNotEmpty;
 
               return Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceContainerLowest,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppColors.outlineVariant),
                 ),
@@ -145,11 +154,17 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
                   children: [
                     CircleAvatar(
                       radius: 22,
-                      backgroundColor: AppColors.surfaceContainer,
-                      backgroundImage:
-                          student.photoUrl.isNotEmpty ? NetworkImage(student.photoUrl) : null,
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainer,
+                      backgroundImage: student.photoUrl.isNotEmpty
+                          ? NetworkImage(student.photoUrl)
+                          : null,
                       child: student.photoUrl.isEmpty
-                          ? const Icon(Icons.person, color: AppColors.safetyBlue)
+                          ? const Icon(
+                              Icons.person,
+                              color: AppColors.safetyBlue,
+                            )
                           : null,
                     ),
                     const SizedBox(width: 12),
@@ -159,24 +174,33 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
                         children: [
                           Text(
                             student.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,
-                              color: AppColors.textMain,
+                              color: Theme.of(context).colorScheme.onSurface,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             '${student.grade} · ${student.seat} · ${student.stopName}',
-                            style: const TextStyle(fontSize: 12, color: AppColors.onSurfaceVariant),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
                           ),
                           const SizedBox(height: 3),
                           Row(
                             children: [
                               Icon(
-                                linked ? Icons.link_rounded : Icons.link_off_rounded,
+                                linked
+                                    ? Icons.link_rounded
+                                    : Icons.link_off_rounded,
                                 size: 12,
-                                color: linked ? AppColors.successGreen : AppColors.errorRed,
+                                color: linked
+                                    ? AppColors.successGreen
+                                    : AppColors.errorRed,
                               ),
                               const SizedBox(width: 4),
                               Text(
@@ -184,7 +208,9 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
                                 style: TextStyle(
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.w600,
-                                  color: linked ? AppColors.successGreen : AppColors.errorRed,
+                                  color: linked
+                                      ? AppColors.successGreen
+                                      : AppColors.errorRed,
                                 ),
                               ),
                             ],
@@ -193,7 +219,10 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.edit_outlined, color: AppColors.safetyBlue),
+                      icon: const Icon(
+                        Icons.edit_outlined,
+                        color: AppColors.safetyBlue,
+                      ),
                       onPressed: () => _openStudentForm(existing: student),
                     ),
                   ],
@@ -262,7 +291,8 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
 
     try {
       final oldParentUid = widget.existing?.parentUid;
-      final studentId = widget.existing?.id ??
+      final studentId =
+          widget.existing?.id ??
           FirebaseDatabase.instance
               .ref()
               .child('studentRosters/${widget.busId}')
@@ -284,11 +314,13 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
       // If the parent link changed (including being cleared), remove the
       // stale index entry first so a child never shows up under two
       // different Parent accounts at once.
+
       if (oldParentUid != null &&
           oldParentUid.isNotEmpty &&
           oldParentUid != _selectedParentUid) {
         await FirebaseService.instance.unlinkChildFromParent(
           parentUid: oldParentUid,
+          busId: widget.busId,
           studentId: studentId,
         );
       }
@@ -302,9 +334,11 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
         Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_isEditing
-                ? 'Updated ${student.name}.'
-                : 'Added ${student.name} to $busIdLabel.'),
+            content: Text(
+              _isEditing
+                  ? 'Updated ${student.name}.'
+                  : 'Added ${student.name} to $busIdLabel.',
+            ),
             backgroundColor: AppColors.successGreen,
           ),
         );
@@ -331,10 +365,16 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
       hintText: hint,
       hintStyle: const TextStyle(color: AppColors.outline, fontSize: 14),
       filled: true,
-      fillColor: AppColors.surfaceContainerLow,
+      fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: AppColors.safetyBlue, width: 2),
@@ -343,17 +383,23 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
   }
 
   Widget _label(String text) => Text(
-        text,
-        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.textMain),
-      );
+    text,
+    style: TextStyle(
+      fontSize: 12.5,
+      fontWeight: FontWeight.bold,
+      color: Theme.of(context).colorScheme.onSurface,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surfaceContainerLowest,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
@@ -376,7 +422,11 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
                 const SizedBox(height: 18),
                 Text(
                   _isEditing ? 'Edit Student' : 'Add Student',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.textMain),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 18),
 
@@ -385,8 +435,13 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
                 TextFormField(
                   controller: _nameController,
                   enabled: !_isSaving,
-                  decoration: _decoration('e.g. Maya Patel', Icons.badge_outlined),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+                  decoration: _decoration(
+                    'e.g. Maya Patel',
+                    Icons.badge_outlined,
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Name is required'
+                      : null,
                 ),
                 const SizedBox(height: 14),
 
@@ -401,8 +456,13 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
                           TextFormField(
                             controller: _gradeController,
                             enabled: !_isSaving,
-                            decoration: _decoration('e.g. Grade 4', Icons.school_outlined),
-                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                            decoration: _decoration(
+                              'e.g. Grade 4',
+                              Icons.school_outlined,
+                            ),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Required'
+                                : null,
                           ),
                         ],
                       ),
@@ -417,8 +477,13 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
                           TextFormField(
                             controller: _seatController,
                             enabled: !_isSaving,
-                            decoration: _decoration('e.g. Seat 2B', Icons.event_seat_outlined),
-                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                            decoration: _decoration(
+                              'e.g. Seat 2B',
+                              Icons.event_seat_outlined,
+                            ),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Required'
+                                : null,
                           ),
                         ],
                       ),
@@ -432,8 +497,13 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
                 TextFormField(
                   controller: _stopController,
                   enabled: !_isSaving,
-                  decoration: _decoration('e.g. Oak St & Maple Ave', Icons.location_on_outlined),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Stop name is required' : null,
+                  decoration: _decoration(
+                    'e.g. Oak St & Maple Ave',
+                    Icons.location_on_outlined,
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Stop name is required'
+                      : null,
                 ),
                 const SizedBox(height: 14),
 
@@ -454,22 +524,39 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
                     final parents = snapshot.data ?? [];
                     return DropdownButtonFormField<String?>(
                       initialValue: _selectedParentUid,
-                      decoration: _decoration('No parent linked', Icons.family_restroom_rounded),
+                      decoration: _decoration(
+                        'No parent linked',
+                        Icons.family_restroom_rounded,
+                      ),
                       items: [
-                        const DropdownMenuItem<String?>(
+                        DropdownMenuItem<String?>(
                           value: null,
-                          child: Text('No parent linked', style: TextStyle(color: AppColors.onSurfaceVariant)),
+                          child: Text(
+                            'No parent linked',
+                            style: TextStyle(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ),
-                        ...parents.map((p) => DropdownMenuItem<String?>(
-                              value: p.uid,
-                              child: Text(
-                                '${p.name} (${p.email})',
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        ...parents.map(
+                          (p) => DropdownMenuItem<String?>(
+                            value: p.uid,
+                            child: Text(
+                              '${p.name} (${p.email})',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
                               ),
-                            )),
+                            ),
+                          ),
+                        ),
                       ],
-                      onChanged: _isSaving ? null : (val) => setState(() => _selectedParentUid = val),
+                      onChanged: _isSaving
+                          ? null
+                          : (val) => setState(() => _selectedParentUid = val),
                     );
                   },
                 ),
@@ -483,8 +570,12 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.safetyBlue,
                       foregroundColor: Colors.white,
-                      disabledBackgroundColor: AppColors.safetyBlue.withValues(alpha: 0.6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      disabledBackgroundColor: AppColors.safetyBlue.withValues(
+                        alpha: 0.6,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     icon: _isSaving
                         ? const SizedBox(
@@ -492,13 +583,20 @@ class _StudentFormSheetState extends State<_StudentFormSheet> {
                             height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
                           )
                         : const Icon(Icons.check_rounded, size: 20),
                     label: Text(
-                      _isSaving ? 'Saving...' : (_isEditing ? 'Save Changes' : 'Add Student'),
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                      _isSaving
+                          ? 'Saving...'
+                          : (_isEditing ? 'Save Changes' : 'Add Student'),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),

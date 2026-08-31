@@ -224,7 +224,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surfaceGray,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
           // Ambient brand-gradient shapes instead of flat tinted circles.
@@ -236,7 +236,7 @@ class _LoginScreenState extends State<LoginScreen>
               gradient: LinearGradient(
                 colors: [
                   AppColors.safetyBlue.withValues(alpha: 0.16),
-                  AppColors.primaryDark.withValues(alpha: 0.05),
+                  Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
                 ],
               ),
             ),
@@ -272,7 +272,7 @@ class _LoginScreenState extends State<LoginScreen>
                           height: 68,
                           decoration: BoxDecoration(
                             gradient: AppTheme.brandGradient,
-                            borderRadius: BorderRadius.circular(22),
+                            borderRadius: BorderRadius.circular(14),
                             boxShadow: [
                               BoxShadow(
                                 color: AppColors.safetyBlue.withValues(
@@ -294,7 +294,7 @@ class _LoginScreenState extends State<LoginScreen>
                           'SchoolBus Safe',
                           style: Theme.of(context).textTheme.headlineLarge
                               ?.copyWith(
-                                color: AppColors.primaryDark,
+                                color: Theme.of(context).colorScheme.onSurface,
                                 fontSize: 27,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: -0.5,
@@ -304,7 +304,7 @@ class _LoginScreenState extends State<LoginScreen>
                         Text(
                           'Know exactly where your child\'s bus is',
                           style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: AppColors.onSurfaceVariant),
+                              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 32),
@@ -312,9 +312,7 @@ class _LoginScreenState extends State<LoginScreen>
                         // Login card
                         Container(
                           padding: const EdgeInsets.all(24),
-                          decoration: AppTheme.glassDecoration(
-                            borderRadius: 24,
-                          ),
+                          decoration: AppTheme.panelDecoration(context, borderRadius: 14, elevated: true),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -325,7 +323,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       fontSize: 11,
                                       letterSpacing: 1.0,
                                       fontWeight: FontWeight.bold,
-                                      color: AppColors.onSurfaceVariant,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
                               ),
                               const SizedBox(height: 12),
@@ -547,7 +545,7 @@ class _LoginScreenState extends State<LoginScreen>
                                               .bodyMedium
                                               ?.copyWith(
                                                 color:
-                                                    AppColors.onSurfaceVariant,
+                                                    Theme.of(context).colorScheme.onSurfaceVariant,
                                                 fontSize: 12.5,
                                               ),
                                         ),
@@ -570,7 +568,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       height: 54,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        color: Colors.white,
+                                        color: Theme.of(context).colorScheme.surface,
                                         border: Border.all(
                                           color: AppColors.outlineVariant,
                                         ),
@@ -603,7 +601,7 @@ class _LoginScreenState extends State<LoginScreen>
                             Text(
                               'Need an account? ',
                               style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: AppColors.onSurfaceVariant),
+                                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
                             ),
                             GestureDetector(
                               onTap: () {
@@ -678,7 +676,7 @@ class _FieldLabel extends StatelessWidget {
     return Text(
       text,
       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-        color: AppColors.textMain,
+        color: Theme.of(context).colorScheme.onSurface,
         fontSize: 12.5,
       ),
     );
@@ -714,7 +712,7 @@ class _ModernTextField extends StatelessWidget {
         hintText: hint,
         hintStyle: const TextStyle(color: AppColors.outline, fontSize: 14),
         filled: true,
-        fillColor: AppColors.surfaceContainerLow,
+        fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 14,
@@ -764,7 +762,7 @@ class _RoleChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: isSelected
               ? AppColors.safetyBlue.withValues(alpha: 0.08)
-              : AppColors.surfaceContainerLowest,
+              : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? AppColors.safetyBlue : AppColors.outlineVariant,
@@ -784,7 +782,7 @@ class _RoleChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                color: isSelected ? AppColors.safetyBlue : AppColors.textMain,
+                color: isSelected ? AppColors.safetyBlue : Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ],

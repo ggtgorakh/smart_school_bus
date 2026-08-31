@@ -73,19 +73,19 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
     final parentUid = FirebaseAuth.instance.currentUser?.uid;
 
     if (parentUid == null) {
-      return const Scaffold(
-        backgroundColor: AppColors.surfaceGray,
+      return Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         body: Center(
           child: Text(
             'Please sign in to view boarding status.',
-            style: TextStyle(color: AppColors.onSurfaceVariant),
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
           ),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: AppColors.surfaceGray,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: StreamBuilder<List<Student>>(
         stream: FirebaseService.instance.streamChildrenForParent(parentUid),
         builder: (context, snapshot) {
@@ -98,15 +98,15 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                   children: [
                     const Icon(Icons.wifi_off_rounded, size: 44, color: AppColors.outline),
                     const SizedBox(height: 14),
-                    const Text(
+                    Text(
                       "Can't load your child's status",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textMain),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Theme.of(context).colorScheme.onSurface),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       'Firebase error: ${snapshot.error}',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 12.5, color: AppColors.onSurfaceVariant),
+                      style: TextStyle(fontSize: 12.5, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -131,16 +131,16 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                   children: [
                     const Icon(Icons.family_restroom_rounded, size: 48, color: AppColors.outline),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'No child linked to your account yet',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textMain),
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Theme.of(context).colorScheme.onSurface),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Ask your school administrator to link your child to this account, and it will appear here automatically.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: AppColors.onSurfaceVariant),
+                      style: TextStyle(fontSize: 13, color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -173,7 +173,7 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.surface,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: AppColors.outlineVariant),
                       ),
@@ -193,10 +193,10 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                                   const SizedBox(width: 8),
                                   Text(
                                     '${c.name} (${c.grade})',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.bold,
-                                      color: AppColors.textMain,
+                                      color: Theme.of(context).colorScheme.onSurface,
                                     ),
                                   ),
                                 ],
@@ -220,8 +220,8 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                   Container(
                     padding: const EdgeInsets.all(18),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: AppColors.outlineVariant.withValues(alpha: 0.5),
                       ),
@@ -289,7 +289,7 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                                     .textTheme
                                     .bodyMedium
                                     ?.copyWith(
-                                      color: AppColors.onSurfaceVariant,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                                       fontSize: 13,
                                     ),
                               ),
@@ -307,7 +307,7 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: color.withValues(alpha: 0.25)),
                     ),
                     child: Column(
@@ -331,7 +331,7 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                               ?.copyWith(
                                 fontSize: 19,
                                 fontWeight: FontWeight.bold,
-                                color: AppColors.primaryDark,
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                         ),
                         const SizedBox(height: 6),
@@ -342,7 +342,7 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                               .textTheme
                               .bodyMedium
                               ?.copyWith(
-                                color: AppColors.onSurfaceVariant,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 fontSize: 13.5,
                               ),
                         ),
@@ -353,7 +353,7 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 14, vertical: 7),
                             decoration: BoxDecoration(
-                              color: Colors.white,
+                              color: Theme.of(context).colorScheme.surface,
                               borderRadius: BorderRadius.circular(12),
                               boxShadow: const [
                                 BoxShadow(
@@ -371,10 +371,10 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                                 const SizedBox(width: 6),
                                 Text(
                                   'Checked in at $timeLabel',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.bold,
-                                    color: AppColors.primaryDark,
+                                    color: Theme.of(context).colorScheme.onSurface,
                                   ),
                                 ),
                               ],
@@ -391,7 +391,7 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(
                         color: AppColors.outlineVariant.withValues(alpha: 0.5),
@@ -410,7 +410,7 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                                 .bodyMedium
                                 ?.copyWith(
                                   fontSize: 13,
-                                  color: AppColors.primaryDark,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                           ),
                         ),

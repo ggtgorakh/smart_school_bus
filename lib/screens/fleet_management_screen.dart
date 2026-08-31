@@ -77,19 +77,24 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: AppColors.surfaceContainerLow,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context),
-              const SizedBox(height: 20),
-              _buildKpiSection(),
-              const SizedBox(height: 24),
-              _buildTelemetrySection(filteredFleet),
-            ],
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1280),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(context),
+                  const SizedBox(height: 20),
+                  _buildKpiSection(),
+                  const SizedBox(height: 24),
+                  _buildTelemetrySection(filteredFleet),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -107,7 +112,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             Text(
               'Fleet Overview',
               style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                color: AppColors.textMain,
+                color: Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.bold,
                 fontSize: 22,
               ),
@@ -116,7 +121,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             Text(
               'Live monitoring of 42 active vehicles',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.onSurfaceVariant,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 13,
               ),
             ),
@@ -126,19 +131,14 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
         final addUserButton = OutlinedButton.icon(
           onPressed: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const AdminCreateUserScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const AdminCreateUserScreen()),
             );
           },
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.safetyBlue,
             side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
-            backgroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
@@ -161,19 +161,14 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
         final peopleButton = OutlinedButton.icon(
           onPressed: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const PeopleDirectoryScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const PeopleDirectoryScreen()),
             );
           },
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.safetyBlue,
             side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
-            backgroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
@@ -196,19 +191,14 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
         final manageStudentsButton = OutlinedButton.icon(
           onPressed: () {
             Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => const ManageStudentsScreen(),
-              ),
+              MaterialPageRoute(builder: (_) => const ManageStudentsScreen()),
             );
           },
           style: OutlinedButton.styleFrom(
             foregroundColor: AppColors.safetyBlue,
             side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
-            backgroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 12,
-            ),
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
@@ -232,19 +222,12 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           onPressed: () => _openDispatchModal(context),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.safetyBlue,
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
             ),
           ),
-          icon: const Icon(
-            Icons.add,
-            size: 18,
-            color: Colors.white,
-          ),
+          icon: const Icon(Icons.add, size: 18, color: Colors.white),
           label: const Text(
             'Dispatch Bus',
             style: TextStyle(
@@ -298,9 +281,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
 
-        if (width < 420) {
+        if (width < 360) {
           return Column(
-            children: const [
+            children: [
               KpiCard(
                 title: 'Active Buses',
                 value: '38',
@@ -327,10 +310,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 title: 'Route Completion',
                 value: '76%',
                 icon: Icons.route,
-                iconBgColor: AppColors.surfaceContainerHigh,
+                iconBgColor: Theme.of(context).colorScheme.surfaceContainerHigh,
                 iconColor: AppColors.safetyBlue,
                 badgeText: 'Morning Run',
-                badgeBgColor: AppColors.surfaceContainerLow,
+                badgeBgColor: Theme.of(context).colorScheme.surfaceContainerLow,
                 badgeTextColor: AppColors.safetyBlue,
                 progress: 0.76,
               ),
@@ -339,8 +322,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 title: 'Students Boarded',
                 value: '1,240',
                 icon: Icons.group,
-                iconBgColor: AppColors.surfaceContainerLow,
-                iconColor: AppColors.textMain,
+                iconBgColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                iconColor: Theme.of(context).colorScheme.onSurface,
                 badgeText: '+12 today',
                 badgeBgColor: Color(0x1F2D8A29),
                 badgeTextColor: AppColors.successGreen,
@@ -358,7 +341,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
           childAspectRatio: width >= 900 ? 1.45 : 1.6,
-          children: const [
+          children: [
             KpiCard(
               title: 'Active Buses',
               value: '38',
@@ -383,10 +366,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
               title: 'Route Completion',
               value: '76%',
               icon: Icons.route,
-              iconBgColor: AppColors.surfaceContainerHigh,
+              iconBgColor: Theme.of(context).colorScheme.surfaceContainerHigh,
               iconColor: AppColors.safetyBlue,
               badgeText: 'Morning Run',
-              badgeBgColor: AppColors.surfaceContainerLow,
+              badgeBgColor: Theme.of(context).colorScheme.surfaceContainerLow,
               badgeTextColor: AppColors.safetyBlue,
               progress: 0.76,
             ),
@@ -394,8 +377,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
               title: 'Students Boarded',
               value: '1,240',
               icon: Icons.group,
-              iconBgColor: AppColors.surfaceContainerLow,
-              iconColor: AppColors.textMain,
+              iconBgColor: Theme.of(context).colorScheme.surfaceContainerLow,
+              iconColor: Theme.of(context).colorScheme.onSurface,
               badgeText: '+12 today',
               badgeBgColor: Color(0x1F2D8A29),
               badgeTextColor: AppColors.successGreen,
@@ -409,10 +392,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
   Widget _buildTelemetrySection(List<BusFleet> filteredFleet) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppColors.surfaceContainerHighest,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
         ),
         boxShadow: [
           BoxShadow(
@@ -425,18 +408,18 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
       child: Column(
         children: [
           _buildTelemetryHeader(),
-          const Divider(
-            color: AppColors.surfaceContainerHighest,
+          Divider(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
             height: 1,
           ),
           if (filteredFleet.isEmpty)
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(32),
               child: Center(
                 child: Text(
                   'No buses found',
                   style: TextStyle(
-                    color: AppColors.onSurfaceVariant,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: 14,
                   ),
                 ),
@@ -447,8 +430,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: filteredFleet.length,
-              separatorBuilder: (_, _) => const Divider(
-                color: AppColors.surfaceContainerHighest,
+              separatorBuilder: (_, _) => Divider(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 height: 1,
               ),
               itemBuilder: (context, index) {
@@ -470,7 +453,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           final title = Text(
             'Live Telemetry & Status',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: AppColors.textMain,
+              color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.bold,
               fontSize: 17,
             ),
@@ -485,9 +468,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             },
             decoration: InputDecoration(
               hintText: 'Search bus or driver...',
-              hintStyle: const TextStyle(
-                fontSize: 12,
-              ),
+              hintStyle: const TextStyle(fontSize: 12),
               prefixIcon: const Icon(
                 Icons.search,
                 size: 19,
@@ -498,7 +479,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 vertical: 10,
               ),
               filled: true,
-              fillColor: AppColors.surfaceContainerLow,
+              fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide.none,
@@ -509,11 +490,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           if (isSmall) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                title,
-                const SizedBox(height: 12),
-                searchField,
-              ],
+              children: [title, const SizedBox(height: 12), searchField],
             );
           }
 
@@ -521,10 +498,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             children: [
               Expanded(child: title),
               const SizedBox(width: 16),
-              SizedBox(
-                width: 220,
-                child: searchField,
-              ),
+              SizedBox(width: 280, child: searchField),
             ],
           );
         },
@@ -564,31 +538,21 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           final isSmall = constraints.maxWidth < 600;
 
           if (isSmall) {
-            return _buildMobileFleetCard(
-              bus,
-              badgeColor,
-              badgeBg,
-              statusText,
-            );
+            return _buildMobileFleetCard(bus, badgeColor, badgeBg, statusText);
           }
 
-          return _buildDesktopFleetCard(
-            bus,
-            badgeColor,
-            badgeBg,
-            statusText,
-          );
+          return _buildDesktopFleetCard(bus, badgeColor, badgeBg, statusText);
         },
       ),
     );
   }
 
   Widget _buildMobileFleetCard(
-      BusFleet bus,
-      Color badgeColor,
-      Color badgeBg,
-      String statusText,
-      ) {
+    BusFleet bus,
+    Color badgeColor,
+    Color badgeBg,
+    String statusText,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -598,15 +562,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             Container(
               width: 46,
               height: 46,
-              decoration: BoxDecoration(
-                color: badgeBg,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.directions_bus,
-                color: badgeColor,
-                size: 23,
-              ),
+              decoration: BoxDecoration(color: badgeBg, shape: BoxShape.circle),
+              child: Icon(Icons.directions_bus, color: badgeColor, size: 23),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -615,10 +572,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 children: [
                   Text(
                     bus.busId,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
-                      color: AppColors.textMain,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -626,9 +583,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                     bus.driverName,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
-                      color: AppColors.onSurfaceVariant,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
@@ -654,10 +611,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           bus.routeName,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: AppColors.textMain,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
 
@@ -665,18 +622,18 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
 
         Row(
           children: [
-            const Icon(
+            Icon(
               Icons.schedule_outlined,
               size: 15,
-              color: AppColors.onSurfaceVariant,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
             const SizedBox(width: 5),
             Expanded(
               child: Text(
                 'Est. Arrival: ${bus.estArrival}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -691,10 +648,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 6,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: badgeBg,
                 borderRadius: BorderRadius.circular(7),
@@ -708,16 +662,13 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 ),
               ),
             ),
-            _buildTelemetryValue(
-              '${bus.speedMph} mph',
-              'Speed',
-            ),
+            _buildTelemetryValue('${bus.speedMph} mph', 'Speed'),
             _buildTelemetryValue(
               'Fuel: ${bus.fuelPercent}%',
               'Fuel',
               valueColor: bus.fuelPercent < 20
                   ? AppColors.errorRed
-                  : AppColors.onSurfaceVariant,
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ],
         ),
@@ -726,25 +677,18 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
   }
 
   Widget _buildDesktopFleetCard(
-      BusFleet bus,
-      Color badgeColor,
-      Color badgeBg,
-      String statusText,
-      ) {
+    BusFleet bus,
+    Color badgeColor,
+    Color badgeBg,
+    String statusText,
+  ) {
     return Row(
       children: [
         Container(
           width: 44,
           height: 44,
-          decoration: BoxDecoration(
-            color: badgeBg,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.directions_bus,
-            color: badgeColor,
-            size: 22,
-          ),
+          decoration: BoxDecoration(color: badgeBg, shape: BoxShape.circle),
+          child: Icon(Icons.directions_bus, color: badgeColor, size: 22),
         ),
         const SizedBox(width: 14),
 
@@ -755,10 +699,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             children: [
               Text(
                 bus.busId,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
-                  color: AppColors.textMain,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 3),
@@ -766,9 +710,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 bus.driverName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -786,10 +730,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 bus.routeName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textMain,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 3),
@@ -797,9 +741,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 'Est. Arrival: ${bus.estArrival}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -810,10 +754,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
 
         Flexible(
           child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 10,
-              vertical: 5,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: badgeBg,
               borderRadius: BorderRadius.circular(7),
@@ -838,10 +779,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           children: [
             Text(
               '${bus.speedMph} mph',
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
-                color: AppColors.textMain,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             Text(
@@ -851,7 +792,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 fontWeight: FontWeight.w600,
                 color: bus.fuelPercent < 20
                     ? AppColors.errorRed
-                    : AppColors.onSurfaceVariant,
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],
@@ -874,11 +815,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
     );
   }
 
-  Widget _buildTelemetryValue(
-      String value,
-      String label, {
-        Color valueColor = AppColors.textMain,
-      }) {
+  Widget _buildTelemetryValue(String value, String label, {Color? valueColor}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -887,14 +824,14 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 13,
-            color: valueColor,
+            color: valueColor ?? Theme.of(context).colorScheme.onSurface,
           ),
         ),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 10,
-            color: AppColors.onSurfaceVariant,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
       ],
@@ -904,7 +841,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
   void _openDispatchModal(BuildContext context) {
     String selectedRoute = 'Route 7A - Oakridge Elementary';
     String selectedBus = 'BUS-901 (Standby Reserve)';
-    String selectedDriver = 'Marcus Vance (Standby)';
+    String selectedDriver = 'Mar Vance (Standby)';
 
     showModalBottomSheet(
       context: context,
@@ -919,8 +856,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
               right: 20,
               top: 20,
             ),
-            decoration: const BoxDecoration(
-              color: Colors.white,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Column(
@@ -940,15 +877,16 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    const Icon(Icons.add_road_rounded,
-                        color: AppColors.safetyBlue, size: 24),
+                    const Icon(
+                      Icons.add_road_rounded,
+                      color: AppColors.safetyBlue,
+                      size: 24,
+                    ),
                     const SizedBox(width: 10),
                     Text(
                       'Dispatch Replacement Vehicle',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontSize: 17, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -962,17 +900,30 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                   initialValue: selectedRoute,
                   decoration: InputDecoration(
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  items: [
-                    'Route 7A - Oakridge Elementary',
-                    'Route 3C - Westside High',
-                    'Route 12B - Pinecrest Academy',
-                    'Route 5F - Lincoln Middle',
-                  ].map((r) => DropdownMenuItem(value: r, child: Text(r, style: const TextStyle(fontSize: 13)))).toList(),
+                  items:
+                      [
+                            'Route 7A - Oakridge Elementary',
+                            'Route 3C - Westside High',
+                            'Route 12B - Pinecrest Academy',
+                            'Route 5F - Lincoln Middle',
+                          ]
+                          .map(
+                            (r) => DropdownMenuItem(
+                              value: r,
+                              child: Text(
+                                r,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          )
+                          .toList(),
                   onChanged: (val) {
                     if (val != null) setModalState(() => selectedRoute = val);
                   },
@@ -987,15 +938,25 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                   initialValue: selectedBus,
                   decoration: InputDecoration(
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  items: [
-                    'BUS-901 (Standby Reserve)',
-                    'BUS-804 (Standby Reserve)',
-                  ].map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 13)))).toList(),
+                  items:
+                      ['BUS-901 (Standby Reserve)', 'BUS-804 (Standby Reserve)']
+                          .map(
+                            (b) => DropdownMenuItem(
+                              value: b,
+                              child: Text(
+                                b,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          )
+                          .toList(),
                   onChanged: (val) {
                     if (val != null) setModalState(() => selectedBus = val);
                   },
@@ -1029,7 +990,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                       Navigator.of(ctx).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('✓ Dispatched ${newBus.busId} to $selectedRoute'),
+                          content: Text(
+                            '✓ Dispatched ${newBus.busId} to $selectedRoute',
+                          ),
                           backgroundColor: AppColors.successGreen,
                         ),
                       );
@@ -1069,8 +1032,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           right: 20,
           top: 20,
         ),
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
@@ -1090,8 +1053,11 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             const SizedBox(height: 16),
             Row(
               children: [
-                const Icon(Icons.chat_bubble_rounded,
-                    color: AppColors.safetyBlue, size: 22),
+                const Icon(
+                  Icons.chat_bubble_rounded,
+                  color: AppColors.safetyBlue,
+                  size: 22,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -1099,17 +1065,17 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                     children: [
                       Text(
                         'Dispatch Dispatcher ↔ ${bus.driverName}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15.5,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.textMain,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                       Text(
                         '${bus.busId} • ${bus.routeName}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.onSurfaceVariant,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -1123,33 +1089,44 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                'Hold at next stop',
-                'Traffic detour ahead',
-                'Confirm student manifest',
-                'Return to depot',
-              ].map((msg) {
-                return ActionChip(
-                  label: Text(msg, style: const TextStyle(fontSize: 12)),
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    NotificationService.instance.add(
-                      kind: NotificationKind.info,
-                      title: 'Dispatch Msg sent to ${bus.driverName}',
-                      message: '"$msg" (${bus.busId})',
-                    );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Sent: "$msg" to ${bus.driverName}'),
-                        backgroundColor: AppColors.safetyBlue,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children:
+                  [
+                    'Hold at next stop',
+                    'Traffic detour ahead',
+                    'Confirm student manifest',
+                    'Return to depot',
+                  ].map((msg) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: ActionChip(
+                        label: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            msg,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.of(ctx).pop();
+                          NotificationService.instance.add(
+                            kind: NotificationKind.info,
+                            title: 'Dispatch Msg sent to ${bus.driverName}',
+                            message: '"$msg" (${bus.busId})',
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Sent: "$msg" to ${bus.driverName}',
+                              ),
+                              backgroundColor: AppColors.safetyBlue,
+                            ),
+                          );
+                        },
                       ),
                     );
-                  },
-                );
-              }).toList(),
+                  }).toList(),
             ),
             const SizedBox(height: 14),
             Row(
@@ -1160,7 +1137,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                     decoration: InputDecoration(
                       hintText: 'Type dispatch message...',
                       contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),

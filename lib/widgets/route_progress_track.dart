@@ -90,7 +90,7 @@ class RouteProgressTrack extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
-                        color: AppColors.textMain,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                 ),
               ),

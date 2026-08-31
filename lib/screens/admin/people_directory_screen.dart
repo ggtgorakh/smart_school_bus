@@ -77,11 +77,11 @@ class _PeopleDirectoryScreenState extends State<PeopleDirectoryScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surfaceContainerLow,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       appBar: AppBar(
-        backgroundColor: AppColors.surfaceContainerLowest,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
-        foregroundColor: AppColors.textMain,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
         title: const Text(
           'People Directory',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
@@ -89,7 +89,7 @@ class _PeopleDirectoryScreenState extends State<PeopleDirectoryScreen>
         bottom: TabBar(
           controller: _tabController,
           labelColor: AppColors.safetyBlue,
-          unselectedLabelColor: AppColors.onSurfaceVariant,
+          unselectedLabelColor: Theme.of(context).colorScheme.onSurfaceVariant,
           indicatorColor: AppColors.safetyBlue,
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           tabs: const [
@@ -190,7 +190,7 @@ class _UserRoleList extends StatelessWidget {
             return Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLowest,
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: AppColors.outlineVariant),
               ),
@@ -198,7 +198,7 @@ class _UserRoleList extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 22,
-                    backgroundColor: AppColors.surfaceContainer,
+                    backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
                     child: Icon(_roleIcon, color: AppColors.safetyBlue, size: 20),
                   ),
                   const SizedBox(width: 12),
@@ -208,18 +208,18 @@ class _UserRoleList extends StatelessWidget {
                       children: [
                         Text(
                           user.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
-                            color: AppColors.textMain,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           user.email,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12.5,
-                            color: AppColors.onSurfaceVariant,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                         ),
                         if (role == 'Driver') ...[
@@ -345,7 +345,7 @@ class _ChildrenList extends StatelessWidget {
                   return Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerLowest,
+                      color: Theme.of(context).colorScheme.surface,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: AppColors.outlineVariant),
                     ),
@@ -353,7 +353,7 @@ class _ChildrenList extends StatelessWidget {
                       children: [
                         CircleAvatar(
                           radius: 22,
-                          backgroundColor: AppColors.surfaceContainer,
+                          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
                           backgroundImage: student.photoUrl.isNotEmpty
                               ? NetworkImage(student.photoUrl)
                               : null,
@@ -368,18 +368,18 @@ class _ChildrenList extends StatelessWidget {
                             children: [
                               Text(
                                 student.name,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
-                                  color: AppColors.textMain,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 '${student.grade} · ${student.seat} · ${student.stopName}',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12,
-                                  color: AppColors.onSurfaceVariant,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                               const SizedBox(height: 4),
@@ -469,17 +469,17 @@ class _EmptyState extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
-                color: AppColors.textMain,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 12.5, color: AppColors.onSurfaceVariant),
+              style: TextStyle(fontSize: 12.5, color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),

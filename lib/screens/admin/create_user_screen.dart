@@ -119,15 +119,15 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.surfaceGray,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0.5,
-        iconTheme: const IconThemeData(color: AppColors.primaryDark),
-        title: const Text(
+        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
+        title: Text(
           'Provision New User',
           style: TextStyle(
-            color: AppColors.primaryDark,
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.bold,
             fontSize: 18,
           ),
@@ -140,11 +140,11 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
             constraints: const BoxConstraints(maxWidth: 520),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryDark.withValues(alpha: 0.06),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.06),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
@@ -179,15 +179,15 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
                               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                     fontSize: 17,
                                     fontWeight: FontWeight.bold,
-                                    color: AppColors.textMain,
+                                    color: Theme.of(context).colorScheme.onSurface,
                                   ),
                             ),
                             const SizedBox(height: 2),
-                            const Text(
+                            Text(
                               'Creates a Firebase Auth credential and registers role permissions in the database.',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: AppColors.onSurfaceVariant,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -196,7 +196,7 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  const Divider(color: AppColors.surfaceContainerHighest),
+                  Divider(color: Theme.of(context).colorScheme.surfaceContainerHighest),
                   const SizedBox(height: 16),
 
                   _buildFieldLabel('Full Name'),
@@ -285,10 +285,10 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
                         value: role,
                         child: Text(
                           role,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.textMain,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                       );
@@ -377,10 +377,10 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
   Widget _buildFieldLabel(String text) {
     return Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 12.5,
         fontWeight: FontWeight.bold,
-        color: AppColors.textMain,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
@@ -394,7 +394,7 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen> {
       hintText: hint,
       hintStyle: const TextStyle(color: AppColors.outline, fontSize: 14),
       filled: true,
-      fillColor: AppColors.surfaceContainerLow,
+      fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),

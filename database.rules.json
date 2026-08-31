@@ -23,15 +23,28 @@
         // children below add a second, stricter check on top of this.
         ".write": "auth != null && (auth.uid === $uid || root.child('users').child(auth.uid).child('role').val() === 'Admin')",
 
-        // BUG #5 FIX: a user may set their own role once (first sign-in /
-        // self-provisioning has no prior record), and may always re-write
-        // the SAME value they already have (e.g. LoginScreen persisting the
-        // role it just read). Any attempt to change an EXISTING role to a
-        // different value is rejected unless the requester is an Admin.
-        // This is what stops a Parent/Driver from promoting themselves to
-        // Admin by writing directly to /users/{uid}/role.
+        // BUG #5 FIX + P0 HARDENING (ISSUE-01/02): a user may set their
+        // own role to 'Parent' — and ONLY 'Parent' — the very first time
+        // their record is created (self-provisioning has no prior
+        // record), and may always re-write whatever value they already
+        // have (e.g. LoginScreen persisting the role it just read, which
+        // could legitimately be Driver/Conductor/Admin for an
+        // Admin-provisioned account). Any attempt to set a role to a
+        // DIFFERENT value — including a brand-new record trying to set
+        // itself to 'Admin' or 'Driver' directly — is rejected unless the
+        // requester is already an Admin.
+        //
+        // Why this matters beyond the app's own UI: the original version
+        // of this rule used `!data.exists()` with no value restriction,
+        // which meant a new record's FIRST role could be set to anything
+        // at all, including 'Admin'. The app's login screen no longer
+        // offers self-signup, but that rule would still have been
+        // exploitable by anyone calling the Firebase Auth/Database REST
+        // API directly, bypassing the app's UI entirely. Restricting the
+        // only-ever-allowed self-assigned value to 'Parent' closes that
+        // gap at the layer that actually enforces it.
         "role": {
-          ".validate": "!data.exists() || newData.val() === data.val() || root.child('users').child(auth.uid).child('role').val() === 'Admin'"
+          ".validate": "root.child('users').child(auth.uid).child('role').val() === 'Admin' || newData.val() === data.val() || (!data.exists() && newData.val() === 'Parent')"
         },
 
         // BUG #4 FIX (supporting rule): a Driver cannot assign themselves
@@ -39,15 +52,40 @@
         // Driver's own client never has permission to alter it.
         "busId": {
           ".validate": "!data.exists() || newData.val() === data.val() || root.child('users').child(auth.uid).child('role').val() === 'Admin'"
+        },
+
+        // PROFILE FIX: a user can edit their own `name`, but must not be
+        // able to change the `email` or `phone` on file for their own
+        // account — these are set once at provisioning time by Admin and
+        // are meant to stay authoritative (e.g. email should track the
+        // actual Firebase Auth login email, not a value the user can
+        // freely overwrite). Same one-way-lock pattern as role/busId
+        // above: first-time set or same-value rewrite is fine, any other
+        // change requires Admin.
+        "email": {
+          ".validate": "!data.exists() || newData.val() === data.val() || root.child('users').child(auth.uid).child('role').val() === 'Admin'"
+        },
+        "phone": {
+          ".validate": "!data.exists() || newData.val() === data.val() || root.child('users').child(auth.uid).child('role').val() === 'Admin'"
         }
       }
     },
 
     "buses": {
       "$busId": {
-        // Any signed-in user can read bus telemetry (Parent/Driver/
-        // Conductor/Admin all need to view Live Tracking).
-        ".read": "auth != null",
+        // P0 FIX (ISSUE-04): previously this was "auth != null" — ANY
+        // signed-in user, including a Parent, could read ANY bus's GPS
+        // telemetry, not just their own child's bus. Now: Admin reads
+        // everything; Driver/Conductor read their own assigned bus (they
+        // need this for Live Tracking regardless of whether a child is
+        // linked yet); a Parent may read a bus ONLY if
+        // /parentChildIndex/{their uid}/{this busId} shows they have at
+        // least one child linked to it. See "parentChildIndex" below —
+        // it's nested by busId specifically so this exact check
+        // ("does this parent have any child on this bus") is expressible
+        // in a single rule, which a flat {studentId: busId} map would not
+        // have allowed.
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor' || root.child('parentChildIndex').child(auth.uid).child($busId).exists())",
 
         // BUG #4 FIX: a Driver may write ONLY the bus that matches their
         // own /users/{auth.uid}/busId. Admins may write any bus. This
@@ -76,9 +114,16 @@
         // bus at once.
         ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId) || (root.child('users').child(auth.uid).child('role').val() === 'Conductor' && root.child('users').child(auth.uid).child('busId').val() === $busId))",
 
-        // Full-roster write: same set of roles, matching the Conductor
-        // regression fix from before (check-in writes) plus Admin/Driver.
-        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId) || (root.child('users').child(auth.uid).child('role').val() === 'Conductor' && root.child('users').child(auth.uid).child('busId').val() === $busId))",
+        // P0 FIX (ISSUE-03): the roster-level ".write" below is now
+        // Admin-ONLY. It used to also grant Driver/Conductor whole-object
+        // write access, which meant they could technically overwrite a
+        // child's name, grade, seat, or even parentUid — not just check
+        // them in. Driver/Conductor's write access is now granted ONLY on
+        // the specific mutable fields (status/boardedAt/stopName) inside
+        // $studentId below, via nested rules that ADD permission just for
+        // those paths. Admin keeps full-object write here for the Manage
+        // Students screen (create/edit/delete a whole record).
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
 
         "$studentId": {
           // ADDITIONAL read grant on top of the roster-level rule above:
@@ -89,18 +134,42 @@
           // know about from /parentChildIndex below.
           ".read": "auth != null && data.child('parentUid').val() === auth.uid",
 
-          ".indexOn": ["parentUid"]
+          ".indexOn": ["parentUid"],
+
+          // P0 FIX (ISSUE-03): Driver/Conductor may update ONLY these
+          // three fields (check-in status and the pickup context that
+          // goes with it) — not name, grade, seat, photoUrl, or
+          // parentUid. Each of these three rules independently ADDS
+          // write permission for just that one field; there is no
+          // broader grant for Driver/Conductor anywhere above this.
+          "status": {
+            ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId) || (root.child('users').child(auth.uid).child('role').val() === 'Conductor' && root.child('users').child(auth.uid).child('busId').val() === $busId))"
+          },
+          "boardedAt": {
+            ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId) || (root.child('users').child(auth.uid).child('role').val() === 'Conductor' && root.child('users').child(auth.uid).child('busId').val() === $busId))"
+          },
+          "stopName": {
+            ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId) || (root.child('users').child(auth.uid).child('role').val() === 'Conductor' && root.child('users').child(auth.uid).child('busId').val() === $busId))"
+          }
         }
       }
     },
 
     "parentChildIndex": {
+      // P0 FIX (ISSUE-04) RESTRUCTURE: this used to be a flat
+      // {studentId: busId} map per parent. That made it impossible for
+      // the /buses/{busId} read rule above to check "does this parent
+      // have a child on this specific bus" in a single rule expression —
+      // RTDB rules can't iterate a map's values to test membership. Now
+      // nested as {busId: {studentId: true}}, that exact check becomes a
+      // direct, cheap existence lookup:
+      // root.child('parentChildIndex').child(uid).child(busId).exists().
       "$parentUid": {
-        // A Parent may only read their own index entry — the list of
-        // student IDs (and which bus each is on) linked to their account.
+        // A Parent may only read their own index entry — which buses and
+        // which student IDs on them are linked to their account.
+        ".read": "auth != null && auth.uid === $parentUid",
         // Only Admin can write this, since only Admin should be able to
         // decide which child belongs to which Parent account.
-        ".read": "auth != null && auth.uid === $parentUid",
         ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'"
       }
     }

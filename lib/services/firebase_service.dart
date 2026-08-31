@@ -154,16 +154,25 @@ class FirebaseService {
   }
 
   /// Streams every child currently linked to [parentUid] via
-  /// /parentChildIndex/{parentUid}, resolving each entry to its live
-  /// student record under /studentRosters/{busId}/{studentId}.
+  /// /parentChildIndex/{parentUid}/{busId}/{studentId}, resolving each
+  /// entry to its live student record under
+  /// /studentRosters/{busId}/{studentId}.
+  ///
+  /// Index shape note (P0 fix, ISSUE-04): this used to be a flat
+  /// {studentId: busId} map. It's now nested as {busId: {studentId: true}}
+  /// specifically so database.rules.json can check "does this parent have
+  /// a child on bus X" in a single rule expression when deciding whether
+  /// a Parent may read that bus's GPS telemetry — RTDB rules can't
+  /// iterate a map's values to test membership, so the busId has to be a
+  /// key, not a value.
   ///
   /// A Parent cannot list a bus's full roster (database.rules.json denies
   /// that at the collection level), so this reads the small index of
-  /// "which student IDs are mine" first, then subscribes to each of those
-  /// specific records directly — which the per-record rule allows. This
-  /// is the standard Realtime Database pattern for row-level-filtered
-  /// reads, since RTDB security rules can't filter query results
-  /// per-item the way Firestore's can.
+  /// "which student IDs are mine, on which buses" first, then subscribes
+  /// to each of those specific records directly — which the per-record
+  /// rule allows. This is the standard Realtime Database pattern for
+  /// row-level-filtered reads, since RTDB security rules can't filter
+  /// query results per-item the way Firestore's can.
   Stream<List<Student>> streamChildrenForParent(String parentUid) {
     late StreamController<List<Student>> controller;
     StreamSubscription<DatabaseEvent>? indexSub;
@@ -199,10 +208,15 @@ class FirebaseService {
     void handleIndexUpdate(dynamic raw) {
       final currentIds = <String>{};
       if (raw is Map) {
-        raw.forEach((studentId, busId) {
-          if (busId is String) {
-            currentIds.add(studentId.toString());
-            subscribeToChild(busId, studentId.toString());
+        // raw shape: { busId: { studentId: true, ... }, ... }
+        raw.forEach((busId, studentsOnBus) {
+          if (studentsOnBus is Map) {
+            studentsOnBus.forEach((studentId, linked) {
+              if (linked == true) {
+                currentIds.add(studentId.toString());
+                subscribeToChild(busId.toString(), studentId.toString());
+              }
+            });
           }
         });
       }
@@ -291,10 +305,12 @@ class FirebaseService {
   }
 
   /// Creates or updates a single student record and, if it has a
-  /// [Student.parentUid], keeps /parentChildIndex/{parentUid}/{studentId}
-  /// in sync so that Parent can find and read this record (see
-  /// streamChildrenForParent above). Used by the Admin "Manage Students"
-  /// screen to link a child to a Parent account.
+  /// [Student.parentUid], keeps
+  /// /parentChildIndex/{parentUid}/{busId}/{studentId} in sync so that
+  /// Parent can find and read this record (see streamChildrenForParent
+  /// above) and read the bus it's on (see database.rules.json's
+  /// /buses/{busId} rule). Used by the Admin "Manage Students" screen to
+  /// link a child to a Parent account.
   Future<void> upsertStudent({
     required String busId,
     required Student student,
@@ -302,19 +318,23 @@ class FirebaseService {
     await _root.child('studentRosters/$busId/${student.id}').set(student.toMap());
     if (student.parentUid != null && student.parentUid!.trim().isNotEmpty) {
       await _root
-          .child('parentChildIndex/${student.parentUid}/${student.id}')
-          .set(busId);
+          .child('parentChildIndex/${student.parentUid}/$busId/${student.id}')
+          .set(true);
     }
   }
 
   /// Removes a child's link to a Parent account (e.g. re-assigning a
   /// student to a different parent, or clearing a mistaken link) without
   /// deleting the underlying student record itself.
+  ///
+  /// [busId] is required now that the index is nested by bus — see
+  /// streamChildrenForParent above for why.
   Future<void> unlinkChildFromParent({
     required String parentUid,
+    required String busId,
     required String studentId,
   }) async {
-    await _root.child('parentChildIndex/$parentUid/$studentId').remove();
+    await _root.child('parentChildIndex/$parentUid/$busId/$studentId').remove();
   }
 
   /// One-off read for manual refresh checks.

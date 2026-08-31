@@ -46,8 +46,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     // purely for notification side effects. Both listeners share the same
     // underlying broadcast stream/Firebase subscription rather than each
     // opening their own.
-    _locationStream =
-        FirebaseService.instance.streamBusLocation(widget.busId);
+    _locationStream = FirebaseService.instance.streamBusLocation(widget.busId);
 
     _statusSub = _locationStream.listen(
       _maybeNotifyStatusChange,
@@ -204,7 +203,9 @@ class _LiveTrackingContent extends StatelessWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Calling driver of ${location.busNumber}: +1 (800) 555-0199'),
+              content: Text(
+                'Calling driver of ${location.busNumber}: +1 (800) 555-0199',
+              ),
               backgroundColor: AppColors.safetyBlue,
             ),
           );
@@ -242,28 +243,35 @@ class _LiveTrackingContent extends StatelessWidget {
         ),
         if (stale)
           Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
+            top: 12,
+            left: 12,
+            right: 12,
             child: _StaleBanner(lastUpdated: location.lastUpdated),
           ),
         // Floating GPS Simulation pill for quick mobile testing
         Positioned(
-          top: 90,
-          right: 16,
+          top: MediaQuery.of(context).size.width < 600 ? 70 : 76,
+          right: MediaQuery.of(context).size.width < 600 ? 10 : 12,
           child: Material(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             elevation: 3,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(12),
             child: InkWell(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(12),
               onTap: onSimulateNextStop,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    Icon(Icons.play_arrow_rounded, color: AppColors.safetyBlue, size: 18),
+                    Icon(
+                      Icons.play_arrow_rounded,
+                      color: AppColors.safetyBlue,
+                      size: 18,
+                    ),
                     SizedBox(width: 4),
                     Text(
                       'Next Stop',
@@ -279,152 +287,182 @@ class _LiveTrackingContent extends StatelessWidget {
             ),
           ),
         ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 24,
-          child: Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 480),
-              padding: const EdgeInsets.all(18),
-              decoration: AppTheme.glassDecoration(borderRadius: 22),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Next-stop headline row
-                  Row(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isMobile = constraints.maxWidth < 600;
+
+            return Positioned(
+              left: isMobile ? 10 : 16,
+              right: isMobile ? 10 : 16,
+              bottom: isMobile ? 10 : 24,
+              child: Center(
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxWidth: isMobile ? double.infinity : 480,
+                  ),
+                  padding: EdgeInsets.all(isMobile ? 12 : 18),
+                  decoration: AppTheme.panelDecoration(
+                    context,
+                    borderRadius: isMobile ? 12 : 14,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: AppColors.amberSoft,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.location_on_rounded,
-                          color: AppColors.alertOrangeDark,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Coming to ${location.currentStopLabel}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineSmall
-                                  ?.copyWith(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold),
+                      // Next-stop headline row
+                      Row(
+                        children: [
+                          Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: AppColors.amberSoft,
+                              shape: BoxShape.circle,
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Stop ${location.currentStopIndex + 1} of ${location.totalStops} • ${location.etaLabel}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: AppColors.onSurfaceVariant,
-                                    fontSize: 13,
+                            child: const Icon(
+                              Icons.location_on_rounded,
+                              color: AppColors.alertOrangeDark,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Coming to ${location.currentStopLabel}',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Stop ${location.currentStopIndex + 1} of ${location.totalStops} • ${location.etaLabel}',
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                        fontSize: 13,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Signature route-progress track.
+                      RouteProgressTrack(
+                        totalStops: location.totalStops,
+                        currentStopIndex: location.currentStopIndex,
+                        currentStopLabel: 'Next: ${location.currentStopLabel}',
+                        etaLabel: location.etaLabel,
+                      ),
+
+                      const SizedBox(height: 14),
+                      const Divider(color: AppColors.outlineVariant, height: 1),
+                      const SizedBox(height: 14),
+
+                      // Student info row
+                      Container(
+                        padding: EdgeInsets.all(
+                          MediaQuery.of(context).size.width < 600 ? 8 : 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: AppColors.outlineVariant.withValues(
+                              alpha: 0.5,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: MediaQuery.of(context).size.width < 600
+                                  ? 38
+                                  : 44,
+                              height: MediaQuery.of(context).size.width < 600
+                                  ? 38
+                                  : 44,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: AppTheme.brandGradient,
+                              ),
+                              child: const Icon(
+                                Icons.face_rounded,
+                                color: Colors.white,
+                                size: 26,
+                              ),
+                            ),
+                            SizedBox(
+                              width: MediaQuery.of(context).size.width < 600
+                                  ? 8
+                                  : 12,
+                            ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    studentName,
+                                    style: Theme.of(context).textTheme.bodyLarge
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                        ),
                                   ),
+                                  Text(
+                                    studentGradeAndSeat,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelMedium
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                          fontSize: 12,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Theme.of(context).colorScheme.surface,
+                                border: Border.all(
+                                  color: AppColors.outlineVariant,
+                                ),
+                              ),
+                              child: IconButton(
+                                icon: const Icon(
+                                  Icons.call_rounded,
+                                  color: AppColors.safetyBlue,
+                                  size: 20,
+                                ),
+                                onPressed: () => _handleCallDriver(context),
+                              ),
                             ),
                           ],
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-
-                  // Signature route-progress track.
-                  RouteProgressTrack(
-                    totalStops: location.totalStops,
-                    currentStopIndex: location.currentStopIndex,
-                    currentStopLabel: 'Next: ${location.currentStopLabel}',
-                    etaLabel: location.etaLabel,
-                  ),
-
-                  const SizedBox(height: 14),
-                  const Divider(color: AppColors.outlineVariant, height: 1),
-                  const SizedBox(height: 14),
-
-                  // Student info row
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: AppColors.outlineVariant.withValues(alpha: 0.5),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: AppTheme.brandGradient,
-                          ),
-                          child: const Icon(
-                            Icons.face_rounded,
-                            color: Colors.white,
-                            size: 26,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                studentName,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyLarge
-                                    ?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15),
-                              ),
-                              Text(
-                                studentGradeAndSeat,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelMedium
-                                    ?.copyWith(
-                                        color: AppColors.onSurfaceVariant,
-                                        fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white,
-                            border: Border.all(color: AppColors.outlineVariant),
-                          ),
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.call_rounded,
-                              color: AppColors.safetyBlue,
-                              size: 20,
-                            ),
-                            onPressed: () => _handleCallDriver(context),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ],
     );
@@ -447,7 +485,11 @@ class _StaleBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 18),
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.white,
+            size: 18,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -484,24 +526,28 @@ class _TrackingStateMessage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 48, color: AppColors.onSurfaceVariant),
+            Icon(
+              icon,
+              size: 48,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
               subtitle,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.onSurfaceVariant,
-                    fontSize: 13,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 13,
+              ),
             ),
           ],
         ),

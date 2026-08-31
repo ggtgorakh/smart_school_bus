@@ -111,15 +111,21 @@ class AuthService {
   /// Uses a temporary secondary [FirebaseApp] instance to ensure the currently
   /// logged-in Admin is NOT signed out during creation.
   ///
-  /// [busId] (Bug #4 fix): when provisioning a Driver, the Admin assigns the
-  /// bus the Driver is allowed to write to. This is stored on the user
-  /// record and enforced server-side by the `/buses/{busId}` write rule.
+  /// [busId] (Bug #4 fix, extended to Conductor): when provisioning a Driver
+  /// or Conductor, the Admin assigns the bus that account is allowed to
+  /// write within. This is stored on the user record and enforced
+  /// server-side by the /buses/{busId} and /studentRosters/{busId} rules.
+  ///
+  /// [phone] is optional. Once set, it can only be changed by an Admin —
+  /// see database.rules.json, which locks `phone` the same way `role` and
+  /// `busId` are locked.
   Future<UserCredential> createUserByAdmin({
     required String email,
     required String password,
     required String name,
     required String role,
     String? busId,
+    String? phone,
   }) async {
     final secondaryAppName = 'AdminUserCreation_${DateTime.now().millisecondsSinceEpoch}';
     FirebaseApp? secondaryApp;
@@ -146,8 +152,16 @@ class AuthService {
           'role': role,
           'createdAt': ServerValue.timestamp,
         };
-        if (role == 'Driver' && busId != null && busId.trim().isNotEmpty) {
+        // BUG FIX: previously this only checked `role == 'Driver'`, so a
+        // Conductor's busId — even though the Admin form collected it —
+        // was silently dropped and never written to the database.
+        if ((role == 'Driver' || role == 'Conductor') &&
+            busId != null &&
+            busId.trim().isNotEmpty) {
           profile['busId'] = busId.trim();
+        }
+        if (phone != null && phone.trim().isNotEmpty) {
+          profile['phone'] = phone.trim();
         }
         await _db.child('users/$newUid').set(profile);
       }
@@ -158,6 +172,17 @@ class AuthService {
         await secondaryApp.delete();
       }
     }
+  }
+
+  /// Lets the signed-in user update their own display name.
+  ///
+  /// Deliberately narrow: only `name` is exposed here. `email` and `phone`
+  /// are NOT editable by the user themselves — see database.rules.json,
+  /// where those two fields are locked to "same value, or Admin only",
+  /// mirroring the role/busId lock pattern. This method existing at all
+  /// doesn't grant access by itself; the rules are the real boundary.
+  Future<void> updateOwnName(String uid, String name) async {
+    await _db.child('users/$uid').update({'name': name.trim()});
   }
 
   /// Sends a password reset email to the given address.

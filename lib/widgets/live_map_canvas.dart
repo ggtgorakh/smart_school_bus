@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 class RouteMapPainter extends CustomPainter {
+  final bool isDark;
+  const RouteMapPainter({this.isDark = false});
   @override
   void paint(Canvas canvas, Size size) {
     // -----------------------------
@@ -9,13 +11,13 @@ class RouteMapPainter extends CustomPainter {
     // -----------------------------
 
     final minorRoad = Paint()
-      ..color = const Color(0xFFDCE3EF)
+      ..color = isDark ? const Color(0xFF334155) : const Color(0xFFDCE3EF)
       ..strokeWidth = 3
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
     final majorRoad = Paint()
-      ..color = const Color(0xFFCBD5E8)
+      ..color = isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E8)
       ..strokeWidth = 5
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -111,7 +113,7 @@ class RouteMapPainter extends CustomPainter {
     // Stop markers
     // -----------------------------
 
-    final completedStopPaint = Paint()..color = const Color(0xFFB9C4DC);
+    final completedStopPaint = Paint()..color = isDark ? const Color(0xFF64748B) : const Color(0xFFB9C4DC);
 
     final nextStopPaint = Paint()..color = AppColors.alertOrange;
 
@@ -144,7 +146,7 @@ class RouteMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant RouteMapPainter oldDelegate) {
-    return false;
+    return oldDelegate.isDark != isDark;
   }
 }
 
@@ -224,13 +226,13 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
         }
 
         return Container(
-          color: const Color(0xFFE7ECF6),
+          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF0F1928) : const Color(0xFFE7ECF6),
           child: Stack(
             children: [
               // MAP BACKGROUND
               Positioned.fill(
                 child: RepaintBoundary(
-                  child: CustomPaint(painter: RouteMapPainter()),
+                  child: CustomPaint(painter: RouteMapPainter(isDark: Theme.of(context).brightness == Brightness.dark)),
                 ),
               ),
 
@@ -246,7 +248,7 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                       horizontal: 18,
                       vertical: 14,
                     ),
-                    decoration: AppTheme.glassDecoration(borderRadius: 18),
+                    decoration: AppTheme.panelDecoration(context, borderRadius: 14),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -281,7 +283,7 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                               '${widget.busNumber} • ${widget.speedKmph.toStringAsFixed(0)} km/h',
                               style: Theme.of(context).textTheme.labelMedium
                                   ?.copyWith(
-                                    color: AppColors.onSurfaceVariant,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontWeight: FontWeight.bold,
                                   ),
                             ),
@@ -357,7 +359,7 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                               Container(
                                 width: 7,
                                 height: 7,
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   color: AppColors.successGreen,
                                   shape: BoxShape.circle,
                                 ),
