@@ -160,6 +160,13 @@ class LiveMapCanvas extends StatefulWidget {
   final String busNumber;
   final double progress; // 0.0 to 1.0
   final double speedKmph;
+  // Optional widgets the screen can hand in so they get laid out in the
+  // same top-overlay column as the ETA card instead of being separately
+  // Positioned elsewhere in the screen's own Stack — that's what was
+  // causing the stale-signal banner and the "Next Stop" pill to overlap
+  // the ETA card instead of stacking cleanly above/below it.
+  final Widget? topBanner;
+  final Widget? trailingAction;
 
   const LiveMapCanvas({
     super.key,
@@ -168,6 +175,8 @@ class LiveMapCanvas extends StatefulWidget {
     this.busNumber = 'Bus 42',
     this.progress = 0.5,
     this.speedKmph = 35.0,
+    this.topBanner,
+    this.trailingAction,
   });
 
   @override
@@ -236,12 +245,22 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                 ),
               ),
 
-              // ETA CARD
+              // TOP OVERLAY: stale banner (if any) → ETA card → trailing
+              // action, all stacked in a single Column so their heights
+              // never collide — no more magic pixel offsets to keep in sync.
               Positioned(
                 top: 16,
                 left: 16,
                 right: 16,
-                child: Center(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.topBanner != null) ...[
+                      widget.topBanner!,
+                      const SizedBox(height: 10),
+                    ],
+                    Center(
                   child: Container(
                     constraints: const BoxConstraints(maxWidth: 380),
                     padding: const EdgeInsets.symmetric(
@@ -251,13 +270,18 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                     decoration: AppTheme.panelDecoration(context, borderRadius: 14),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // ETA
-                        Column(
+                        Flexible(
+                          child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               'ESTIMATED ARRIVAL',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.labelMedium
                                   ?.copyWith(
                                     fontSize: 10.5,
@@ -267,20 +291,28 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                             const SizedBox(height: 2),
                             Text(
                               widget.etaTime,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: AppTheme.tabularTime(
                                 fontSize: 24,
                                 color: AppColors.alertOrangeDark,
                               ),
                             ),
                           ],
+                          ),
                         ),
+                        const SizedBox(width: 10),
 
                         // Bus information
-                        Column(
+                        Flexible(
+                          child: Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               '${widget.busNumber} • ${widget.speedKmph.toStringAsFixed(0)} km/h',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.labelMedium
                                   ?.copyWith(
                                     color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -318,10 +350,17 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                               ),
                             ),
                           ],
+                          ),
                         ),
                       ],
                     ),
                   ),
+                ),
+                    if (widget.trailingAction != null) ...[
+                      const SizedBox(height: 10),
+                      widget.trailingAction!,
+                    ],
+                  ],
                 ),
               ),
 

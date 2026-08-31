@@ -1,8 +1,11 @@
+// lib/widgets/app_header.dart
+
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/app_notification.dart';
 import '../services/notification_service.dart';
 import '../screens/notifications_screen.dart';
+import '../widgets/notification_badge.dart';
 
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   final String title;
@@ -36,7 +39,11 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
               color: scheme.primary,
               borderRadius: BorderRadius.circular(9),
             ),
-            child: const Icon(Icons.directions_bus_rounded, color: Colors.white, size: 20),
+            child: const Icon(
+              Icons.directions_bus_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 10),
           Flexible(
@@ -45,63 +52,49 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: scheme.onSurface,
-                  ),
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurface,
+              ),
             ),
           ),
         ],
       ),
       actions: [
-        ValueListenableBuilder<List<AppNotification>>(
-          valueListenable: NotificationService.instance.notifications,
-          builder: (context, items, _) {
-            final unreadCount = items.where((n) => !n.isRead).length;
-            return Stack(
-              children: [
-                IconButton(
-                  tooltip: 'Notifications',
-                  onPressed: onNotificationPressed ??
-                      () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-                          ),
-                  icon: const Icon(Icons.notifications_none_rounded),
+        // Enhanced Notification Badge
+        NotificationBadge(
+          onTap: onNotificationPressed ??
+              () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const NotificationsScreen(),
                 ),
-                if (unreadCount > 0)
-                  Positioned(
-                    right: 7,
-                    top: 7,
-                    child: Container(
-                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      decoration: BoxDecoration(
-                        color: scheme.error,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: scheme.surface, width: 1.5),
-                      ),
-                      child: Text(
-                        unreadCount > 9 ? '9+' : '$unreadCount',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
+              ),
         ),
         PopupMenuButton<ThemeMode>(
           tooltip: 'Choose theme',
-          icon: Icon(isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined),
+          icon: Icon(
+            isDark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+          ),
           onSelected: ThemeController.instance.setMode,
           itemBuilder: (context) => const [
             PopupMenuItem(
               value: ThemeMode.light,
-              child: Row(children: [Icon(Icons.light_mode_outlined, size: 18), SizedBox(width: 10), Text('Day theme')]),
+              child: Row(
+                children: [
+                  Icon(Icons.light_mode_outlined, size: 18),
+                  SizedBox(width: 10),
+                  Text('Day theme'),
+                ],
+              ),
             ),
             PopupMenuItem(
               value: ThemeMode.dark,
-              child: Row(children: [Icon(Icons.dark_mode_outlined, size: 18), SizedBox(width: 10), Text('Dark theme')]),
+              child: Row(
+                children: [
+                  Icon(Icons.dark_mode_outlined, size: 18),
+                  SizedBox(width: 10),
+                  Text('Dark theme'),
+                ],
+              ),
             ),
           ],
         ),

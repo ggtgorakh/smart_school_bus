@@ -340,7 +340,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           crossAxisCount: crossAxisCount,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: width >= 900 ? 1.45 : 1.6,
+          childAspectRatio: width >= 900 ? 1.5 : 1.15,
           children: [
             KpiCard(
               title: 'Active Buses',
@@ -531,18 +531,29 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
         break;
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isSmall = constraints.maxWidth < 600;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openBusDetailSheet(bus, badgeColor, badgeBg, statusText),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = constraints.maxWidth < 600;
 
-          if (isSmall) {
-            return _buildMobileFleetCard(bus, badgeColor, badgeBg, statusText);
-          }
+              if (isSmall) {
+                return _buildMobileFleetCard(
+                  bus,
+                  badgeColor,
+                  badgeBg,
+                  statusText,
+                );
+              }
 
-          return _buildDesktopFleetCard(bus, badgeColor, badgeBg, statusText);
-        },
+              return _buildDesktopFleetCard(bus, badgeColor, badgeBg, statusText);
+            },
+          ),
+        ),
       ),
     );
   }
@@ -838,6 +849,221 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
     );
   }
 
+  // Tapping a fleet card used to do nothing — it just looked like a static
+  // row. This opens a real detail sheet with the bus's live stats and
+  // actions (message driver, jump to its live map, mark for maintenance),
+  // so the row is actually workable instead of a pasted-looking image.
+  void _openBusDetailSheet(
+    BusFleet bus,
+    Color badgeColor,
+    Color badgeBg,
+    String statusText,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(color: badgeBg, shape: BoxShape.circle),
+                  child: Icon(Icons.directions_bus, color: badgeColor, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        bus.busId,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        bus.routeName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(7)),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: badgeColor),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildDetailStat(
+                    icon: Icons.person_outline,
+                    label: 'Driver',
+                    value: bus.driverName,
+                  ),
+                ),
+                Expanded(
+                  child: _buildDetailStat(
+                    icon: Icons.schedule_outlined,
+                    label: 'Est. Arrival',
+                    value: bus.estArrival,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildDetailStat(
+                    icon: Icons.speed_rounded,
+                    label: 'Speed',
+                    value: '${bus.speedMph} mph',
+                  ),
+                ),
+                Expanded(
+                  child: _buildDetailStat(
+                    icon: Icons.local_gas_station_outlined,
+                    label: 'Fuel',
+                    value: '${bus.fuelPercent}%',
+                    valueColor: bus.fuelPercent < 20
+                        ? AppColors.errorRed
+                        : Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      _openDriverChat(bus);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.safetyBlue,
+                      side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                    label: const Text(
+                      'Message Driver',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Opening ${bus.busId} on the live map…'),
+                          backgroundColor: AppColors.safetyBlue,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.safetyBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.map_outlined, size: 18),
+                    label: const Text(
+                      'View on Map',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailStat({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 17, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.bold,
+                  color: valueColor ?? Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   void _openDispatchModal(BuildContext context) {
     String selectedRoute = 'Route 7A - Oakridge Elementary';
     String selectedBus = 'BUS-901 (Standby Reserve)';
@@ -883,10 +1109,18 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                       size: 24,
                     ),
                     const SizedBox(width: 10),
-                    Text(
-                      'Dispatch Replacement Vehicle',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontSize: 17, fontWeight: FontWeight.bold),
+                    // OVERFLOW FIX: this Text had no Expanded/Flexible, so on
+                    // a narrow phone screen there was nowhere for it to go
+                    // once the icon and spacing took their width — Flutter
+                    // reported "RIGHT OVERFLOWED BY X PIXELS" and clipped
+                    // part of the title off-screen. Wrapping in Expanded
+                    // lets it wrap onto a second line instead.
+                    Expanded(
+                      child: Text(
+                        'Dispatch Replacement Vehicle',
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ],
                 ),

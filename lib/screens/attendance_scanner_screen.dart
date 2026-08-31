@@ -636,12 +636,20 @@ class _BadgeScannerModalState extends State<_BadgeScannerModal>
               const Icon(Icons.qr_code_scanner_rounded,
                   color: AppColors.safetyBlue, size: 24),
               const SizedBox(width: 10),
-              Text(
-                'Student Badge & RFID Scanner',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                    ),
+              // OVERFLOW FIX: this Text had no Expanded/Flexible, so on a
+              // narrow phone screen there was nowhere for it to go once the
+              // icon and spacing took their width — Flutter reported
+              // "RIGHT OVERFLOWED BY X PIXELS" and clipped part of the
+              // title off-screen. Wrapping in Expanded lets it wrap onto a
+              // second line instead.
+              Expanded(
+                child: Text(
+                  'Student Badge & RFID Scanner',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
               ),
             ],
           ),

@@ -81,7 +81,11 @@ class FirebaseService {
         return BusLocation.fromMap(rawData);
       }
       return null;
-    });
+    }).asBroadcastStream();
+    // .asBroadcastStream() lets multiple listeners (e.g. a manual
+    // subscription for notifications AND a StreamBuilder for rendering)
+    // both listen to this same stream safely, without throwing
+    // "Bad state: Stream has already been listened to."
     // Note: deliberately NOT using .handleError() here. Swallowing errors
     // (as the previous implementation did) hid PERMISSION_DENIED and other
     // Firebase failures behind a state that looked identical to "no bus

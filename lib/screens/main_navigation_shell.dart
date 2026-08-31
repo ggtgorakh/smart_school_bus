@@ -1,12 +1,17 @@
+// lib/screens/main_navigation_shell.dart
+
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';  // ← ADD THIS IMPORT
 import '../widgets/app_header.dart';
 import '../services/session_service.dart';
+import '../widgets/notification_badge.dart';
 import 'live_tracking_screen.dart';
 import 'boarding_status_screen.dart';
 import 'fleet_management_screen.dart';
 import 'route_planning_screen.dart';
 import 'profile_screen.dart';
 import 'attendance_scanner_screen.dart';
+import 'notifications_screen.dart';
 
 class AuthorizedTab {
   final String title;
@@ -53,6 +58,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
 
   List<AuthorizedTab> _buildAuthorizedTabs() {
     final role = widget.userRole;
+
     if (role == 'Driver') {
       return [
         AuthorizedTab(
@@ -66,7 +72,10 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         ),
         AuthorizedTab(
           title: 'Driver Profile',
-          screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
+          screen: ProfileScreen(
+            activeRole: role,
+            onSignOut: widget.onSignOut,
+          ),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
@@ -75,6 +84,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         ),
       ];
     }
+
     if (role == 'Conductor') {
       return [
         AuthorizedTab(
@@ -97,7 +107,10 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         ),
         AuthorizedTab(
           title: 'Conductor Profile',
-          screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
+          screen: ProfileScreen(
+            activeRole: role,
+            onSignOut: widget.onSignOut,
+          ),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
@@ -106,6 +119,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         ),
       ];
     }
+
     if (role == 'Admin') {
       return [
         AuthorizedTab(
@@ -137,7 +151,10 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         ),
         AuthorizedTab(
           title: 'Admin System Profile',
-          screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
+          screen: ProfileScreen(
+            activeRole: role,
+            onSignOut: widget.onSignOut,
+          ),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
@@ -146,10 +163,12 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
         ),
       ];
     }
+
+    // Parent
     return [
       AuthorizedTab(
         title: 'Child Boarding Status',
-        screen: BoardingStatusScreen(),
+        screen: const BoardingStatusScreen(),
         navItem: const BottomNavigationBarItem(
           icon: Icon(Icons.info_outlined),
           activeIcon: Icon(Icons.info),
@@ -167,7 +186,10 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
       ),
       AuthorizedTab(
         title: 'Parent Profile',
-        screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
+        screen: ProfileScreen(
+          activeRole: role,
+          onSignOut: widget.onSignOut,
+        ),
         navItem: const BottomNavigationBarItem(
           icon: Icon(Icons.person_outline),
           activeIcon: Icon(Icons.person),
@@ -266,6 +288,7 @@ class _DesktopSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+
     return Container(
       width: 240,
       decoration: BoxDecoration(
@@ -277,7 +300,29 @@ class _DesktopSidebar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 18, 12, 14),
             child: Row(
-             
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    gradient: AppTheme.brandGradient,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.directions_bus_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'Smart Bus',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
             ),
           ),
           Divider(color: scheme.outlineVariant),
@@ -287,9 +332,10 @@ class _DesktopSidebar extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 role.toUpperCase(),
-                style: Theme.of(
-                  context,
-                ).textTheme.labelSmall?.copyWith(letterSpacing: 1.1),
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(letterSpacing: 1.1),
               ),
             ),
           ),
@@ -297,14 +343,13 @@ class _DesktopSidebar extends StatelessWidget {
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               itemCount: tabs.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 4),
+              separatorBuilder: (_, __) => const SizedBox(height: 4),
               itemBuilder: (context, index) {
                 final item = tabs[index].navItem;
                 final selected = index == currentIndex;
+
                 return Material(
-                  color: selected
-                      ? scheme.primaryContainer
-                      : Colors.transparent,
+                  color: selected ? scheme.primaryContainer : Colors.transparent,
                   borderRadius: BorderRadius.circular(9),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(9),
@@ -321,9 +366,7 @@ class _DesktopSidebar extends StatelessWidget {
                                 ? (item.activeIcon as Icon).icon
                                 : (item.icon as Icon).icon,
                             size: 19,
-                            color: selected
-                                ? scheme.primary
-                                : scheme.onSurfaceVariant,
+                            color: selected ? scheme.primary : scheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 11),
                           Expanded(
@@ -336,9 +379,7 @@ class _DesktopSidebar extends StatelessWidget {
                                     fontWeight: selected
                                         ? FontWeight.w700
                                         : FontWeight.w500,
-                                    color: selected
-                                        ? scheme.primary
-                                        : scheme.onSurface,
+                                    color: selected ? scheme.primary : scheme.onSurface,
                                   ),
                             ),
                           ),

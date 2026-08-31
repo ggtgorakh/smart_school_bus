@@ -191,12 +191,16 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen> {
                                   const Icon(Icons.face_rounded,
                                       color: AppColors.safetyBlue, size: 20),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    '${c.name} (${c.grade})',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).colorScheme.onSurface,
+                                  Expanded(
+                                    child: Text(
+                                      '${c.name} (${c.grade})',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).colorScheme.onSurface,
+                                      ),
                                     ),
                                   ),
                                 ],

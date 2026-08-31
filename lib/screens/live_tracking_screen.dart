@@ -30,29 +30,20 @@ class LiveTrackingScreen extends StatefulWidget {
 
 class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
   late final Stream<BusLocation?> _locationStream;
-  // Bug #2 fix: the notification side-effect subscription is now stored and
-  // explicitly cancelled in dispose(). Previously it was never cancelled,
-  // so a screen instance kept alive by IndexedStack (or recreated on
-  // navigation) could accumulate listeners on /buses/{busId} over time.
   StreamSubscription<BusLocation?>? _statusSub;
   BusRunStatus? _lastNotifiedStatus;
+  String? _lastNotifiedStop;
+  int? _lastNotifiedEta;
+  bool _isInitialNotificationSent = false;
 
   @override
   void initState() {
     super.initState();
-    // Bug #2 fix: a single Firebase stream is created for this screen
-    // instance. StreamBuilder below subscribes to it for rendering, and
-    // exactly one additional subscription (stored in _statusSub) listens
-    // purely for notification side effects. Both listeners share the same
-    // underlying broadcast stream/Firebase subscription rather than each
-    // opening their own.
     _locationStream = FirebaseService.instance.streamBusLocation(widget.busId);
-
     _statusSub = _locationStream.listen(
-      _maybeNotifyStatusChange,
-      onError: (_) {
-        // Errors are handled by the StreamBuilder's `hasError` branch;
-        // this listener only needs to not crash on them.
+      _handleLocationUpdate,
+      onError: (error) {
+        debugPrint('LiveTrackingScreen location stream error: $error');
       },
     );
   }
@@ -63,32 +54,58 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     super.dispose();
   }
 
-  void _maybeNotifyStatusChange(BusLocation? location) {
+  void _handleLocationUpdate(BusLocation? location) async {
     if (location == null) return;
-    if (_lastNotifiedStatus == location.status) return;
-    final previous = _lastNotifiedStatus;
+
+    // Send initial notification when first valid location is received
+    if (!_isInitialNotificationSent) {
+      _isInitialNotificationSent = true;
+      await NotificationService.instance.add(
+        kind: NotificationKind.info,
+        title: '${location.busNumber} tracking started',
+        message: 'Live tracking is now active. Current location: ${location.currentStopLabel}',
+        busId: widget.busId,
+        metadata: {
+          'stopLabel': location.currentStopLabel,
+          'etaMinutes': location.etaMinutes,
+          'isInitial': true,
+        },
+      );
+    }
+
+    // Check for status change
+    final statusChanged = _lastNotifiedStatus != location.status;
+    if (statusChanged && _lastNotifiedStatus != null) {
+      await NotificationService.instance.notifyBusStatusChange(
+        busId: widget.busId,
+        busNumber: location.busNumber,
+        oldStatus: _lastNotifiedStatus!.name,
+        newStatus: location.status.name,
+        stopLabel: location.currentStopLabel,
+        etaMinutes: location.etaMinutes,
+      );
+    }
     _lastNotifiedStatus = location.status;
 
-    if (previous == null) return;
-
-    switch (location.status) {
-      case BusRunStatus.delayed:
-        NotificationService.instance.add(
-          kind: NotificationKind.delay,
-          title: '${location.busNumber} running late',
-          message: 'Now delayed, ETA ${location.etaLabel}.',
-        );
-        break;
-      case BusRunStatus.arrived:
-        NotificationService.instance.add(
-          kind: NotificationKind.arrival,
-          title: '${location.busNumber} arrived',
-          message: 'Arrived at ${location.currentStopLabel}.',
-        );
-        break;
-      default:
-        break;
+    // Check for stop change (new notification for each new stop)
+    if (_lastNotifiedStop != location.currentStopLabel) {
+      await NotificationService.instance.add(
+        kind: NotificationKind.info,
+        title: '${location.busNumber} approaching ${location.currentStopLabel}',
+        message: 'ETA: ${location.etaLabel}',
+        busId: widget.busId,
+        metadata: {
+          'stopLabel': location.currentStopLabel,
+          'etaMinutes': location.etaMinutes,
+          'stopIndex': location.currentStopIndex,
+          'totalStops': location.totalStops,
+          'busNumber': location.busNumber,
+        },
+      );
+      _lastNotifiedStop = location.currentStopLabel;
     }
+
+    _lastNotifiedEta = location.etaMinutes;
   }
 
   Future<void> _advanceSimulation(BusLocation current) async {
@@ -120,6 +137,19 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
     );
 
     await FirebaseService.instance.updateBusLocation(widget.busId, updated);
+
+    await NotificationService.instance.add(
+      kind: NotificationKind.info,
+      title: '🚌 Simulation: Advanced to $nextLabel',
+      message: 'Next stop: ${nextIndex + 1}/${current.totalStops}',
+      busId: widget.busId,
+      metadata: {
+        'isSimulation': true,
+        'nextStop': nextLabel,
+        'nextIndex': nextIndex,
+      },
+    );
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -139,15 +169,12 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const _TrackingStateMessage(
               icon: Icons.satellite_alt_rounded,
-              title: 'Connecting to bus…',
+              title: 'Connecting to bus...',
               subtitle: 'Waiting for the first GPS reading.',
             );
           }
 
           if (snapshot.hasError) {
-            // Bug #1 fix: this now reflects a real Firebase error (e.g.
-            // PERMISSION_DENIED) rather than never firing because errors
-            // were being swallowed and masked with fake data.
             return _TrackingStateMessage(
               icon: Icons.wifi_off_rounded,
               title: 'Can\'t reach live tracking',
@@ -157,15 +184,10 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen> {
 
           final location = snapshot.data;
           if (location == null) {
-            // Bug #1 fix: previously this branch was unreachable in
-            // practice because missing data was auto-seeded with fake
-            // coordinates. Now a genuinely missing /buses/{busId} node is
-            // shown honestly instead of looking "live".
             return const _TrackingStateMessage(
               icon: Icons.directions_bus_filled_rounded,
               title: 'Bus data not available',
-              subtitle:
-                  'The bus hasn\'t started its route or the tracker is offline.',
+              subtitle: 'The bus hasn\'t started its route or the tracker is offline.',
             );
           }
 
@@ -239,49 +261,38 @@ class _LiveTrackingContent extends StatelessWidget {
             busNumber: location.busNumber,
             progress: progress,
             speedKmph: location.speedKmph,
-          ),
-        ),
-        if (stale)
-          Positioned(
-            top: 12,
-            left: 12,
-            right: 12,
-            child: _StaleBanner(lastUpdated: location.lastUpdated),
-          ),
-        // Floating GPS Simulation pill for quick mobile testing
-        Positioned(
-          top: MediaQuery.of(context).size.width < 600 ? 70 : 76,
-          right: MediaQuery.of(context).size.width < 600 ? 10 : 12,
-          child: Material(
-            color: Theme.of(context).colorScheme.surface,
-            elevation: 3,
-            borderRadius: BorderRadius.circular(12),
-            child: InkWell(
+            topBanner: stale ? _StaleBanner(lastUpdated: location.lastUpdated) : null,
+            trailingAction: Material(
+              color: Theme.of(context).colorScheme.surface,
+              elevation: 3,
               borderRadius: BorderRadius.circular(12),
-              onTap: onSimulateNextStop,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(
-                      Icons.play_arrow_rounded,
-                      color: AppColors.safetyBlue,
-                      size: 18,
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      'Next Stop',
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: onSimulateNextStop,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(
+                        Icons.play_arrow_rounded,
                         color: AppColors.safetyBlue,
+                        size: 18,
                       ),
-                    ),
-                  ],
+                      SizedBox(width: 4),
+                      Text(
+                        'Next Stop',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.safetyBlue,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -309,7 +320,6 @@ class _LiveTrackingContent extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Next-stop headline row
                       Row(
                         children: [
                           Container(
@@ -357,20 +367,15 @@ class _LiveTrackingContent extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 16),
-
-                      // Signature route-progress track.
                       RouteProgressTrack(
                         totalStops: location.totalStops,
                         currentStopIndex: location.currentStopIndex,
                         currentStopLabel: 'Next: ${location.currentStopLabel}',
                         etaLabel: location.etaLabel,
                       ),
-
                       const SizedBox(height: 14),
                       const Divider(color: AppColors.outlineVariant, height: 1),
                       const SizedBox(height: 14),
-
-                      // Student info row
                       Container(
                         padding: EdgeInsets.all(
                           MediaQuery.of(context).size.width < 600 ? 8 : 10,

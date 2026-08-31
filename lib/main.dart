@@ -1,18 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation_shell.dart';
 import 'services/auth_service.dart';
 import 'services/session_service.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  
+  // Initialize Notification Service (starts listening to Firebase)
+  NotificationService.instance;
+  
   runApp(const SchoolBusApp());
 }
 
@@ -37,8 +45,6 @@ class SchoolBusApp extends StatelessWidget {
   }
 }
 
-/// Listens to real-time Firebase Auth state changes and routes between
-/// the login screen and the authorized main navigation shell.
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
 
@@ -48,30 +54,27 @@ class AuthGate extends StatelessWidget {
       stream: AuthService.instance.authStateChanges,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _AppSplashScreen();
+          return const AppSplashScreen();
         }
-
         final user = snapshot.data;
         if (user == null) {
           return const LoginScreen();
         }
-
-        return _RoleResolutionShell(user: user);
+        return RoleResolutionShell(user: user);
       },
     );
   }
 }
 
-class _RoleResolutionShell extends StatefulWidget {
+class RoleResolutionShell extends StatefulWidget {
   final User user;
-
-  const _RoleResolutionShell({required this.user});
+  const RoleResolutionShell({required this.user});
 
   @override
-  State<_RoleResolutionShell> createState() => _RoleResolutionShellState();
+  State<RoleResolutionShell> createState() => _RoleResolutionShellState();
 }
 
-class _RoleResolutionShellState extends State<_RoleResolutionShell> {
+class _RoleResolutionShellState extends State<RoleResolutionShell> {
   String? _role;
   String? _busId;
   bool _isLoading = true;
@@ -83,7 +86,7 @@ class _RoleResolutionShellState extends State<_RoleResolutionShell> {
   }
 
   @override
-  void didUpdateWidget(covariant _RoleResolutionShell oldWidget) {
+  void didUpdateWidget(covariant RoleResolutionShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.user.uid != widget.user.uid) {
       _resolveRole();
@@ -91,7 +94,6 @@ class _RoleResolutionShellState extends State<_RoleResolutionShell> {
   }
 
   Future<void> _resolveRole() async {
-    // 1. Try cached role/busId first for immediate UI responsiveness
     final cachedRole = await SessionService.instance.getCachedRole();
     final cachedBusId = await SessionService.instance.getCachedBusId();
     if (cachedRole != null && mounted) {
@@ -102,15 +104,12 @@ class _RoleResolutionShellState extends State<_RoleResolutionShell> {
       });
     }
 
-    // 2. Fetch fresh role + assigned bus from Realtime Database.
-    // Bug #4 fix: the app itself now only ever points a Driver at the bus
-    // recorded on their own user profile (server-enforced by Firebase
-    // Rules), instead of every role sharing a hardcoded 'bus_01'.
     final freshRole = await AuthService.instance.fetchRole(widget.user.uid);
     final freshBusId = await AuthService.instance.fetchBusId(widget.user.uid);
+    
     await SessionService.instance.saveRole(freshRole);
     await SessionService.instance.saveBusId(freshBusId);
-
+    
     if (mounted) {
       setState(() {
         _role = freshRole;
@@ -123,14 +122,15 @@ class _RoleResolutionShellState extends State<_RoleResolutionShell> {
   Future<void> _handleSignOut() async {
     await AuthService.instance.signOut();
     await SessionService.instance.clearSession();
+    // Clear notifications on sign out
+    NotificationService.instance.clearAll();
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading && _role == null) {
-      return const _AppSplashScreen();
+      return const AppSplashScreen();
     }
-
     return MainNavigationShell(
       userRole: _role ?? 'Parent',
       busId: _busId ?? 'bus_01',
@@ -139,8 +139,8 @@ class _RoleResolutionShellState extends State<_RoleResolutionShell> {
   }
 }
 
-class _AppSplashScreen extends StatelessWidget {
-  const _AppSplashScreen();
+class AppSplashScreen extends StatelessWidget {
+  const AppSplashScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/session_service.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final Function(String role)? onLoginSuccess;
@@ -137,75 +138,13 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  Future<void> _handleBiometricLogin() async {
-    if (_isLoading) return;
-
-    // Quick biometric authentication prompt simulation
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(
-              Icons.fingerprint_rounded,
-              color: Colors.white,
-              size: 22,
-            ),
-            const SizedBox(width: 10),
-            Text('Biometric authentication verified for $_selectedRole'),
-          ],
-        ),
-        backgroundColor: AppColors.safetyBlue,
-        duration: const Duration(seconds: 1),
+  void _handleForgotPassword() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            ForgotPasswordScreen(initialEmail: _emailController.text.trim()),
       ),
     );
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (mounted) {
-      _handleLogin();
-    }
-  }
-
-  Future<void> _handleForgotPassword() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please enter your email to receive a password reset link',
-          ),
-        ),
-      );
-      return;
-    }
-
-    try {
-      await AuthService.instance.sendPasswordResetEmail(email);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Password reset link sent to $email'),
-            backgroundColor: AppColors.successGreen,
-          ),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message ?? 'Failed to send reset link'),
-            backgroundColor: AppColors.errorRed,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.errorRed,
-          ),
-        );
-      }
-    }
   }
 
   String _scopeCopyFor(String role) {
@@ -236,7 +175,9 @@ class _LoginScreenState extends State<LoginScreen>
               gradient: LinearGradient(
                 colors: [
                   AppColors.safetyBlue.withValues(alpha: 0.16),
-                  Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
+                  Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.05),
                 ],
               ),
             ),
@@ -291,7 +232,7 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                         const SizedBox(height: 18),
                         Text(
-                          'SchoolBus Safe',
+                          'Smart School Bus',
                           style: Theme.of(context).textTheme.headlineLarge
                               ?.copyWith(
                                 color: Theme.of(context).colorScheme.onSurface,
@@ -304,7 +245,11 @@ class _LoginScreenState extends State<LoginScreen>
                         Text(
                           'Know exactly where your child\'s bus is',
                           style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 32),
@@ -312,7 +257,11 @@ class _LoginScreenState extends State<LoginScreen>
                         // Login card
                         Container(
                           padding: const EdgeInsets.all(24),
-                          decoration: AppTheme.panelDecoration(context, borderRadius: 14, elevated: true),
+                          decoration: AppTheme.panelDecoration(
+                            context,
+                            borderRadius: 14,
+                            elevated: true,
+                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -323,7 +272,9 @@ class _LoginScreenState extends State<LoginScreen>
                                       fontSize: 11,
                                       letterSpacing: 1.0,
                                       fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
                                     ),
                               ),
                               const SizedBox(height: 12),
@@ -432,7 +383,18 @@ class _LoginScreenState extends State<LoginScreen>
                                   TextButton(
                                     onPressed: _isLoading
                                         ? null
-                                        : _handleForgotPassword,
+                                        : () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    ForgotPasswordScreen(
+                                                      initialEmail:
+                                                          _emailController.text
+                                                              .trim(),
+                                                    ),
+                                              ),
+                                            );
+                                          },
                                     style: TextButton.styleFrom(
                                       padding: EdgeInsets.zero,
                                       minimumSize: Size.zero,
@@ -523,72 +485,6 @@ class _LoginScreenState extends State<LoginScreen>
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 20),
-
-                              Column(
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Expanded(
-                                        child: Divider(
-                                          color: AppColors.outlineVariant,
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                        ),
-                                        child: Text(
-                                          'or continue with',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                color:
-                                                    Theme.of(context).colorScheme.onSurfaceVariant,
-                                                fontSize: 12.5,
-                                              ),
-                                        ),
-                                      ),
-                                      const Expanded(
-                                        child: Divider(
-                                          color: AppColors.outlineVariant,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 14),
-                                  InkWell(
-                                    onTap: _isLoading
-                                        ? null
-                                        : _handleBiometricLogin,
-                                    borderRadius: BorderRadius.circular(30),
-                                    child: Container(
-                                      width: 54,
-                                      height: 54,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: Theme.of(context).colorScheme.surface,
-                                        border: Border.all(
-                                          color: AppColors.outlineVariant,
-                                        ),
-                                        boxShadow: const [
-                                          BoxShadow(
-                                            color: Colors.black12,
-                                            blurRadius: 6,
-                                            offset: Offset(0, 3),
-                                          ),
-                                        ],
-                                      ),
-                                      child: const Icon(
-                                        Icons.fingerprint_rounded,
-                                        color: AppColors.safetyBlue,
-                                        size: 30,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
                             ],
                           ),
                         ),
@@ -601,7 +497,11 @@ class _LoginScreenState extends State<LoginScreen>
                             Text(
                               'Need an account? ',
                               style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
                             ),
                             GestureDetector(
                               onTap: () {
@@ -782,7 +682,9 @@ class _RoleChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                color: isSelected ? AppColors.safetyBlue : Theme.of(context).colorScheme.onSurface,
+                color: isSelected
+                    ? AppColors.safetyBlue
+                    : Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ],
