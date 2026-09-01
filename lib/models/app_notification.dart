@@ -1,3 +1,5 @@
+// lib/models/app_notification.dart
+
 enum NotificationKind {
   delay,
   arrival,
@@ -31,6 +33,67 @@ class AppNotification {
     this.metadata,
   });
 
+  /// Get human-readable kind label
+  String get kindLabel {
+    switch (kind) {
+      case NotificationKind.delay:
+        return 'Delayed';
+      case NotificationKind.arrival:
+        return 'Arrived';
+      case NotificationKind.boarding:
+        return 'Boarded';
+      case NotificationKind.alert:
+        return 'Alert';
+      case NotificationKind.info:
+        return 'Info';
+      case NotificationKind.departure:
+        return 'Departed';
+      case NotificationKind.emergency:
+        return 'Emergency';
+    }
+  }
+
+  /// Get kind color
+  int get kindColor {
+    switch (kind) {
+      case NotificationKind.delay:
+        return 0xFFB45309;
+      case NotificationKind.arrival:
+        return 0xFF2563EB;
+      case NotificationKind.boarding:
+        return 0xFF16A34A;
+      case NotificationKind.alert:
+        return 0xFFB45309;
+      case NotificationKind.info:
+        return 0xFF64748B;
+      case NotificationKind.departure:
+        return 0xFF2563EB;
+      case NotificationKind.emergency:
+        return 0xFFDC2626;
+    }
+  }
+
+  /// Get kind icon
+  String get kindIcon {
+    switch (kind) {
+      case NotificationKind.delay:
+        return 'schedule';
+      case NotificationKind.arrival:
+        return 'directions_bus';
+      case NotificationKind.boarding:
+        return 'face';
+      case NotificationKind.alert:
+        return 'warning_amber';
+      case NotificationKind.info:
+        return 'info';
+      case NotificationKind.departure:
+        return 'play_arrow';
+      case NotificationKind.emergency:
+        return 'sos';
+    }
+  }
+
+  /// Get relative time string
   String get relativeTime {
     final diff = DateTime.now().difference(timestamp);
     if (diff.inMinutes < 1) return 'Just now';
@@ -38,6 +101,11 @@ class AppNotification {
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays < 7) return '${diff.inDays}d ago';
     return '${(diff.inDays / 7).floor()}w ago';
+  }
+
+  /// Check if notification is urgent
+  bool get isUrgent {
+    return kind == NotificationKind.emergency || kind == NotificationKind.alert;
   }
 
   Map<String, dynamic> toMap() {

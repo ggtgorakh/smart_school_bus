@@ -1,3 +1,5 @@
+// lib/models/student.dart
+
 enum StudentStatus { boarded, pending, alert }
 
 StudentStatus studentStatusFromString(String? value) {
@@ -21,19 +23,7 @@ class Student {
   StudentStatus status;
   final String stopName;
   final DateTime? boardedAt;
-  // Parent-child linkage: the Firebase Auth uid of this child's Parent
-  // account. Nullable because existing/legacy student records created
-  // before this field existed won't have it set — those show up as
-  // "unlinked" in the Admin UI rather than crashing on a missing field.
   final String? parentUid;
-  // ISSUE-05/06 FIX: which bus this record actually lives under
-  // (/studentRosters/{busId}/{id}). Deliberately NOT read from or written
-  // to the map itself — the path already encodes it, so storing it
-  // redundantly inside the record risks it going stale. Instead, whoever
-  // reads the record (FirebaseService, which already knows the busId it
-  // queried) stamps it on via the constructor. This is what lets a
-  // Parent's tracking screen show the bus their own child is actually on,
-  // instead of always defaulting to bus_01.
   final String? busId;
 
   Student({
@@ -48,6 +38,45 @@ class Student {
     this.parentUid,
     this.busId,
   });
+
+  /// Get human-readable status label
+  String get statusLabel {
+    switch (status) {
+      case StudentStatus.boarded:
+        return 'Boarded';
+      case StudentStatus.pending:
+        return 'Pending';
+      case StudentStatus.alert:
+        return 'Alert';
+    }
+  }
+
+  /// Get status color
+  int get statusColor {
+    switch (status) {
+      case StudentStatus.boarded:
+        return 0xFF16A34A;
+      case StudentStatus.pending:
+        return 0xFFF59E0B;
+      case StudentStatus.alert:
+        return 0xFFDC2626;
+    }
+  }
+
+  /// Get status icon
+  String get statusIcon {
+    switch (status) {
+      case StudentStatus.boarded:
+        return 'check_circle';
+      case StudentStatus.pending:
+        return 'hourglass_top';
+      case StudentStatus.alert:
+        return 'error';
+    }
+  }
+
+  /// Check if student is linked to a parent
+  bool get isLinkedToParent => parentUid != null && parentUid!.isNotEmpty;
 
   Map<String, dynamic> toMap() {
     return {

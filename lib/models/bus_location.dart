@@ -1,6 +1,9 @@
+// lib/models/bus_location.dart
+
 /// Live telemetry for a single bus, as pushed by the ESP32
 /// (NEO-6M GPS + SIM800L GSM) to Firebase Realtime Database at:
-///   /buses/{busId}
+/// /buses/{busId}
+
 enum BusRunStatus { onRoute, delayed, arrived, idle }
 
 BusRunStatus _statusFromString(String? raw) {
@@ -17,10 +20,6 @@ BusRunStatus _statusFromString(String? raw) {
   }
 }
 
-/// Single source of truth for the Firebase wire format of [BusRunStatus].
-/// Firebase always stores/expects: on_route | delayed | arrived | idle.
-/// (BusRunStatus.onRoute.name is "onRoute", which does NOT match the
-/// Firebase contract, so this must be used instead of `.name` when writing.)
 String _statusToString(BusRunStatus status) {
   switch (status) {
     case BusRunStatus.onRoute:
@@ -64,6 +63,7 @@ class BusLocation {
     return DateTime.now().difference(lastUpdated) > staleAfter;
   }
 
+  /// Get human-readable status label
   String get statusLabel {
     switch (status) {
       case BusRunStatus.onRoute:
@@ -77,14 +77,42 @@ class BusLocation {
     }
   }
 
+  /// Get human-readable ETA label
   String get etaLabel {
     if (status == BusRunStatus.arrived) return 'Arrived';
     if (etaMinutes <= 0) return 'Arriving now';
     return '$etaMinutes min${etaMinutes == 1 ? '' : 's'} away';
   }
 
+  /// Get status color
+  int get statusColor {
+    switch (status) {
+      case BusRunStatus.onRoute:
+        return 0xFF16A34A; // success green
+      case BusRunStatus.delayed:
+        return 0xFFF59E0B; // alert orange
+      case BusRunStatus.arrived:
+        return 0xFF2563EB; // safety blue
+      case BusRunStatus.idle:
+        return 0xFF718096; // gray
+    }
+  }
+
+  /// Get status icon
+  String get statusIcon {
+    switch (status) {
+      case BusRunStatus.onRoute:
+        return 'play_arrow';
+      case BusRunStatus.delayed:
+        return 'warning_amber';
+      case BusRunStatus.arrived:
+        return 'check_circle';
+      case BusRunStatus.idle:
+        return 'pause_circle';
+    }
+  }
+
   factory BusLocation.fromMap(Map<dynamic, dynamic> map) {
-    // 1. Safe parsing for timestamps (Handles epoch millis, ISO strings, and invalid placeholders)
     DateTime parseLastUpdated(dynamic raw) {
       if (raw is num) {
         return DateTime.fromMillisecondsSinceEpoch(raw.toInt());
@@ -103,7 +131,7 @@ class BusLocation {
       lastUpdated: parseLastUpdated(map['lastUpdated']),
       currentStopIndex: (map['currentStopIndex'] as num?)?.toInt() ?? 0,
       totalStops: (map['totalStops'] as num?)?.toInt() ?? 1,
-      currentStopLabel: map['currentStopLabel'] as String? ?? '—',
+      currentStopLabel: map['currentStopLabel'] as String? ?? '---',
       etaMinutes: (map['etaMinutes'] as num?)?.toInt() ?? 0,
       busNumber: map['busNumber'] as String? ?? 'Bus',
     );
@@ -122,5 +150,31 @@ class BusLocation {
       'etaMinutes': etaMinutes,
       'busNumber': busNumber,
     };
+  }
+
+  BusLocation copyWith({
+    double? lat,
+    double? lng,
+    double? speedKmph,
+    BusRunStatus? status,
+    DateTime? lastUpdated,
+    int? currentStopIndex,
+    int? totalStops,
+    String? currentStopLabel,
+    int? etaMinutes,
+    String? busNumber,
+  }) {
+    return BusLocation(
+      lat: lat ?? this.lat,
+      lng: lng ?? this.lng,
+      speedKmph: speedKmph ?? this.speedKmph,
+      status: status ?? this.status,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+      currentStopIndex: currentStopIndex ?? this.currentStopIndex,
+      totalStops: totalStops ?? this.totalStops,
+      currentStopLabel: currentStopLabel ?? this.currentStopLabel,
+      etaMinutes: etaMinutes ?? this.etaMinutes,
+      busNumber: busNumber ?? this.busNumber,
+    );
   }
 }

@@ -14,7 +14,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('SchoolBus Safe'), findsOneWidget);
+    expect(find.text('Smart School Bus'), findsOneWidget);
     expect(find.text('Sign In'), findsOneWidget);
   });
 }

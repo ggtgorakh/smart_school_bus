@@ -1,3 +1,5 @@
+// lib/screens/login_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../theme/app_theme.dart';
@@ -7,7 +9,6 @@ import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final Function(String role)? onLoginSuccess;
-
   const LoginScreen({super.key, this.onLoginSuccess});
 
   @override
@@ -21,25 +22,73 @@ class _LoginScreenState extends State<LoginScreen>
   final _passwordController = TextEditingController(text: 'password123');
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _rememberMe = true;
+  bool _isPasswordFocused = false;
+  bool _isEmailFocused = false;
 
-  late final AnimationController _entrance = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 600),
-  )..forward();
-  late final Animation<double> _fadeIn = CurvedAnimation(
-    parent: _entrance,
-    curve: Curves.easeOut,
-  );
-  late final Animation<Offset> _slideIn = Tween<Offset>(
-    begin: const Offset(0, 0.04),
-    end: Offset.zero,
-  ).animate(CurvedAnimation(parent: _entrance, curve: Curves.easeOutCubic));
+  late final AnimationController _entranceController;
+  late final Animation<double> _fadeAnimation;
+  late final Animation<Offset> _slideAnimation;
+  late final Animation<double> _scaleAnimation;
+
+  final List<Map<String, dynamic>> _roles = [
+    {'label': 'Parent', 'icon': Icons.family_restroom_rounded, 'color': AppColors.safetyBlue},
+    {'label': 'Driver', 'icon': Icons.local_shipping_rounded, 'color': AppColors.alertOrange},
+    {'label': 'Conductor', 'icon': Icons.how_to_reg_rounded, 'color': AppColors.successGreen},
+    {'label': 'Admin', 'icon': Icons.admin_panel_settings_rounded, 'color': Colors.purple},
+  ];
+
+  final Map<String, String> _demoCredentials = {
+    'Parent': 'parent@schoolsafe.org',
+    'Driver': 'driver@schoolsafe.org',
+    'Conductor': 'conductor@schoolsafe.org',
+    'Admin': 'admin@sbs.com',
+  };
+
+  final Map<String, String> _roleDescriptions = {
+    'Parent': 'Track your child\'s bus in real-time',
+    'Driver': 'Navigate routes and update GPS status',
+    'Conductor': 'Manage student check-in/out',
+    'Admin': 'Full fleet and user management',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+
+    _fadeAnimation = CurvedAnimation(
+      parent: _entranceController,
+      curve: Curves.easeOut,
+    );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _entranceController,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _scaleAnimation = Tween<double>(
+      begin: 0.95,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _entranceController,
+      curve: Curves.easeOutBack,
+    ));
+
+    _entranceController.forward();
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _entrance.dispose();
+    _entranceController.dispose();
     super.dispose();
   }
 
@@ -47,31 +96,19 @@ class _LoginScreenState extends State<LoginScreen>
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your email address')),
-      );
+    if (email.isEmpty || password.isEmpty) {
+      _showSnackBar('Please enter email and password', isError: true);
       return;
     }
 
-    if (password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your password')),
-      );
+    if (!email.contains('@') || !email.contains('.')) {
+      _showSnackBar('Please enter a valid email address', isError: true);
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      // Bug-fix follow-up: login no longer silently creates a new Firebase
-      // Auth account on 'user-not-found' / 'invalid-credential'. Modern
-      // Firebase Auth deliberately returns 'invalid-credential' for BOTH
-      // "no such user" and "wrong password" (to avoid leaking which one it
-      // is), which made the old auto-create logic indistinguishable from a
-      // typo'd password — silently spinning up a duplicate, role-less,
-      // bus-less account instead of telling the user what went wrong.
-      // Account creation now only happens through Admin > Provision User.
       final credential = await AuthService.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
@@ -79,451 +116,118 @@ class _LoginScreenState extends State<LoginScreen>
 
       final uid = credential.user?.uid;
       String role = _selectedRole;
+
       if (uid != null) {
         role = await AuthService.instance.fetchRole(
           uid,
           defaultRole: _selectedRole,
         );
-        // Persist role into Realtime Database
         await AuthService.instance.setUserRole(uid, role, email: email);
       }
 
       await SessionService.instance.saveRole(role);
-
-      if (mounted) {
-        widget.onLoginSuccess?.call(role);
-      }
+      if (mounted) widget.onLoginSuccess?.call(role);
     } on FirebaseAuthException catch (e) {
       String message;
       switch (e.code) {
         case 'user-not-found':
-          message = 'No user account found with this email.';
+          message = 'No account found with this email.';
           break;
         case 'wrong-password':
         case 'invalid-credential':
-          message =
-              'Incorrect email or password. Please verify your credentials.';
+          message = 'Incorrect email or password.';
           break;
         case 'invalid-email':
-          message = 'The email address format is invalid.';
+          message = 'Invalid email address format.';
           break;
         case 'user-disabled':
-          message =
-              'This account has been disabled. Contact your administrator.';
+          message = 'This account has been disabled.';
           break;
         case 'too-many-requests':
-          message = 'Too many attempts. Please wait a moment and try again.';
+          message = 'Too many attempts. Please try again later.';
           break;
         default:
-          message = e.message ?? 'Authentication failed (${e.code}).';
+          message = e.message ?? 'Authentication failed.';
       }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: AppColors.errorRed),
-        );
-      }
+      _showSnackBar(message, isError: true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Login error: $e'),
-            backgroundColor: AppColors.errorRed,
-          ),
-        );
-      }
+      _showSnackBar('Login error: $e', isError: true);
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _handleForgotPassword() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            ForgotPasswordScreen(initialEmail: _emailController.text.trim()),
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline_rounded : Icons.check_circle_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: isError ? AppColors.errorRed : AppColors.successGreen,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
 
-  String _scopeCopyFor(String role) {
-    switch (role) {
-      case 'Driver':
-        return 'You can access: Route, Profile';
-      case 'Conductor':
-        return 'You can access: Students, Map, Profile';
-      case 'Admin':
-        return 'You can access: Fleet, Routes, Map, Students, Profile';
-      default:
-        return 'You can access: Live Map, Profile';
-    }
+  void _selectRole(String role) {
+    setState(() {
+      _selectedRole = role;
+      _emailController.text = _demoCredentials[role] ?? '';
+      _passwordController.text = 'password123';
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMobile = context.isMobile;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
-          // Ambient brand-gradient shapes instead of flat tinted circles.
-          Positioned(
-            top: -70,
-            left: -80,
-            child: _AmbientBlob(
-              size: 260,
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.safetyBlue.withValues(alpha: 0.16),
-                  Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.05),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -100,
-            right: -90,
-            child: _AmbientBlob(
-              size: 320,
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.alertOrange.withValues(alpha: 0.12),
-                  AppColors.alertOrange.withValues(alpha: 0.0),
-                ],
-              ),
-            ),
-          ),
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: FadeTransition(
-                opacity: _fadeIn,
-                child: SlideTransition(
-                  position: _slideIn,
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 420),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        // Branding mark
-                        Container(
-                          width: 68,
-                          height: 68,
-                          decoration: BoxDecoration(
-                            gradient: AppTheme.brandGradient,
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.safetyBlue.withValues(
-                                  alpha: 0.32,
-                                ),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.directions_bus_filled_rounded,
-                            color: Colors.white,
-                            size: 34,
-                          ),
+          // Animated Background
+          _buildBackground(isDark),
+          
+          // Main Content
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 20 : 40,
+                  vertical: isMobile ? 20 : 40,
+                ),
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: SlideTransition(
+                    position: _slideAnimation,
+                    child: ScaleTransition(
+                      scale: _scaleAnimation,
+                      child: Container(
+                        constraints: BoxConstraints(
+                          maxWidth: isMobile ? 440 : 480,
                         ),
-                        const SizedBox(height: 18),
-                        Text(
-                          'Smart School Bus',
-                          style: Theme.of(context).textTheme.headlineLarge
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface,
-                                fontSize: 27,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: -0.5,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Know exactly where your child\'s bus is',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Login card
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: AppTheme.panelDecoration(
-                            context,
-                            borderRadius: 14,
-                            elevated: true,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'SIGN IN AS',
-                                style: Theme.of(context).textTheme.labelMedium
-                                    ?.copyWith(
-                                      fontSize: 11,
-                                      letterSpacing: 1.0,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _RoleChip(
-                                      role: 'Parent',
-                                      icon: Icons.family_restroom_rounded,
-                                      isSelected: _selectedRole == 'Parent',
-                                      onTap: () => _selectRole('Parent'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: _RoleChip(
-                                      role: 'Driver',
-                                      icon: Icons.local_shipping_rounded,
-                                      isSelected: _selectedRole == 'Driver',
-                                      onTap: () => _selectRole('Driver'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _RoleChip(
-                                      role: 'Conductor',
-                                      icon: Icons.how_to_reg_rounded,
-                                      isSelected: _selectedRole == 'Conductor',
-                                      onTap: () => _selectRole('Conductor'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: _RoleChip(
-                                      role: 'Admin',
-                                      icon: Icons.admin_panel_settings_rounded,
-                                      isSelected: _selectedRole == 'Admin',
-                                      onTap: () => _selectRole('Admin'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 200),
-                                child: Container(
-                                  key: ValueKey(_selectedRole),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 9,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.safetyBlue.withValues(
-                                      alpha: 0.07,
-                                    ),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: AppColors.safetyBlue.withValues(
-                                        alpha: 0.18,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.verified_user_rounded,
-                                        size: 15,
-                                        color: AppColors.safetyBlue,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          _scopeCopyFor(_selectedRole),
-                                          style: const TextStyle(
-                                            fontSize: 11.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.safetyBlue,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 22),
-
-                              const _FieldLabel('Email or ID'),
-                              const SizedBox(height: 6),
-                              _ModernTextField(
-                                controller: _emailController,
-                                icon: Icons.person_outline_rounded,
-                                hint: 'Enter your credentials',
-                                enabled: !_isLoading,
-                              ),
-                              const SizedBox(height: 16),
-
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const _FieldLabel('Password'),
-                                  TextButton(
-                                    onPressed: _isLoading
-                                        ? null
-                                        : () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    ForgotPasswordScreen(
-                                                      initialEmail:
-                                                          _emailController.text
-                                                              .trim(),
-                                                    ),
-                                              ),
-                                            );
-                                          },
-                                    style: TextButton.styleFrom(
-                                      padding: EdgeInsets.zero,
-                                      minimumSize: Size.zero,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                    child: const Text(
-                                      'Forgot password?',
-                                      style: TextStyle(
-                                        color: AppColors.alertOrangeDark,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 6),
-                              _ModernTextField(
-                                controller: _passwordController,
-                                icon: Icons.lock_outline_rounded,
-                                hint: 'Enter your password',
-                                obscureText: _obscurePassword,
-                                enabled: !_isLoading,
-                                suffix: IconButton(
-                                  icon: Icon(
-                                    _obscurePassword
-                                        ? Icons.visibility_off_outlined
-                                        : Icons.visibility_outlined,
-                                    color: AppColors.outline,
-                                    size: 20,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      _obscurePassword = !_obscurePassword;
-                                    });
-                                  },
-                                ),
-                              ),
-                              const SizedBox(height: 26),
-
-                              SizedBox(
-                                width: double.infinity,
-                                height: 52,
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    gradient: AppTheme.brandGradient,
-                                    borderRadius: BorderRadius.circular(14),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.safetyBlue.withValues(
-                                          alpha: 0.35,
-                                        ),
-                                        blurRadius: 16,
-                                        offset: const Offset(0, 8),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(14),
-                                      onTap: _isLoading ? null : _handleLogin,
-                                      child: Center(
-                                        child: _isLoading
-                                            ? const SizedBox(
-                                                width: 22,
-                                                height: 22,
-                                                child: CircularProgressIndicator(
-                                                  strokeWidth: 2.5,
-                                                  valueColor:
-                                                      AlwaysStoppedAnimation<
-                                                        Color
-                                                      >(Colors.white),
-                                                ),
-                                              )
-                                            : const Text(
-                                                'Sign In',
-                                                style: TextStyle(
-                                                  fontSize: 17,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: Colors.white,
-                                                  letterSpacing: 0.2,
-                                                ),
-                                              ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        Wrap(
-                          alignment: WrapAlignment.center,
-                          crossAxisAlignment: WrapCrossAlignment.center,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              'Need an account? ',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                            GestureDetector(
-                              onTap: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Support Desk: support@schoolbussafe.org',
-                                    ),
-                                  ),
-                                );
-                              },
-                              child: const Text(
-                                'Contact Administrator',
-                                style: TextStyle(
-                                  color: AppColors.safetyBlue,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
+                            _buildBrandSection(isMobile),
+                            const SizedBox(height: 32),
+                            _buildLoginCard(isMobile, isDark),
+                            const SizedBox(height: 20),
+                            _buildFooter(),
                           ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -535,118 +239,639 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  void _selectRole(String role) {
-    setState(() {
-      _selectedRole = role;
-      if (role == 'Parent') {
-        _emailController.text = 'parent@schoolsafe.org';
-      } else if (role == 'Driver') {
-        _emailController.text = 'driver@schoolsafe.org';
-      } else if (role == 'Conductor') {
-        _emailController.text = 'conductor@schoolsafe.org';
-      } else if (role == 'Admin') {
-        _emailController.text = 'admin@sbs.com';
-      }
-      _passwordController.text = 'password123';
-    });
+  // ============================================================
+  // BACKGROUND
+  // ============================================================
+
+  Widget _buildBackground(bool isDark) {
+    return Stack(
+      children: [
+        // Animated blobs
+        AnimatedPositioned(
+          duration: const Duration(seconds: 8),
+          curve: Curves.easeInOut,
+          top: -60,
+          left: -60,
+          child: Container(
+            width: 280,
+            height: 280,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  AppColors.safetyBlue.withValues(alpha: isDark ? 0.12 : 0.08),
+                  AppColors.safetyBlue.withValues(alpha: 0.0),
+                ],
+                radius: 1.0,
+              ),
+            ),
+          ),
+        ),
+        AnimatedPositioned(
+          duration: const Duration(seconds: 10),
+          curve: Curves.easeInOut,
+          bottom: -80,
+          right: -60,
+          child: Container(
+            width: 320,
+            height: 320,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  AppColors.alertOrange.withValues(alpha: isDark ? 0.08 : 0.06),
+                  AppColors.alertOrange.withValues(alpha: 0.0),
+                ],
+                radius: 1.0,
+              ),
+            ),
+          ),
+        ),
+        AnimatedPositioned(
+          duration: const Duration(seconds: 12),
+          curve: Curves.easeInOut,
+          top: 200,
+          right: -40,
+          child: Container(
+            width: 180,
+            height: 180,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  AppColors.successGreen.withValues(alpha: isDark ? 0.06 : 0.04),
+                  AppColors.successGreen.withValues(alpha: 0.0),
+                ],
+                radius: 1.0,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
-}
 
-class _AmbientBlob extends StatelessWidget {
-  final double size;
-  final Gradient gradient;
-  const _AmbientBlob({required this.size, required this.gradient});
+  // ============================================================
+  // BRAND SECTION
+  // ============================================================
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildBrandSection(bool isMobile) {
+    return Column(
+      children: [
+        // Animated Logo
+        TweenAnimationBuilder(
+          duration: const Duration(milliseconds: 600),
+          tween: Tween<double>(begin: 0.0, end: 1.0),
+          builder: (context, value, child) {
+            return Transform.scale(
+              scale: value,
+              child: child,
+            );
+          },
+          child: Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              gradient: AppTheme.brandGradient,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.safetyBlue.withValues(alpha: 0.35),
+                  blurRadius: 30,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.directions_bus_filled_rounded,
+              color: Colors.white,
+              size: 38,
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          'Smart School Bus',
+          style: Theme.of(context).textTheme.displayLarge?.copyWith(
+            fontSize: isMobile ? 27 : 32,
+            fontWeight: FontWeight.bold,
+            letterSpacing: -0.5,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Safe • Tracked • Connected',
+          style: TextStyle(
+            fontSize: 14,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            letterSpacing: 0.3,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // LOGIN CARD
+  // ============================================================
+
+  Widget _buildLoginCard(bool isMobile, bool isDark) {
     return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, gradient: gradient),
-    );
-  }
-}
-
-class _FieldLabel extends StatelessWidget {
-  final String text;
-  const _FieldLabel(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-        color: Theme.of(context).colorScheme.onSurface,
-        fontSize: 12.5,
+      padding: EdgeInsets.all(isMobile ? 20 : 28),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+            blurRadius: 30,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Role Selector
+          _buildRoleSelector(isMobile),
+          const SizedBox(height: 16),
+          
+          // Role Description
+          _buildRoleDescription(),
+          const SizedBox(height: 20),
+          
+          // Email Field
+          _buildEmailField(),
+          const SizedBox(height: 14),
+          
+          // Password Field
+          _buildPasswordField(),
+          const SizedBox(height: 12),
+          
+          // Options Row
+          _buildOptionsRow(),
+          const SizedBox(height: 24),
+          
+          // Login Button
+          _buildLoginButton(),
+        ],
       ),
     );
   }
-}
 
-class _ModernTextField extends StatelessWidget {
-  final TextEditingController controller;
-  final IconData icon;
-  final String hint;
-  final bool obscureText;
-  final bool enabled;
-  final Widget? suffix;
+  // ============================================================
+  // ROLE SELECTOR
+  // ============================================================
 
-  const _ModernTextField({
-    required this.controller,
-    required this.icon,
-    required this.hint,
-    this.obscureText = false,
-    this.enabled = true,
-    this.suffix,
-  });
+  Widget _buildRoleSelector(bool isMobile) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: AppColors.safetyBlue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(
+                Icons.person_outline_rounded,
+                color: AppColors.safetyBlue,
+                size: 16,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Sign in as',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 56,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _roles.length,
+            physics: const BouncingScrollPhysics(),
+            itemBuilder: (context, index) {
+              final role = _roles[index];
+              final isSelected = _selectedRole == role['label'];
+              return Padding(
+                padding: EdgeInsets.only(
+                  right: index < _roles.length - 1 ? 8 : 0,
+                ),
+                child: _RoleChip(
+                  role: role['label']!,
+                  icon: role['icon']!,
+                  color: role['color']!,
+                  isSelected: isSelected,
+                  onTap: () => _selectRole(role['label']!),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      obscureText: obscureText,
-      enabled: enabled,
-      decoration: InputDecoration(
-        prefixIcon: Icon(icon, color: AppColors.outline, size: 20),
-        suffixIcon: suffix,
-        hintText: hint,
-        hintStyle: const TextStyle(color: AppColors.outline, fontSize: 14),
-        filled: true,
-        fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
-        border: OutlineInputBorder(
+  // ============================================================
+  // ROLE DESCRIPTION
+  // ============================================================
+
+  Widget _buildRoleDescription() {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: Container(
+        key: ValueKey(_selectedRole),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.safetyBlue.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          border: Border.all(
+            color: AppColors.safetyBlue.withValues(alpha: 0.15),
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.safetyBlue, width: 2),
-        ),
-        disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+        child: Row(
+          children: [
+            const Icon(
+              Icons.info_outline_rounded,
+              size: 18,
+              color: AppColors.safetyBlue,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _roleDescriptions[_selectedRole] ?? '',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.safetyBlue,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  // ============================================================
+  // EMAIL FIELD
+  // ============================================================
+
+  Widget _buildEmailField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Email Address',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _emailController,
+          enabled: !_isLoading,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          onTap: () => setState(() => _isEmailFocused = true),
+          onTapOutside: (_) => setState(() => _isEmailFocused = false),
+          style: TextStyle(
+            fontSize: 15,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+          decoration: InputDecoration(
+            prefixIcon: Icon(
+              Icons.email_outlined,
+              color: _isEmailFocused ? AppColors.safetyBlue : AppColors.outline,
+              size: 20,
+            ),
+            hintText: 'Enter your email',
+            hintStyle: TextStyle(
+              fontSize: 14,
+              color: AppColors.outline,
+            ),
+            filled: true,
+            fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: AppColors.safetyBlue,
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // PASSWORD FIELD
+  // ============================================================
+
+  Widget _buildPasswordField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Password',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            TextButton(
+              onPressed: _isLoading
+                  ? null
+                  : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ForgotPasswordScreen(
+                            initialEmail: _emailController.text.trim(),
+                          ),
+                        ),
+                      ),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                'Forgot password?',
+                style: TextStyle(
+                  color: AppColors.alertOrangeDark,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _passwordController,
+          enabled: !_isLoading,
+          obscureText: _obscurePassword,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _handleLogin(),
+          onTap: () => setState(() => _isPasswordFocused = true),
+          onTapOutside: (_) => setState(() => _isPasswordFocused = false),
+          style: TextStyle(
+            fontSize: 15,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+          decoration: InputDecoration(
+            prefixIcon: Icon(
+              Icons.lock_outline_rounded,
+              color: _isPasswordFocused ? AppColors.safetyBlue : AppColors.outline,
+              size: 20,
+            ),
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                color: AppColors.outline,
+                size: 20,
+              ),
+              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+            ),
+            hintText: 'Enter your password',
+            hintStyle: TextStyle(
+              fontSize: 14,
+              color: AppColors.outline,
+            ),
+            filled: true,
+            fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: AppColors.safetyBlue,
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // OPTIONS ROW
+  // ============================================================
+
+  Widget _buildOptionsRow() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: Checkbox(
+                value: _rememberMe,
+                onChanged: (val) => setState(() => _rememberMe = val ?? false),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                activeColor: AppColors.safetyBlue,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Remember me',
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        TextButton(
+          onPressed: _isLoading
+              ? null
+              : () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ForgotPasswordScreen(
+                        initialEmail: _emailController.text.trim(),
+                      ),
+                    ),
+                  ),
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Text(
+            'Forgot password?',
+            style: TextStyle(
+              color: AppColors.alertOrangeDark,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // LOGIN BUTTON
+  // ============================================================
+
+  Widget _buildLoginButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: AppTheme.brandGradient,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.safetyBlue.withValues(alpha: 0.35),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: _isLoading ? null : _handleLogin,
+            child: Center(
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'Sign In',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Icon(
+                          Icons.arrow_forward_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // FOOTER
+  // ============================================================
+
+  Widget _buildFooter() {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 6,
+      children: [
+        Text(
+          'Need an account?',
+          style: TextStyle(
+            fontSize: 14,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        GestureDetector(
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Contact administrator to create an account.'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+          child: Text(
+            'Contact Administrator',
+            style: TextStyle(
+              color: AppColors.safetyBlue,
+              fontWeight: FontWeight.bold,
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
+
+// ============================================================
+// ROLE CHIP WIDGET
+// ============================================================
 
 class _RoleChip extends StatelessWidget {
   final String role;
   final IconData icon;
+  final Color color;
   final bool isSelected;
   final VoidCallback onTap;
 
   const _RoleChip({
     required this.role,
     required this.icon,
+    required this.color,
     required this.isSelected,
     required this.onTap,
   });
@@ -657,34 +882,42 @@ class _RoleChip extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(vertical: 13),
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.safetyBlue.withValues(alpha: 0.08)
+              ? color.withValues(alpha: 0.12)
               : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isSelected ? AppColors.safetyBlue : AppColors.outlineVariant,
-            width: isSelected ? 1.6 : 1,
+            color: isSelected ? color : AppColors.outlineVariant,
+            width: isSelected ? 2 : 1,
           ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: color.withValues(alpha: 0.15),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [],
         ),
-        child: Column(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              color: isSelected ? AppColors.safetyBlue : AppColors.outline,
-              size: 22,
+              color: isSelected ? color : AppColors.outline,
+              size: 18,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(width: 6),
             Text(
               role,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 12.5,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                color: isSelected
-                    ? AppColors.safetyBlue
-                    : Theme.of(context).colorScheme.onSurface,
+                color: isSelected ? color : Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ],

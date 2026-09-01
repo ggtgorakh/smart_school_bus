@@ -1,3 +1,5 @@
+// lib/screens/fleet_management_screen.dart
+
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/bus_fleet.dart';
@@ -15,9 +17,16 @@ class FleetManagementScreen extends StatefulWidget {
   State<FleetManagementScreen> createState() => _FleetManagementScreenState();
 }
 
-class _FleetManagementScreenState extends State<FleetManagementScreen> {
+class _FleetManagementScreenState extends State<FleetManagementScreen>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  String _filterStatus = 'all';
+  bool _isGridView = false;
+  
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
   final List<BusFleet> _fleetList = [
     BusFleet(
@@ -59,627 +68,207 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.04),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOutCubic,
+    ));
+    _animationController.forward();
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
+    _animationController.dispose();
     super.dispose();
+  }
+
+  List<BusFleet> get _filteredFleet {
+    var filtered = _fleetList;
+    
+    // Apply search filter
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase().trim();
+      filtered = filtered.where((bus) =>
+        bus.busId.toLowerCase().contains(query) ||
+        bus.driverName.toLowerCase().contains(query) ||
+        bus.routeName.toLowerCase().contains(query)
+      ).toList();
+    }
+    
+    // Apply status filter
+    if (_filterStatus != 'all') {
+      filtered = filtered.where((bus) {
+        final statusMap = {
+          'onRoute': FleetStatus.onRoute,
+          'delayed': FleetStatus.delayed,
+          'maintenance': FleetStatus.maintenance,
+        };
+        return bus.status == statusMap[_filterStatus];
+      }).toList();
+    }
+    
+    return filtered;
   }
 
   @override
   Widget build(BuildContext context) {
-    final filteredFleet = _fleetList.where((bus) {
-      final query = _searchQuery.toLowerCase().trim();
-
-      if (query.isEmpty) return true;
-
-      return bus.busId.toLowerCase().contains(query) ||
-          bus.driverName.toLowerCase().contains(query) ||
-          bus.routeName.toLowerCase().contains(query);
-    }).toList();
+    final isMobile = context.isMobile;
+    final filteredFleet = _filteredFleet;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1280),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeader(context),
-                  const SizedBox(height: 20),
-                  _buildKpiSection(),
-                  const SizedBox(height: 24),
-                  _buildTelemetrySection(filteredFleet),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isSmallScreen = constraints.maxWidth < 600;
-
-        final titleSection = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Fleet Overview',
-              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface,
-                fontWeight: FontWeight.bold,
-                fontSize: 22,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Live monitoring of 42 active vehicles',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        );
-
-        final addUserButton = OutlinedButton.icon(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AdminCreateUserScreen()),
-            );
-          },
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.safetyBlue,
-            side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          icon: const Icon(
-            Icons.person_add_rounded,
-            size: 18,
-            color: AppColors.safetyBlue,
-          ),
-          label: const Text(
-            'Add User',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: AppColors.safetyBlue,
-            ),
-          ),
-        );
-
-        final peopleButton = OutlinedButton.icon(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const PeopleDirectoryScreen()),
-            );
-          },
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.safetyBlue,
-            side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          icon: const Icon(
-            Icons.groups_rounded,
-            size: 18,
-            color: AppColors.safetyBlue,
-          ),
-          label: const Text(
-            'People',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: AppColors.safetyBlue,
-            ),
-          ),
-        );
-
-        final manageStudentsButton = OutlinedButton.icon(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ManageStudentsScreen()),
-            );
-          },
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.safetyBlue,
-            side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          icon: const Icon(
-            Icons.child_care_rounded,
-            size: 18,
-            color: AppColors.safetyBlue,
-          ),
-          label: const Text(
-            'Students',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: AppColors.safetyBlue,
-            ),
-          ),
-        );
-
-        final dispatchButton = ElevatedButton.icon(
-          onPressed: () => _openDispatchModal(context),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.safetyBlue,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          icon: const Icon(Icons.add, size: 18, color: Colors.white),
-          label: const Text(
-            'Dispatch Bus',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        );
-
-        if (isSmallScreen) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              titleSection,
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  addUserButton,
-                  peopleButton,
-                  manageStudentsButton,
-                  dispatchButton,
-                ],
-              ),
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(child: titleSection),
-            const SizedBox(width: 12),
-            addUserButton,
-            const SizedBox(width: 8),
-            peopleButton,
-            const SizedBox(width: 8),
-            manageStudentsButton,
-            const SizedBox(width: 8),
-            dispatchButton,
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildKpiSection() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width = constraints.maxWidth;
-
-        if (width < 360) {
-          return Column(
-            children: [
-              KpiCard(
-                title: 'Active Buses',
-                value: '38',
-                icon: Icons.directions_bus,
-                iconBgColor: AppColors.primaryContainer,
-                iconColor: Colors.white,
-                badgeText: 'On Time',
-                badgeBgColor: Color(0x1F2D8A29),
-                badgeTextColor: AppColors.successGreen,
-              ),
-              SizedBox(height: 12),
-              KpiCard(
-                title: 'In Maintenance',
-                value: '4',
-                icon: Icons.build,
-                iconBgColor: AppColors.errorContainer,
-                iconColor: AppColors.errorRed,
-                badgeText: '2 Critical',
-                badgeBgColor: Color(0x1FFF7A00),
-                badgeTextColor: AppColors.alertOrange,
-              ),
-              SizedBox(height: 12),
-              KpiCard(
-                title: 'Route Completion',
-                value: '76%',
-                icon: Icons.route,
-                iconBgColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-                iconColor: AppColors.safetyBlue,
-                badgeText: 'Morning Run',
-                badgeBgColor: Theme.of(context).colorScheme.surfaceContainerLow,
-                badgeTextColor: AppColors.safetyBlue,
-                progress: 0.76,
-              ),
-              SizedBox(height: 12),
-              KpiCard(
-                title: 'Students Boarded',
-                value: '1,240',
-                icon: Icons.group,
-                iconBgColor: Theme.of(context).colorScheme.surfaceContainerLow,
-                iconColor: Theme.of(context).colorScheme.onSurface,
-                badgeText: '+12 today',
-                badgeBgColor: Color(0x1F2D8A29),
-                badgeTextColor: AppColors.successGreen,
-              ),
-            ],
-          );
-        }
-
-        final crossAxisCount = width >= 900 ? 4 : 2;
-
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: crossAxisCount,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: width >= 900 ? 1.5 : 1.15,
-          children: [
-            KpiCard(
-              title: 'Active Buses',
-              value: '38',
-              icon: Icons.directions_bus,
-              iconBgColor: AppColors.primaryContainer,
-              iconColor: Colors.white,
-              badgeText: 'On Time',
-              badgeBgColor: Color(0x1F2D8A29),
-              badgeTextColor: AppColors.successGreen,
-            ),
-            KpiCard(
-              title: 'In Maintenance',
-              value: '4',
-              icon: Icons.build,
-              iconBgColor: AppColors.errorContainer,
-              iconColor: AppColors.errorRed,
-              badgeText: '2 Critical',
-              badgeBgColor: Color(0x1FFF7A00),
-              badgeTextColor: AppColors.alertOrange,
-            ),
-            KpiCard(
-              title: 'Route Completion',
-              value: '76%',
-              icon: Icons.route,
-              iconBgColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-              iconColor: AppColors.safetyBlue,
-              badgeText: 'Morning Run',
-              badgeBgColor: Theme.of(context).colorScheme.surfaceContainerLow,
-              badgeTextColor: AppColors.safetyBlue,
-              progress: 0.76,
-            ),
-            KpiCard(
-              title: 'Students Boarded',
-              value: '1,240',
-              icon: Icons.group,
-              iconBgColor: Theme.of(context).colorScheme.surfaceContainerLow,
-              iconColor: Theme.of(context).colorScheme.onSurface,
-              badgeText: '+12 today',
-              badgeBgColor: Color(0x1F2D8A29),
-              badgeTextColor: AppColors.successGreen,
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildTelemetrySection(List<BusFleet> filteredFleet) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.safetyBlue.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          _buildTelemetryHeader(),
-          Divider(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            height: 1,
-          ),
-          if (filteredFleet.isEmpty)
-            Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(
-                child: Text(
-                  'No buses found',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: 14,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child: SlideTransition(
+          position: _slideAnimation,
+          child: SafeArea(
+            child: CustomScrollView(
+              slivers: [
+                // Header
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(isMobile ? 16 : 20),
+                    child: _buildHeader(context),
                   ),
                 ),
-              ),
-            )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredFleet.length,
-              separatorBuilder: (_, _) => Divider(
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                height: 1,
-              ),
-              itemBuilder: (context, index) {
-                return _buildFleetCard(filteredFleet[index]);
-              },
+                
+                // KPI Section
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 20),
+                    child: _buildKpiSection(context),
+                  ),
+                ),
+                
+                // Fleet List Header
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      isMobile ? 16 : 20,
+                      20,
+                      isMobile ? 16 : 20,
+                      12,
+                    ),
+                    child: _buildListHeader(context),
+                  ),
+                ),
+                
+                // Fleet List
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 20),
+                  sliver: _buildFleetList(filteredFleet),
+                ),
+                
+                SliverToBoxAdapter(
+                  child: SizedBox(height: isMobile ? 80 : 20),
+                ),
+              ],
             ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTelemetryHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final isSmall = constraints.maxWidth < 500;
-
-          final title = Text(
-            'Live Telemetry & Status',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontWeight: FontWeight.bold,
-              fontSize: 17,
-            ),
-          );
-
-          final searchField = TextField(
-            controller: _searchController,
-            onChanged: (value) {
-              setState(() {
-                _searchQuery = value;
-              });
-            },
-            decoration: InputDecoration(
-              hintText: 'Search bus or driver...',
-              hintStyle: const TextStyle(fontSize: 12),
-              prefixIcon: const Icon(
-                Icons.search,
-                size: 19,
-                color: AppColors.outline,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-              filled: true,
-              fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          );
-
-          if (isSmall) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [title, const SizedBox(height: 12), searchField],
-            );
-          }
-
-          return Row(
-            children: [
-              Expanded(child: title),
-              const SizedBox(width: 16),
-              SizedBox(width: 280, child: searchField),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildFleetCard(BusFleet bus) {
-    Color badgeColor;
-    Color badgeBg;
-    String statusText;
-
-    switch (bus.status) {
-      case FleetStatus.onRoute:
-        badgeColor = AppColors.successGreen;
-        badgeBg = const Color(0x1F2D8A29);
-        statusText = 'On Route';
-        break;
-
-      case FleetStatus.delayed:
-        badgeColor = AppColors.alertOrange;
-        badgeBg = const Color(0x1FFF7A00);
-        statusText = 'Delayed (Traffic)';
-        break;
-
-      case FleetStatus.maintenance:
-        badgeColor = AppColors.errorRed;
-        badgeBg = AppColors.errorContainer;
-        statusText = 'In Maintenance';
-        break;
-    }
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => _openBusDetailSheet(bus, badgeColor, badgeBg, statusText),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isSmall = constraints.maxWidth < 600;
-
-              if (isSmall) {
-                return _buildMobileFleetCard(
-                  bus,
-                  badgeColor,
-                  badgeBg,
-                  statusText,
-                );
-              }
-
-              return _buildDesktopFleetCard(bus, badgeColor, badgeBg, statusText);
-            },
           ),
         ),
       ),
     );
   }
 
-  Widget _buildMobileFleetCard(
-    BusFleet bus,
-    Color badgeColor,
-    Color badgeBg,
-    String statusText,
-  ) {
+  // ============================================================
+  // HEADER
+  // ============================================================
+
+  Widget _buildHeader(BuildContext context) {
+    final isMobile = context.isMobile;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(color: badgeBg, shape: BoxShape.circle),
-              child: Icon(Icons.directions_bus, color: badgeColor, size: 23),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: AppTheme.brandGradient,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.directions_bus_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    bus.busId,
-                    style: TextStyle(
+                    'Fleet Overview',
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      fontSize: isMobile ? 20 : 24,
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
-                  const SizedBox(height: 3),
                   Text(
-                    bus.driverName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    '${_fleetList.length} vehicles • ${_fleetList.where((b) => b.status == FleetStatus.onRoute).length} active',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
               ),
             ),
-            IconButton(
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(
-                Icons.chat_bubble_outline,
-                size: 20,
-                color: AppColors.safetyBlue,
-              ),
-              onPressed: () {
-                _openDriverChat(bus);
-              },
-            ),
           ],
         ),
-
         const SizedBox(height: 14),
-
-        Text(
-          bus.routeName,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-
-        const SizedBox(height: 6),
-
-        Row(
-          children: [
-            Icon(
-              Icons.schedule_outlined,
-              size: 15,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 5),
-            Expanded(
-              child: Text(
-                'Est. Arrival: ${bus.estArrival}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(height: 12),
-
         Wrap(
-          spacing: 10,
+          spacing: 8,
           runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: badgeBg,
-                borderRadius: BorderRadius.circular(7),
-              ),
-              child: Text(
-                statusText,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: badgeColor,
-                ),
+            _buildActionButton(
+              context,
+              icon: Icons.person_add_rounded,
+              label: 'Add User',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AdminCreateUserScreen()),
               ),
             ),
-            _buildTelemetryValue('${bus.speedMph} mph', 'Speed'),
-            _buildTelemetryValue(
-              'Fuel: ${bus.fuelPercent}%',
-              'Fuel',
-              valueColor: bus.fuelPercent < 20
-                  ? AppColors.errorRed
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            _buildActionButton(
+              context,
+              icon: Icons.groups_rounded,
+              label: 'People',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PeopleDirectoryScreen()),
+              ),
+            ),
+            _buildActionButton(
+              context,
+              icon: Icons.child_care_rounded,
+              label: 'Students',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ManageStudentsScreen()),
+              ),
+            ),
+            _buildActionButton(
+              context,
+              icon: Icons.add_rounded,
+              label: 'Dispatch',
+              onTap: () => _openDispatchModal(context),
+              isPrimary: true,
             ),
           ],
         ),
@@ -687,40 +276,147 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
     );
   }
 
-  Widget _buildDesktopFleetCard(
-    BusFleet bus,
-    Color badgeColor,
-    Color badgeBg,
-    String statusText,
-  ) {
+  Widget _buildActionButton(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isPrimary = false,
+  }) {
+    if (isPrimary) {
+      return ElevatedButton.icon(
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.safetyBlue,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          elevation: 2,
+        ),
+        icon: Icon(icon, size: 18),
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+        ),
+      );
+    }
+
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.safetyBlue,
+        side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+      ),
+      icon: Icon(icon, size: 18),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  // ============================================================
+  // KPI SECTION
+  // ============================================================
+
+  Widget _buildKpiSection(BuildContext context) {
+    final isMobile = context.isMobile;
+    final activeBuses = _fleetList.where((b) => b.status == FleetStatus.onRoute).length;
+    final delayedBuses = _fleetList.where((b) => b.status == FleetStatus.delayed).length;
+    final maintenanceBuses = _fleetList.where((b) => b.status == FleetStatus.maintenance).length;
+
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: isMobile ? 2 : 4,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: isMobile ? 1.1 : 1.4,
+      children: [
+        KpiCard(
+          title: 'Active Buses',
+          value: '$activeBuses',
+          icon: Icons.directions_bus_rounded,
+          iconBgColor: AppColors.primaryContainer,
+          iconColor: Colors.white,
+          badgeText: 'On Time',
+          badgeBgColor: AppColors.successGreen.withValues(alpha: 0.12),
+          badgeTextColor: AppColors.successGreen,
+          gradient: AppTheme.brandGradient,
+          onTap: () => setState(() => _filterStatus = 'onRoute'),
+        ),
+        KpiCard(
+          title: 'Delayed',
+          value: '$delayedBuses',
+          icon: Icons.warning_amber_rounded,
+          iconBgColor: AppColors.amberSoft,
+          iconColor: Colors.white,
+          badgeText: 'Need Attention',
+          badgeBgColor: AppColors.alertOrange.withValues(alpha: 0.12),
+          badgeTextColor: AppColors.alertOrange,
+          gradient: AppTheme.warningGradient,
+          onTap: () => setState(() => _filterStatus = 'delayed'),
+        ),
+        KpiCard(
+          title: 'In Maintenance',
+          value: '$maintenanceBuses',
+          icon: Icons.build_rounded,
+          iconBgColor: AppColors.errorContainer,
+          iconColor: Colors.white,
+          badgeText: '${maintenanceBuses > 0 ? '2 Critical' : 'All Good'}',
+          badgeBgColor: maintenanceBuses > 0 
+              ? AppColors.alertOrange.withValues(alpha: 0.12)
+              : AppColors.successGreen.withValues(alpha: 0.12),
+          badgeTextColor: maintenanceBuses > 0 
+              ? AppColors.alertOrange
+              : AppColors.successGreen,
+          gradient: maintenanceBuses > 0 
+              ? AppTheme.dangerGradient
+              : AppTheme.successGradient,
+          onTap: () => setState(() => _filterStatus = 'maintenance'),
+        ),
+        KpiCard(
+          title: 'Fuel Efficiency',
+          value: '92%',
+          icon: Icons.local_gas_station_rounded,
+          iconBgColor: AppColors.mintSoft,
+          iconColor: Colors.white,
+          badgeText: 'Optimized',
+          badgeBgColor: AppColors.successGreen.withValues(alpha: 0.12),
+          badgeTextColor: AppColors.successGreen,
+          gradient: AppTheme.successGradient,
+          progress: 0.92,
+        ),
+      ],
+    );
+  }
+
+  // ============================================================
+  // LIST HEADER
+  // ============================================================
+
+  Widget _buildListHeader(BuildContext context) {
     return Row(
       children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(color: badgeBg, shape: BoxShape.circle),
-          child: Icon(Icons.directions_bus, color: badgeColor, size: 22),
-        ),
-        const SizedBox(width: 14),
-
         Expanded(
-          flex: 2,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                bus.busId,
-                style: TextStyle(
+                'Live Telemetry',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                  color: Theme.of(context).colorScheme.onSurface,
+                  fontSize: 18,
                 ),
               ),
-              const SizedBox(height: 3),
               Text(
-                bus.driverName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                '${_filteredFleet.length} vehicles match your filters',
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -729,136 +425,510 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             ],
           ),
         ),
+        Row(
+          children: [
+            // View toggle
+            IconButton(
+              onPressed: () => setState(() => _isGridView = !_isGridView),
+              icon: Icon(
+                _isGridView ? Icons.view_list_rounded : Icons.grid_view_rounded,
+                color: AppColors.safetyBlue,
+              ),
+              tooltip: _isGridView ? 'List View' : 'Grid View',
+            ),
+            // Filter button
+            PopupMenuButton<String>(
+              icon: Icon(
+                Icons.filter_list_rounded,
+                color: _filterStatus != 'all' ? AppColors.safetyBlue : null,
+              ),
+              onSelected: (value) => setState(() => _filterStatus = value),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'all',
+                  child: Text('All Vehicles'),
+                ),
+                const PopupMenuItem(
+                  value: 'onRoute',
+                  child: Text('On Route'),
+                ),
+                const PopupMenuItem(
+                  value: 'delayed',
+                  child: Text('Delayed'),
+                ),
+                const PopupMenuItem(
+                  value: 'maintenance',
+                  child: Text('Maintenance'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 
-        const SizedBox(width: 16),
+  // ============================================================
+  // FLEET LIST
+  // ============================================================
 
-        Expanded(
-          flex: 3,
+  Widget _buildFleetList(List<BusFleet> filteredFleet) {
+    if (filteredFleet.isEmpty) {
+      return SliverFillRemaining(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.search_off_rounded,
+                size: 48,
+                color: AppColors.outline,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No vehicles found',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _searchController.clear();
+                    _searchQuery = '';
+                    _filterStatus = 'all';
+                  });
+                },
+                child: const Text('Clear filters'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_isGridView) {
+      return SliverPadding(
+        padding: const EdgeInsets.only(bottom: 8),
+        sliver: SliverGrid(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 0.85,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => _buildGridCard(filteredFleet[index]),
+            childCount: filteredFleet.length,
+          ),
+        ),
+      );
+    }
+
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final bus = filteredFleet[index];
+          return Padding(
+            padding: EdgeInsets.only(bottom: index < filteredFleet.length - 1 ? 8 : 0),
+            child: _buildFleetCard(bus),
+          );
+        },
+        childCount: filteredFleet.length,
+      ),
+    );
+  }
+
+  // ============================================================
+  // FLEET CARD (List View)
+  // ============================================================
+
+  Widget _buildFleetCard(BusFleet bus) {
+    final statusInfo = _getStatusInfo(bus.status);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openBusDetailSheet(bus, statusInfo),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.1 : 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Bus Icon
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: statusInfo.color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.directions_bus_rounded,
+                  color: statusInfo.color,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 14),
+              
+              // Bus Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          bus.busId,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: statusInfo.color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: statusInfo.color.withValues(alpha: 0.2),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(statusInfo.icon, size: 12, color: statusInfo.color),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    statusInfo.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: statusInfo.color,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      bus.driverName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      bus.routeName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Telemetry
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${bus.speedMph} mph',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: bus.fuelPercent < 20
+                          ? AppColors.errorRed.withValues(alpha: 0.12)
+                          : AppColors.successGreen.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.local_gas_station_rounded,
+                          size: 10,
+                          color: bus.fuelPercent < 20
+                              ? AppColors.errorRed
+                              : AppColors.successGreen,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '${bus.fuelPercent}%',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: bus.fuelPercent < 20
+                                ? AppColors.errorRed
+                                : AppColors.successGreen,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(width: 8),
+              
+              // Actions
+              IconButton(
+                icon: const Icon(
+                  Icons.chat_bubble_outline_rounded,
+                  size: 20,
+                  color: AppColors.safetyBlue,
+                ),
+                onPressed: () => _openDriverChat(bus),
+                tooltip: 'Message Driver',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // GRID CARD
+  // ============================================================
+
+  Widget _buildGridCard(BusFleet bus) {
+    final statusInfo = _getStatusInfo(bus.status);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openBusDetailSheet(bus, statusInfo),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.1 : 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: statusInfo.color.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.directions_bus_rounded,
+                      color: statusInfo.color,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      bus.busId,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      size: 16,
+                      color: AppColors.safetyBlue,
+                    ),
+                    onPressed: () => _openDriverChat(bus),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Message Driver',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              
+              // Driver & Route
               Text(
-                bus.routeName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                bus.driverName,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
-              const SizedBox(height: 3),
               Text(
-                'Est. Arrival: ${bus.estArrival}',
-                maxLines: 1,
+                bus.routeName,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
+              
+              const Spacer(),
+              
+              // Status & Telemetry
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: statusInfo.color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: statusInfo.color.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(statusInfo.icon, size: 10, color: statusInfo.color),
+                        const SizedBox(width: 3),
+                        Text(
+                          statusInfo.label,
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: statusInfo.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.speed_rounded,
+                        size: 14,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${bus.speedMph} mph',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.local_gas_station_rounded,
+                        size: 12,
+                        color: bus.fuelPercent < 20
+                            ? AppColors.errorRed
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${bus.fuelPercent}%',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: bus.fuelPercent < 20
+                              ? AppColors.errorRed
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ],
           ),
         ),
-
-        const SizedBox(width: 14),
-
-        Flexible(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: badgeBg,
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: Text(
-              statusText,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: badgeColor,
-              ),
-            ),
-          ),
-        ),
-
-        const SizedBox(width: 16),
-
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${bus.speedMph} mph',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-            Text(
-              'Fuel: ${bus.fuelPercent}%',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: bus.fuelPercent < 20
-                    ? AppColors.errorRed
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-
-        const SizedBox(width: 8),
-
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(
-            Icons.chat_bubble_outline,
-            size: 20,
-            color: AppColors.safetyBlue,
-          ),
-          onPressed: () {
-            _openDriverChat(bus);
-          },
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildTelemetryValue(String value, String label, {Color? valueColor}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 13,
-            color: valueColor ?? Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
-    );
+  // ============================================================
+  // STATUS INFO HELPER
+  // ============================================================
+
+  ({Color color, IconData icon, String label}) _getStatusInfo(FleetStatus status) {
+    switch (status) {
+      case FleetStatus.onRoute:
+        return (
+          color: AppColors.successGreen,
+          icon: Icons.play_arrow_rounded,
+          label: 'On Route',
+        );
+      case FleetStatus.delayed:
+        return (
+          color: AppColors.alertOrange,
+          icon: Icons.warning_amber_rounded,
+          label: 'Delayed',
+        );
+      case FleetStatus.maintenance:
+        return (
+          color: AppColors.errorRed,
+          icon: Icons.build_rounded,
+          label: 'Maintenance',
+        );
+    }
   }
 
-  // Tapping a fleet card used to do nothing — it just looked like a static
-  // row. This opens a real detail sheet with the bus's live stats and
-  // actions (message driver, jump to its live map, mark for maintenance),
-  // so the row is actually workable instead of a pasted-looking image.
-  void _openBusDetailSheet(
-    BusFleet bus,
-    Color badgeColor,
-    Color badgeBg,
-    String statusText,
-  ) {
+  // ============================================================
+  // BUS DETAIL SHEET
+  // ============================================================
+
+  void _openBusDetailSheet(BusFleet bus, ({Color color, IconData icon, String label}) statusInfo) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -878,6 +948,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Drag Handle
             Center(
               child: Container(
                 width: 40,
@@ -888,35 +959,42 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 16),
+
+            // Bus Header
             Row(
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(color: badgeBg, shape: BoxShape.circle),
-                  child: Icon(Icons.directions_bus, color: badgeColor, size: 24),
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: statusInfo.color.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.directions_bus_rounded,
+                    color: statusInfo.color,
+                    size: 26,
+                  ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         bus.busId,
-                        style: TextStyle(
-                          fontSize: 17,
+                        style: const TextStyle(
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
-                      const SizedBox(height: 2),
                       Text(
                         bus.routeName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 12.5,
+                          fontSize: 13,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
@@ -925,56 +1003,68 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(7)),
-                  child: Text(
-                    statusText,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: badgeColor),
+                  decoration: BoxDecoration(
+                    color: statusInfo.color.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: statusInfo.color.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(statusInfo.icon, size: 14, color: statusInfo.color),
+                      const SizedBox(width: 4),
+                      Text(
+                        statusInfo.label,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: statusInfo.color,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 20),
+
+            // Detail Grid
             Row(
               children: [
-                Expanded(
-                  child: _buildDetailStat(
-                    icon: Icons.person_outline,
-                    label: 'Driver',
-                    value: bus.driverName,
-                  ),
+                _buildDetailItem(
+                  icon: Icons.person_outline_rounded,
+                  label: 'Driver',
+                  value: bus.driverName,
                 ),
-                Expanded(
-                  child: _buildDetailStat(
-                    icon: Icons.schedule_outlined,
-                    label: 'Est. Arrival',
-                    value: bus.estArrival,
-                  ),
+                const SizedBox(width: 12),
+                _buildDetailItem(
+                  icon: Icons.schedule_rounded,
+                  label: 'Est. Arrival',
+                  value: bus.estArrival,
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: _buildDetailStat(
-                    icon: Icons.speed_rounded,
-                    label: 'Speed',
-                    value: '${bus.speedMph} mph',
-                  ),
+                _buildDetailItem(
+                  icon: Icons.speed_rounded,
+                  label: 'Speed',
+                  value: '${bus.speedMph} mph',
                 ),
-                Expanded(
-                  child: _buildDetailStat(
-                    icon: Icons.local_gas_station_outlined,
-                    label: 'Fuel',
-                    value: '${bus.fuelPercent}%',
-                    valueColor: bus.fuelPercent < 20
-                        ? AppColors.errorRed
-                        : Theme.of(context).colorScheme.onSurface,
-                  ),
+                const SizedBox(width: 12),
+                _buildDetailItem(
+                  icon: Icons.local_gas_station_rounded,
+                  label: 'Fuel',
+                  value: '${bus.fuelPercent}%',
+                  valueColor: bus.fuelPercent < 20 ? AppColors.errorRed : null,
                 ),
               ],
             ),
-            const SizedBox(height: 22),
+            const SizedBox(height: 20),
+
+            // Actions
             Row(
               children: [
                 Expanded(
@@ -983,16 +1073,15 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                       Navigator.of(ctx).pop();
                       _openDriverChat(bus);
                     },
+                    icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
+                    label: const Text('Message'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.safetyBlue,
                       side: const BorderSide(color: AppColors.safetyBlue, width: 1.3),
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: const Icon(Icons.chat_bubble_outline_rounded, size: 18),
-                    label: const Text(
-                      'Message Driver',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ),
@@ -1003,21 +1092,21 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                       Navigator.of(ctx).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Opening ${bus.busId} on the live map…'),
+                          content: Text('Opening ${bus.busId} on the live map...'),
                           backgroundColor: AppColors.safetyBlue,
+                          behavior: SnackBarBehavior.floating,
                         ),
                       );
                     },
+                    icon: const Icon(Icons.map_rounded, size: 18),
+                    label: const Text('View Map'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.safetyBlue,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    icon: const Icon(Icons.map_outlined, size: 18),
-                    label: const Text(
-                      'View on Map',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                 ),
@@ -1029,40 +1118,56 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
     );
   }
 
-  Widget _buildDetailStat({
+  Widget _buildDetailItem({
     required IconData icon,
     required String label,
     required String value,
     Color? valueColor,
   }) {
-    return Row(
-      children: [
-        Icon(icon, size: 17, color: Theme.of(context).colorScheme.onSurfaceVariant),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
-              ),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.bold,
-                  color: valueColor ?? Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-            ],
-          ),
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(10),
         ),
-      ],
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: valueColor ?? Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
+
+  // ============================================================
+  // DISPATCH MODAL
+  // ============================================================
 
   void _openDispatchModal(BuildContext context) {
     String selectedRoute = 'Route 7A - Oakridge Elementary';
@@ -1084,12 +1189,13 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             ),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Drag Handle
                 Center(
                   child: Container(
                     width: 40,
@@ -1101,30 +1207,37 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                // Header
                 Row(
                   children: [
-                    const Icon(
-                      Icons.add_road_rounded,
-                      color: AppColors.safetyBlue,
-                      size: 24,
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.safetyBlue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.add_road_rounded,
+                        color: AppColors.safetyBlue,
+                        size: 24,
+                      ),
                     ),
-                    const SizedBox(width: 10),
-                    // OVERFLOW FIX: this Text had no Expanded/Flexible, so on
-                    // a narrow phone screen there was nowhere for it to go
-                    // once the icon and spacing took their width — Flutter
-                    // reported "RIGHT OVERFLOWED BY X PIXELS" and clipped
-                    // part of the title off-screen. Wrapping in Expanded
-                    // lets it wrap onto a second line instead.
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'Dispatch Replacement Vehicle',
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontSize: 17, fontWeight: FontWeight.bold),
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
+
+                // Route Select
                 const Text(
                   'Select Target Route:',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -1140,29 +1253,25 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
+                    filled: true,
+                    fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
                   ),
-                  items:
-                      [
-                            'Route 7A - Oakridge Elementary',
-                            'Route 3C - Westside High',
-                            'Route 12B - Pinecrest Academy',
-                            'Route 5F - Lincoln Middle',
-                          ]
-                          .map(
-                            (r) => DropdownMenuItem(
-                              value: r,
-                              child: Text(
-                                r,
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                          )
-                          .toList(),
+                  items: const [
+                    'Route 7A - Oakridge Elementary',
+                    'Route 3C - Westside High',
+                    'Route 12B - Pinecrest Academy',
+                    'Route 5F - Lincoln Middle',
+                  ].map((r) => DropdownMenuItem(
+                    value: r,
+                    child: Text(r, style: const TextStyle(fontSize: 13)),
+                  )).toList(),
                   onChanged: (val) {
                     if (val != null) setModalState(() => selectedRoute = val);
                   },
                 ),
                 const SizedBox(height: 14),
+
+                // Bus Select
                 const Text(
                   'Assign Reserve Bus & Driver:',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -1178,24 +1287,23 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
+                    filled: true,
+                    fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
                   ),
-                  items:
-                      ['BUS-901 (Standby Reserve)', 'BUS-804 (Standby Reserve)']
-                          .map(
-                            (b) => DropdownMenuItem(
-                              value: b,
-                              child: Text(
-                                b,
-                                style: const TextStyle(fontSize: 13),
-                              ),
-                            ),
-                          )
-                          .toList(),
+                  items: const [
+                    'BUS-901 (Standby Reserve)',
+                    'BUS-804 (Standby Reserve)',
+                  ].map((b) => DropdownMenuItem(
+                    value: b,
+                    child: Text(b, style: const TextStyle(fontSize: 13)),
+                  )).toList(),
                   onChanged: (val) {
                     if (val != null) setModalState(() => selectedBus = val);
                   },
                 ),
                 const SizedBox(height: 20),
+
+                // Confirm Button
                 SizedBox(
                   width: double.infinity,
                   height: 48,
@@ -1210,24 +1318,27 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                         speedMph: 24,
                         fuelPercent: 95,
                       );
-
                       setState(() {
                         _fleetList.insert(0, newBus);
                       });
-
                       NotificationService.instance.add(
                         kind: NotificationKind.info,
                         title: 'Replacement Bus Dispatched',
                         message: '${newBus.busId} assigned to $selectedRoute.',
                       );
-
                       Navigator.of(ctx).pop();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(
-                            '✓ Dispatched ${newBus.busId} to $selectedRoute',
+                          content: Row(
+                            children: [
+                              const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(child: Text('✓ Dispatched ${newBus.busId} to $selectedRoute')),
+                            ],
                           ),
                           backgroundColor: AppColors.successGreen,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       );
                     },
@@ -1240,7 +1351,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                     ),
                     icon: const Icon(Icons.check_circle_rounded, size: 18),
                     label: const Text(
-                      'Confirm & Dispatch Immediately',
+                      'Confirm & Dispatch',
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -1253,8 +1364,13 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
     );
   }
 
+  // ============================================================
+  // DRIVER CHAT
+  // ============================================================
+
   void _openDriverChat(BusFleet bus) {
     final textController = TextEditingController();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1268,12 +1384,13 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
         ),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Drag Handle
             Center(
               child: Container(
                 width: 40,
@@ -1285,20 +1402,29 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
+            // Header
             Row(
               children: [
-                const Icon(
-                  Icons.chat_bubble_rounded,
-                  color: AppColors.safetyBlue,
-                  size: 22,
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.safetyBlue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.chat_rounded,
+                    color: AppColors.safetyBlue,
+                    size: 22,
+                  ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Dispatch Dispatcher ↔ ${bus.driverName}',
+                        'Dispatch ↔ ${bus.driverName}',
                         style: TextStyle(
                           fontSize: 15.5,
                           fontWeight: FontWeight.bold,
@@ -1318,51 +1444,49 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
               ],
             ),
             const SizedBox(height: 16),
+
+            // Quick Messages
             const Text(
-              'Quick Dispatch Canned Messages:',
+              'Quick Dispatch Messages:',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children:
-                  [
-                    'Hold at next stop',
-                    'Traffic detour ahead',
-                    'Confirm student manifest',
-                    'Return to depot',
-                  ].map((msg) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: ActionChip(
-                        label: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            msg,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.of(ctx).pop();
-                          NotificationService.instance.add(
-                            kind: NotificationKind.info,
-                            title: 'Dispatch Msg sent to ${bus.driverName}',
-                            message: '"$msg" (${bus.busId})',
-                          );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Sent: "$msg" to ${bus.driverName}',
-                              ),
-                              backgroundColor: AppColors.safetyBlue,
-                            ),
-                          );
-                        },
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                'Hold at next stop',
+                'Traffic detour ahead',
+                'Confirm student manifest',
+                'Return to depot',
+              ].map((msg) {
+                return ActionChip(
+                  label: Text(
+                    msg,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    NotificationService.instance.add(
+                      kind: NotificationKind.info,
+                      title: 'Dispatch Msg sent to ${bus.driverName}',
+                      message: '"$msg" (${bus.busId})',
+                    );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Sent: "$msg" to ${bus.driverName}'),
+                        backgroundColor: AppColors.safetyBlue,
+                        behavior: SnackBarBehavior.floating,
                       ),
                     );
-                  }).toList(),
+                  },
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                );
+              }).toList(),
             ),
             const SizedBox(height: 14),
+
+            // Custom Message
             Row(
               children: [
                 Expanded(
@@ -1377,27 +1501,15 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
                     ),
+                    onSubmitted: (_) => _sendCustomMessage(textController.text, bus, ctx),
                   ),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: () {
-                    final txt = textController.text.trim();
-                    if (txt.isEmpty) return;
-                    Navigator.of(ctx).pop();
-                    NotificationService.instance.add(
-                      kind: NotificationKind.info,
-                      title: 'Dispatch Msg sent to ${bus.driverName}',
-                      message: '"$txt" (${bus.busId})',
-                    );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Sent: "$txt" to ${bus.driverName}'),
-                        backgroundColor: AppColors.safetyBlue,
-                      ),
-                    );
-                  },
+                  onPressed: () => _sendCustomMessage(textController.text, bus, ctx),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.safetyBlue,
                     foregroundColor: Colors.white,
@@ -1411,6 +1523,24 @@ class _FleetManagementScreenState extends State<FleetManagementScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _sendCustomMessage(String text, BusFleet bus, BuildContext ctx) {
+    final txt = text.trim();
+    if (txt.isEmpty) return;
+    Navigator.of(ctx).pop();
+    NotificationService.instance.add(
+      kind: NotificationKind.info,
+      title: 'Dispatch Msg sent to ${bus.driverName}',
+      message: '"$txt" (${bus.busId})',
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Sent: "$txt" to ${bus.driverName}'),
+        backgroundColor: AppColors.safetyBlue,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
