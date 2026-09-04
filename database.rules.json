@@ -1,4 +1,3 @@
-
 {
   "rules": {
     ".read": false,
@@ -25,13 +24,16 @@
     },
 
     "buses": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
       "$busId": {
-        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor' || root.child('parentChildIndex').child(auth.uid).child($busId).exists())",
-        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId))"
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId) || root.child('parentChildIndex').child(auth.uid).child($busId).exists())",
+        ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId))",
+        ".validate": "newData.hasChildren(['lat', 'lng', 'speedKmph', 'status', 'lastUpdated', 'currentStopIndex', 'totalStops', 'currentStopLabel', 'etaMinutes', 'busNumber']) && newData.child('lat').isNumber() && newData.child('lat').val() >= -90 && newData.child('lat').val() <= 90 && newData.child('lng').isNumber() && newData.child('lng').val() >= -180 && newData.child('lng').val() <= 180 && newData.child('speedKmph').isNumber() && newData.child('speedKmph').val() >= 0 && newData.child('lastUpdated').isNumber() && newData.child('currentStopIndex').isNumber() && newData.child('totalStops').isNumber() && newData.child('totalStops').val() > 0 && newData.child('etaMinutes').isNumber() && newData.child('etaMinutes').val() >= 0"
       }
     },
 
     "studentRosters": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
       "$busId": {
         ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId) || (root.child('users').child(auth.uid).child('role').val() === 'Conductor' && root.child('users').child(auth.uid).child('busId').val() === $busId))",
         ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
@@ -58,17 +60,54 @@
       }
     },
 
+    "busesFleet": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
+      "$busId": {
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId) || root.child('parentChildIndex').child(auth.uid).child($busId).exists())",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
+        "driverUid": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId))",
+          ".validate": "newData.val() == null || newData.isString()"
+        },
+        "driverPhone": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId))",
+          ".validate": "newData.val() == null || newData.isString()"
+        },
+        "driverName": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId))",
+          ".validate": "newData.isString()"
+        }
+      }
+    },
+
+    "routes": {
+      "$routeId": {
+        ".read": "auth != null",
+        ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
+        "stops": {
+          "$stopId": {
+            ".validate": "newData.hasChildren(['order', 'time', 'name', 'studentsCount', 'isCompleted', 'isCurrent'])",
+            "order": { ".validate": "newData.isNumber()" },
+            "studentsCount": { ".validate": "newData.isNumber()" },
+            "isCompleted": { ".validate": "newData.isBoolean()" },
+            "isCurrent": { ".validate": "newData.isBoolean()" }
+          }
+        }
+      }
+    },
+
     "notifications": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid && newData.val() == null",
         "$notificationId": {
-          ".validate": "newData.hasChildren(['id', 'kind', 'title', 'message', 'timestamp', 'isRead'])",
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (auth.uid === $uid && (!data.exists() || newData.val() == null || (newData.child('id').val() === data.child('id').val() && newData.child('kind').val() === data.child('kind').val() && newData.child('title').val() === data.child('title').val() && newData.child('message').val() === data.child('message').val() && newData.child('timestamp').val() === data.child('timestamp').val() && newData.child('busId').val() === data.child('busId').val() && newData.child('studentId').val() === data.child('studentId').val() && newData.child('metadata').val() === data.child('metadata').val()))) || (!data.exists() && (root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && newData.child('busId').isString() && newData.child('studentId').isString() && newData.child('busId').val() === root.child('users').child(auth.uid).child('busId').val() && root.child('parentChildIndex').child($uid).child(newData.child('busId').val()).child(newData.child('studentId').val()).exists()) || (!data.exists() && (root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && newData.child('kind').val() === 'emergency' && root.child('users').child($uid).child('role').val() === 'Admin' && newData.child('busId').val() === root.child('users').child(auth.uid).child('busId').val()))",
+          ".validate": "newData.hasChildren(['id', 'kind', 'title', 'message', 'timestamp', 'isRead']) && newData.child('id').val() === $notificationId && newData.child('title').isString() && newData.child('title').val().length > 0 && newData.child('message').isString() && newData.child('message').val().length > 0",
           "kind": {
-            ".validate": "newData.val().matches(/^(delay|arrival|boarding|alert|info|departure|emergency)$/)"
+            ".validate": "newData.isString() && newData.val().matches(/^(delay|arrival|boarding|alert|info|departure|emergency)$/)"
           },
           "timestamp": {
-            ".validate": "newData.isNumber()"
+            ".validate": "newData.isNumber() && newData.val() > 0"
           },
           "isRead": {
             ".validate": "newData.isBoolean()"

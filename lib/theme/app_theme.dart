@@ -179,7 +179,6 @@ class AppTheme {
     final background = dark ? const Color(0xFF0B1220) : AppColors.surfaceGray;
     final surface = dark ? const Color(0xFF111B2B) : Colors.white;
     final surfaceLow = dark ? const Color(0xFF0F1928) : const Color(0xFFF1F5F9);
-    final surfaceHigh = dark ? const Color(0xFF1A2638) : const Color(0xFFE8EEF5);
     final border = dark ? const Color(0xFF26364D) : AppColors.outlineVariant;
     final text = dark ? const Color(0xFFF1F5F9) : AppColors.textMain;
     final muted = dark ? const Color(0xFF94A3B8) : AppColors.onSurfaceVariant;

@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.CALL_PHONE"/>
 
     <application
-        android:label="schoolbus_safe"
+        android:label="Smart School Bus"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

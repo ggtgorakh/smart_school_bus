@@ -287,13 +287,16 @@ class _NotificationsScreenState extends State<NotificationsScreen>
               padding: const EdgeInsets.only(right: 8),
               child: FilterChip(
                 selected: isSelected,
-                label: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(filter['icon'] ?? ''),
-                    const SizedBox(width: 4),
-                    Text(filter['label'] ?? ''),
-                  ],
+                label: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(filter['icon'] ?? ''),
+                      const SizedBox(width: 4),
+                      Text(filter['label'] ?? ''),
+                    ],
+                  ),
                 ),
                 onSelected: (_) {
                   setState(() {

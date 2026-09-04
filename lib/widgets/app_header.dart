@@ -2,8 +2,6 @@
 
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
-import '../models/app_notification.dart';
-import '../services/notification_service.dart';
 import '../screens/notifications_screen.dart';
 import 'notification_badge.dart';
 

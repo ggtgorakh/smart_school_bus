@@ -18,8 +18,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   String _selectedRole = 'Parent';
-  final _emailController = TextEditingController(text: 'parent@schoolsafe.org');
-  final _passwordController = TextEditingController(text: 'password123');
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _rememberMe = true;
@@ -37,13 +37,6 @@ class _LoginScreenState extends State<LoginScreen>
     {'label': 'Conductor', 'icon': Icons.how_to_reg_rounded, 'color': AppColors.successGreen},
     {'label': 'Admin', 'icon': Icons.admin_panel_settings_rounded, 'color': Colors.purple},
   ];
-
-  final Map<String, String> _demoCredentials = {
-    'Parent': 'parent@schoolsafe.org',
-    'Driver': 'driver@schoolsafe.org',
-    'Conductor': 'conductor@schoolsafe.org',
-    'Admin': 'admin@sbs.com',
-  };
 
   final Map<String, String> _roleDescriptions = {
     'Parent': 'Track your child\'s bus in real-time',
@@ -180,10 +173,11 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _selectRole(String role) {
+    // Only switches which role the login attempt is validated against —
+    // no demo email/password auto-fill. The real account's own
+    // email/password must be typed in.
     setState(() {
       _selectedRole = role;
-      _emailController.text = _demoCredentials[role] ?? '';
-      _passwordController.text = 'password123';
     });
   }
 

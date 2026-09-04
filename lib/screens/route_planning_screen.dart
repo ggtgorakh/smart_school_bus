@@ -1,8 +1,10 @@
 // lib/screens/route_planning_screen.dart
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/live_map_canvas.dart';
+import '../services/firebase_service.dart';
 
 // Data Model for stops
 class RouteStop {
@@ -43,6 +45,27 @@ class RouteStop {
       statusMessage: statusMessage ?? this.statusMessage,
     );
   }
+
+  Map<String, dynamic> toMap(int order) => {
+    'order': order,
+    'time': time,
+    'name': name,
+    'studentsCount': studentsCount,
+    'isCompleted': isCompleted,
+    'isCurrent': isCurrent,
+    if (eta != null) 'eta': eta,
+    if (statusMessage != null) 'statusMessage': statusMessage,
+  };
+
+  factory RouteStop.fromMap(Map<dynamic, dynamic> map) => RouteStop(
+    time: map['time']?.toString() ?? '',
+    name: map['name']?.toString() ?? 'Unnamed stop',
+    studentsCount: (map['studentsCount'] as num?)?.toInt() ?? 0,
+    isCompleted: map['isCompleted'] == true,
+    isCurrent: map['isCurrent'] == true,
+    eta: map['eta']?.toString(),
+    statusMessage: map['statusMessage']?.toString(),
+  );
 }
 
 class RoutePlanningScreen extends StatefulWidget {
@@ -58,6 +81,8 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   String _selectedView = 'timeline'; // 'timeline' or 'map'
+  static const _routeId = 'route_7a_morning';
+  StreamSubscription<List<Map<String, dynamic>>>? _routeSubscription;
 
   // Mock Data
   static List<RouteStop> _stops = [
@@ -114,18 +139,25 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
       parent: _animationController,
       curve: Curves.easeOut,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.04),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
     _animationController.forward();
+    _routeSubscription = FirebaseService.instance
+        .streamRouteStops(_routeId)
+        .listen((items) {
+          if (!mounted || items.isEmpty) return;
+          setState(() => _stops = items.map(RouteStop.fromMap).toList());
+        });
   }
 
   @override
   void dispose() {
+    _routeSubscription?.cancel();
     _animationController.dispose();
     super.dispose();
   }
@@ -145,10 +177,10 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
               children: [
                 // Header
                 _buildHeader(context),
-                
+
                 // View Selector
                 _buildViewSelector(),
-                
+
                 // Content
                 Expanded(
                   child: _selectedView == 'timeline'
@@ -177,7 +209,9 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.3),
           ),
         ),
       ),
@@ -337,7 +371,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
           // Progress Summary
           _buildProgressSummary(),
           const SizedBox(height: 16),
-          
+
           // Stop Timeline
           Container(
             padding: const EdgeInsets.all(16),
@@ -345,7 +379,9 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
               color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+                color: Theme.of(
+                  context,
+                ).colorScheme.outlineVariant.withValues(alpha: 0.3),
               ),
               boxShadow: [
                 BoxShadow(
@@ -369,9 +405,9 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
               }).toList(),
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Route Stats
           _buildRouteStats(),
         ],
@@ -417,10 +453,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
               ),
               Text(
                 '$completedCount / $totalCount',
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                ),
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
             ],
           ),
@@ -437,10 +470,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
           const SizedBox(height: 8),
           Text(
             '${(progress * 100).toStringAsFixed(0)}% Complete',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
           ),
         ],
       ),
@@ -461,17 +491,14 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
     final Color nodeColor = stop.isCompleted
         ? AppColors.successGreen
         : stop.isCurrent
-            ? AppColors.alertOrange
-            : AppColors.outlineVariant;
+        ? AppColors.alertOrange
+        : AppColors.outlineVariant;
 
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () => _showStopDetails(context, stop),
       child: Padding(
-        padding: EdgeInsets.only(
-          top: index == 0 ? 0 : 8,
-          bottom: 8,
-        ),
+        padding: EdgeInsets.only(top: index == 0 ? 0 : 8, bottom: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -485,7 +512,9 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontWeight: stop.isCurrent ? FontWeight.bold : FontWeight.w500,
+                    fontWeight: stop.isCurrent
+                        ? FontWeight.bold
+                        : FontWeight.w500,
                     color: stop.isCurrent
                         ? AppColors.alertOrange
                         : Theme.of(context).colorScheme.onSurface,
@@ -495,7 +524,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
               ),
             ),
             const SizedBox(width: 8),
-            
+
             // Timeline Node
             SizedBox(
               width: 24,
@@ -511,7 +540,9 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
                       boxShadow: stop.isCurrent
                           ? [
                               BoxShadow(
-                                color: AppColors.alertOrange.withValues(alpha: 0.4),
+                                color: AppColors.alertOrange.withValues(
+                                  alpha: 0.4,
+                                ),
                                 blurRadius: 8,
                               ),
                             ]
@@ -524,13 +555,15 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
                       height: 40,
                       color: stop.isCompleted
                           ? AppColors.successGreen
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                          : Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
                     ),
                 ],
               ),
             ),
             const SizedBox(width: 12),
-            
+
             // Stop Details
             Expanded(
               child: Padding(
@@ -584,7 +617,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
                 ),
               ),
             ),
-            
+
             // Status Icon
             if (stop.isCompleted)
               const Icon(
@@ -614,9 +647,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: color.withValues(alpha: 0.15),
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -651,7 +682,9 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -707,10 +740,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
             const SizedBox(height: 4),
             Text(
               value,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             Text(
               label,
@@ -767,9 +797,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
       icon: const Icon(Icons.add_rounded),
       label: const Text('Add Stop'),
       elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
   }
 
@@ -781,29 +809,24 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Row(
           children: [
             Icon(
               stop.isCompleted
                   ? Icons.check_circle_rounded
                   : stop.isCurrent
-                      ? Icons.navigation_rounded
-                      : Icons.location_on_rounded,
+                  ? Icons.navigation_rounded
+                  : Icons.location_on_rounded,
               color: stop.isCompleted
                   ? AppColors.successGreen
                   : stop.isCurrent
-                      ? AppColors.alertOrange
-                      : AppColors.outline,
+                  ? AppColors.alertOrange
+                  : AppColors.outline,
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                stop.name,
-                style: const TextStyle(fontSize: 16),
-              ),
+              child: Text(stop.name, style: const TextStyle(fontSize: 16)),
             ),
           ],
         ),
@@ -814,8 +837,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
             _buildDetailRow('Scheduled Time', stop.time),
             if (stop.studentsCount > 0)
               _buildDetailRow('Students', '${stop.studentsCount}'),
-            if (stop.eta != null)
-              _buildDetailRow('ETA', stop.eta!),
+            if (stop.eta != null) _buildDetailRow('ETA', stop.eta!),
             if (stop.statusMessage != null)
               _buildDetailRow('Status', stop.statusMessage!),
             _buildDetailRow(
@@ -823,8 +845,8 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
               stop.isCompleted
                   ? '✅ Completed'
                   : stop.isCurrent
-                      ? '🟠 In Progress'
-                      : '⏳ Scheduled',
+                  ? '🟠 In Progress'
+                  : '⏳ Scheduled',
             ),
           ],
         ),
@@ -835,16 +857,13 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
           ),
           if (!stop.isCompleted)
             FilledButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(ctx).pop();
                 setState(() {
                   final index = _stops.indexOf(stop);
                   _stops = _stops.map((s) {
                     if (s == stop) {
-                      return s.copyWith(
-                        isCompleted: true,
-                        isCurrent: false,
-                      );
+                      return s.copyWith(isCompleted: true, isCurrent: false);
                     }
                     return s;
                   }).toList();
@@ -858,6 +877,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
                     }).toList();
                   }
                 });
+                await _persistStops();
               },
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.safetyBlue,
@@ -890,10 +910,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -909,15 +926,10 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Row(
           children: [
-            const Icon(
-              Icons.add_location_rounded,
-              color: AppColors.safetyBlue,
-            ),
+            const Icon(Icons.add_location_rounded, color: AppColors.safetyBlue),
             const SizedBox(width: 8),
             const Text('Add New Stop'),
           ],
@@ -957,7 +969,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               if (nameController.text.isNotEmpty) {
                 setState(() {
                   _stops.add(
@@ -970,6 +982,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
                     ),
                   );
                 });
+                await _persistStops();
                 Navigator.of(ctx).pop();
               }
             },
@@ -990,5 +1003,16 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
 
   int _getTotalStudents() {
     return _stops.fold(0, (sum, stop) => sum + stop.studentsCount);
+  }
+
+  Future<void> _persistStops() async {
+    await Future.wait([
+      for (var index = 0; index < _stops.length; index++)
+        FirebaseService.instance.saveRouteStop(
+          _routeId,
+          'stop_${index + 1}',
+          _stops[index].toMap(index),
+        ),
+    ]);
   }
 }

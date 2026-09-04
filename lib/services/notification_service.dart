@@ -18,9 +18,19 @@ class NotificationService {
   // In-memory notification list
   final ValueNotifier<List<AppNotification>> notifications =
       ValueNotifier<List<AppNotification>>([]);
+  StreamSubscription<DatabaseEvent>? _notificationsSubscription;
+  StreamSubscription<User?>? _authSubscription;
 
   // Current user's UID
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
+
+  String _requireUid() {
+    final uid = _uid;
+    if (uid == null) {
+      throw StateError('Notification actions require an authenticated user.');
+    }
+    return uid;
+  }
 
   // Notification path in Firebase: /notifications/{uid}/{notificationId}
   String get _notificationsPath => 'notifications/$_uid';
@@ -56,25 +66,22 @@ class NotificationService {
   /// Initialize Firebase listeners for real-time notification sync
   void _initializeListeners() {
     // Listen to auth state changes
-    FirebaseAuth.instance.authStateChanges().listen((user) {
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      _notificationsSubscription?.cancel();
+      _notificationsSubscription = null;
       if (user != null) {
         _listenToNotifications();
       } else {
         notifications.value = [];
       }
     });
-
-    // If already signed in, start listening
-    if (FirebaseAuth.instance.currentUser != null) {
-      _listenToNotifications();
-    }
   }
 
   /// Listen to Firebase Realtime Database for notification changes
   void _listenToNotifications() {
     if (_uid == null) return;
 
-    _db
+    _notificationsSubscription = _db
         .child(_notificationsPath)
         .onValue
         .listen(
@@ -87,7 +94,7 @@ class NotificationService {
                 if (value is Map) {
                   try {
                     final notification = AppNotification.fromMap(
-                      Map<String, dynamic>.from(value as Map),
+                      Map<String, dynamic>.from(value),
                     );
                     updated.add(notification);
                   } catch (e) {
@@ -108,7 +115,15 @@ class NotificationService {
         );
   }
 
-  /// Add a new notification (persists to Firebase)
+  /// Add a new notification (persists to Firebase).
+  ///
+  /// By default this writes to the CURRENT user's own notification list
+  /// (`notifications/{currentUid}`). Pass [targetUid] to instead deliver the
+  /// notification to a *different* user — e.g. a driver notifying a parent
+  /// that their child boarded. When [targetUid] is used, the notification is
+  /// written directly (it will not appear in this instance's in-memory
+  /// `notifications` list, since that list only mirrors the signed-in
+  /// user's own node).
   Future<void> add({
     required NotificationKind kind,
     required String title,
@@ -116,26 +131,67 @@ class NotificationService {
     String? busId,
     String? studentId,
     Map<String, dynamic>? metadata,
+    String? targetUid,
+    String? eventKey,
   }) async {
-    if (_uid == null) return;
+    final senderUid = _uid;
+    if (senderUid == null) {
+      throw StateError(
+        'Cannot save a notification without an authenticated user.',
+      );
+    }
 
-    // Deduplicate: prevent identical notifications within 3 seconds
-    final recentDuplicate = notifications.value.any(
-      (n) =>
-          n.title == title &&
-          n.message == message &&
-          DateTime.now().difference(n.timestamp) < const Duration(seconds: 3),
-    );
+    final normalizedTargetUid = targetUid?.trim();
+    if (targetUid != null &&
+        (normalizedTargetUid == null || normalizedTargetUid.isEmpty)) {
+      throw ArgumentError.value(targetUid, 'targetUid', 'must not be empty');
+    }
 
-    if (recentDuplicate) return;
+    final recipientUid = normalizedTargetUid ?? senderUid;
+    final isSelfNotification = recipientUid == senderUid;
+    final notificationMetadata = <String, dynamic>{
+      ...?metadata,
+      ...?(eventKey == null ? null : {'eventKey': eventKey}),
+    };
+
+    // Deduplicate: prevent identical notifications within five minutes
+    // (only meaningful for self-notifications, since that's the only case
+    // where we have the recipient's existing list in memory).
+    if (isSelfNotification) {
+      final recentDuplicate = notifications.value.any(
+        (n) =>
+            ((eventKey != null &&
+                    n.metadata?['eventKey']?.toString() == eventKey) ||
+                (eventKey == null &&
+                    n.title == title &&
+                    n.message == message)) &&
+            DateTime.now().difference(n.timestamp) < const Duration(minutes: 5),
+      );
+      if (recentDuplicate) return;
+    }
 
     // Get current user's role for context
-    final roleSnapshot = await _db.child('users/$_uid/role').get();
-    final role = roleSnapshot.value?.toString() ?? 'Parent';
+    late final String role;
+    try {
+      final roleSnapshot = await _db.child('users/$senderUid/role').get();
+      role = roleSnapshot.value?.toString() ?? 'Parent';
+    } on FirebaseException catch (error, stackTrace) {
+      debugPrint('Unable to determine notification sender role: $error');
+      Error.throwWithStackTrace(error, stackTrace);
+    }
+
+    if (!isSelfNotification &&
+        role != 'Admin' &&
+        role != 'Driver' &&
+        role != 'Conductor') {
+      throw StateError(
+        'This account is not authorized to notify another user.',
+      );
+    }
 
     // Enhance notification with role-based context
     final notification = AppNotification(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: _db.child('notifications/$recipientUid').push().key!,
       kind: kind,
       title: title,
       message: message,
@@ -143,25 +199,24 @@ class NotificationService {
       isRead: false,
       busId: busId,
       studentId: studentId,
-      metadata: {...?metadata, 'role': role, 'userId': _uid},
+      metadata: {...notificationMetadata, 'role': role, 'userId': senderUid},
     );
 
     // Save to Firebase Realtime Database
     try {
       await _db
-          .child(_notificationsPath)
+          .child('notifications/$recipientUid')
           .child(notification.id)
           .set(notification.toMap());
-    } catch (e) {
-      debugPrint('Error saving notification: $e');
-      // Fallback: add to local list only
-      notifications.value = [notification, ...notifications.value];
+    } on FirebaseException catch (error, stackTrace) {
+      debugPrint('Error saving notification for $recipientUid: $error');
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
   /// Mark a single notification as read (persists to Firebase)
   Future<void> markAsRead(String id) async {
-    if (_uid == null) return;
+    _requireUid();
 
     // Find the notification locally so we can write its full record —
     // writing just the `isRead` leaf assumes the complete record already
@@ -192,14 +247,15 @@ class NotificationService {
           .child(_notificationsPath)
           .child(id)
           .set(target.copyWith(isRead: true).toMap());
-    } catch (e) {
-      debugPrint('Error marking notification as read: $e');
+    } on FirebaseException catch (error, stackTrace) {
+      debugPrint('Error marking notification as read: $error');
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
   /// Mark all notifications as read (persists to Firebase)
   Future<void> markAllAsRead() async {
-    if (_uid == null) return;
+    _requireUid();
 
     // Update local state
     notifications.value = notifications.value.map((n) {
@@ -216,14 +272,15 @@ class NotificationService {
         updates[n.id] = n.copyWith(isRead: true).toMap();
       }
       await _db.child(_notificationsPath).update(updates);
-    } catch (e) {
-      debugPrint('Error marking all notifications as read: $e');
+    } on FirebaseException catch (error, stackTrace) {
+      debugPrint('Error marking all notifications as read: $error');
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
   /// Delete a notification (persists to Firebase)
   Future<void> deleteNotification(String id) async {
-    if (_uid == null) return;
+    _requireUid();
 
     // Remove from local state
     notifications.value = notifications.value.where((n) => n.id != id).toList();
@@ -231,28 +288,36 @@ class NotificationService {
     // Remove from Firebase
     try {
       await _db.child(_notificationsPath).child(id).remove();
-    } catch (e) {
-      debugPrint('Error deleting notification: $e');
+    } on FirebaseException catch (error, stackTrace) {
+      debugPrint('Error deleting notification: $error');
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
   /// Clear all notifications (persists to Firebase)
   Future<void> clearAll() async {
-    if (_uid == null) return;
+    _requireUid();
 
     notifications.value = [];
 
     // Remove all from Firebase
     try {
       await _db.child(_notificationsPath).remove();
-    } catch (e) {
-      debugPrint('Error clearing notifications: $e');
+    } on FirebaseException catch (error, stackTrace) {
+      debugPrint('Error clearing notifications: $error');
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
   /// Clear sample data (for testing)
   void clearSampleData() {
     notifications.value = [];
+  }
+
+  Future<void> dispose() async {
+    await _notificationsSubscription?.cancel();
+    await _authSubscription?.cancel();
+    notifications.dispose();
   }
 
   /// Generate notification for bus status change
@@ -264,26 +329,29 @@ class NotificationService {
     required String stopLabel,
     required int etaMinutes,
   }) async {
+    final normalizedOldStatus = _normalizeStatus(oldStatus);
+    final normalizedNewStatus = _normalizeStatus(newStatus);
+    if (normalizedOldStatus == normalizedNewStatus) return;
+
     String title;
     String message;
     NotificationKind kind;
 
-    if (newStatus == 'delayed') {
+    if (normalizedNewStatus == 'delayed') {
       kind = NotificationKind.delay;
       title = '$busNumber is running late';
       message = 'Currently delayed. ETA: ${etaMinutes}m at $stopLabel';
-    } else if (newStatus == 'arrived') {
+    } else if (normalizedNewStatus == 'arrived') {
       kind = NotificationKind.arrival;
       title = '$busNumber has arrived';
       message = 'Arrived at $stopLabel';
-    } else if (newStatus == 'on_route' && oldStatus != 'on_route') {
-      kind = NotificationKind.info;
-      title = '$busNumber is now on route';
-      message = 'Departed from previous stop. Next stop: $stopLabel';
+    } else if (normalizedNewStatus == 'on_route' &&
+        normalizedOldStatus != 'on_route') {
+      kind = NotificationKind.departure;
+      title = '$busNumber has departed';
+      message = 'Departed from the previous stop. Next stop: $stopLabel';
     } else {
-      kind = NotificationKind.info;
-      title = '$busNumber status updated';
-      message = 'Current status: $newStatus at $stopLabel';
+      return;
     }
 
     await add(
@@ -291,9 +359,11 @@ class NotificationService {
       title: title,
       message: message,
       busId: busId,
+      eventKey:
+          'bus-status:$busId:$normalizedOldStatus:$normalizedNewStatus:$stopLabel',
       metadata: {
-        'oldStatus': oldStatus,
-        'newStatus': newStatus,
+        'oldStatus': normalizedOldStatus,
+        'newStatus': normalizedNewStatus,
         'stopLabel': stopLabel,
         'etaMinutes': etaMinutes,
         'busNumber': busNumber,
@@ -301,7 +371,45 @@ class NotificationService {
     );
   }
 
-  /// Generate notification for student boarding event
+  String _normalizeStatus(String status) {
+    switch (status) {
+      case 'onRoute':
+      case 'on_route':
+        return 'on_route';
+      default:
+        return status;
+    }
+  }
+
+  /// Notify once when a bus stops reporting telemetry, or when it resumes.
+  Future<void> notifyTrackerStale({
+    required String busId,
+    required String busNumber,
+    required bool isStale,
+    required DateTime lastUpdated,
+  }) {
+    final kind = isStale ? NotificationKind.alert : NotificationKind.info;
+    final title = isStale
+        ? '$busNumber tracking signal is stale'
+        : '$busNumber tracking signal restored';
+    final message = isStale
+        ? 'No location update received since ${lastUpdated.toLocal()}'
+        : 'Live location updates have resumed.';
+    return add(
+      kind: kind,
+      title: title,
+      message: message,
+      busId: busId,
+      eventKey: 'tracker-stale:$busId:${isStale ? 'stale' : 'restored'}',
+      metadata: {
+        'isStale': isStale,
+        'lastUpdated': lastUpdated.millisecondsSinceEpoch,
+      },
+    );
+  }
+
+  /// Generate notification for student boarding event, delivered to the
+  /// linked parent's own notification list (not the calling driver's).
   Future<void> notifyStudentBoarding({
     required String studentName,
     required String busId,
@@ -309,7 +417,10 @@ class NotificationService {
     required String stopName,
     required bool isBoarding,
     required String? parentUid,
+    String? studentId,
   }) async {
+    if (parentUid == null || parentUid.trim().isEmpty) return;
+
     final kind = isBoarding ? NotificationKind.boarding : NotificationKind.info;
     final title = isBoarding
         ? '$studentName boarded the bus'
@@ -323,7 +434,8 @@ class NotificationService {
       title: title,
       message: message,
       busId: busId,
-      studentId: parentUid,
+      studentId: studentId,
+      targetUid: parentUid,
       metadata: {
         'studentName': studentName,
         'stopName': stopName,
@@ -333,29 +445,43 @@ class NotificationService {
     );
   }
 
-  /// Generate notification for emergency alert
+  /// Generate an emergency alert and deliver it to each UID in
+  /// [recipientUids] (in addition to the caller). Looking recipients up by
+  /// role here isn't possible client-side — reading the full `/users` list
+  /// is Admin-only under the database rules — so the caller (which already
+  /// knows the relevant Admins/Drivers for this bus, e.g. from the fleet
+  /// roster it has loaded) must supply the UIDs to notify.
   Future<void> notifyEmergency({
     required String busId,
     required String busNumber,
     required String alertType,
     required String description,
     List<String>? recipientRoles,
+    List<String> recipientUids = const [],
   }) async {
     final title = '🚨 Emergency Alert - $busNumber';
     final message = '$alertType: $description';
+    final metadata = {
+      'alertType': alertType,
+      'description': description,
+      'severity': 'high',
+      'recipientRoles': recipientRoles ?? ['Admin', 'Driver'],
+    };
 
-    await add(
-      kind: NotificationKind.emergency,
-      title: title,
-      message: message,
-      busId: busId,
-      metadata: {
-        'alertType': alertType,
-        'description': description,
-        'severity': 'high',
-        'recipientRoles': recipientRoles ?? ['Admin', 'Driver'],
-      },
-    );
+    // Always notify the caller themselves, plus every explicit recipient.
+    final targets = <String>{...recipientUids};
+    if (_uid != null) targets.add(_uid!);
+
+    for (final uid in targets) {
+      await add(
+        kind: NotificationKind.emergency,
+        title: title,
+        message: message,
+        busId: busId,
+        metadata: metadata,
+        targetUid: uid,
+      );
+    }
   }
 
   /// Get unread count as a stream for real-time updates - FIXED

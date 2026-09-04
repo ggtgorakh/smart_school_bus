@@ -1,9 +1,12 @@
 // lib/services/firebase_service.dart
 
 import 'dart:async';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import '../models/bus_fleet.dart';
 import '../models/bus_location.dart';
 import '../models/student.dart';
+import 'offline_write_queue.dart';
 
 /// Central wrapper around Firebase Realtime Database for live telemetry
 /// and real-time student attendance manifests.
@@ -12,145 +15,135 @@ class FirebaseService {
   static final FirebaseService instance = FirebaseService._();
 
   final DatabaseReference _root = FirebaseDatabase.instance.ref();
+  final OfflineWriteQueue _writeQueue = OfflineWriteQueue.instance;
 
-  /// Default student roster used to seed RTDB if empty
-  static final List<Student> defaultStudentRoster = [
-    Student(
-      id: 'S1',
-      name: 'Liam Johnson',
-      grade: 'Grade 3',
-      seat: 'Seat 4A',
-      photoUrl:
-          'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150',
-      status: StudentStatus.pending,
-      stopName: 'Oak St & Maple Ave',
-    ),
-    Student(
-      id: 'S2',
-      name: 'Maya Patel',
-      grade: 'Grade 4',
-      seat: 'Seat 2B',
-      photoUrl:
-          'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
-      status: StudentStatus.pending,
-      stopName: 'Oak St & Maple Ave',
-    ),
-    Student(
-      id: 'S3',
-      name: 'Ethan Williams',
-      grade: 'Grade 5',
-      seat: 'Seat 8C',
-      photoUrl:
-          'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150',
-      status: StudentStatus.pending,
-      stopName: 'Oak St & Maple Ave',
-    ),
-    Student(
-      id: 'S4',
-      name: 'Sophia Garcia',
-      grade: 'Grade 2',
-      seat: 'Seat 1A',
-      photoUrl:
-          'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
-      status: StudentStatus.pending,
-      stopName: 'Oak St & Maple Ave',
-    ),
-    Student(
-      id: 'S5',
-      name: 'Jackson Davis',
-      grade: 'Grade 3',
-      seat: 'Seat 5D',
-      photoUrl:
-          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      status: StudentStatus.pending,
-      stopName: 'Oak St & Maple Ave',
-    ),
-  ];
+  bool _shouldQueueWrite(Object error) {
+    if (error is! FirebaseException) return true;
+    return error.code == 'network-error' ||
+        error.code == 'disconnected' ||
+        error.code == 'unavailable' ||
+        error.code == 'timeout';
+  }
+
+  /// Streams the administrator's route plan from Realtime Database.
+  Stream<List<Map<String, dynamic>>> streamRouteStops(String routeId) {
+    return _root.child('routes/$routeId/stops').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return <Map<String, dynamic>>[];
+      final stops = <Map<String, dynamic>>[];
+      raw.forEach((key, value) {
+        if (value is Map) {
+          stops.add({
+            'id': key.toString(),
+            ...Map<String, dynamic>.from(value),
+          });
+        }
+      });
+      stops.sort(
+        (a, b) => (a['order'] as num? ?? 0).compareTo(b['order'] as num? ?? 0),
+      );
+      return stops;
+    });
+  }
+
+  Future<void> saveRouteStop(
+    String routeId,
+    String stopId,
+    Map<String, dynamic> stop,
+  ) async {
+    final path = 'routes/$routeId/stops/$stopId';
+    try {
+      await _root.child(path).set(stop);
+    } catch (error) {
+      if (_shouldQueueWrite(error)) {
+        await _writeQueue.enqueue(
+          path: path,
+          operation: OfflineWriteOperation.set,
+          value: stop,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> removeRouteStop(String routeId, String stopId) async {
+    final path = 'routes/$routeId/stops/$stopId';
+    try {
+      await _root.child(path).remove();
+    } catch (error) {
+      if (_shouldQueueWrite(error)) {
+        await _writeQueue.enqueue(
+          path: path,
+          operation: OfflineWriteOperation.remove,
+        );
+      }
+      rethrow;
+    }
+  }
 
   /// Streams live telemetry for [busId] from /buses/{busId}.
   Stream<BusLocation?> streamBusLocation(String busId) {
-    return _root
-        .child('buses/$busId')
-        .onValue
-        .map<BusLocation?>((event) {
-          final rawData = event.snapshot.value;
-          if (rawData == null) {
-            return null;
-          }
-          if (rawData is Map) {
-            return BusLocation.fromMap(rawData);
-          }
-          return null;
-        })
-        .asBroadcastStream()
-        .handleError((error) {
-          // Log error for debugging
-          print('FirebaseService: Error streaming bus location: $error');
-          return null;
-        });
+    return _root.child('buses/$busId').onValue.map<BusLocation?>((event) {
+      final rawData = event.snapshot.value;
+      if (rawData == null) {
+        return null;
+      }
+      if (rawData is Map) {
+        return BusLocation.fromMap(rawData);
+      }
+      return null;
+    }).asBroadcastStream();
   }
 
   /// Streams real-time student attendance for a given bus route.
   Stream<List<Student>> streamStudents(String busId) {
-    return _root
-        .child('studentRosters/$busId')
-        .onValue
-        .map<List<Student>>((event) {
-          final raw = event.snapshot.value;
-          if (raw == null) {
-            seedStudents(busId, defaultStudentRoster);
-            return defaultStudentRoster;
+    return _root.child('studentRosters/$busId').onValue.map<List<Student>>((
+      event,
+    ) {
+      final raw = event.snapshot.value;
+      if (raw == null) {
+        // No roster imported yet for this bus — return an honest empty
+        // list instead of silently seeding fake demo students.
+        return <Student>[];
+      }
+      if (raw is Map) {
+        final List<Student> list = [];
+        raw.forEach((key, val) {
+          if (val is Map) {
+            list.add(Student.fromMap(val, id: key.toString()));
           }
-          if (raw is Map) {
-            final List<Student> list = [];
-            raw.forEach((key, val) {
-              if (val is Map) {
-                list.add(Student.fromMap(val, id: key.toString()));
-              }
-            });
-            list.sort((a, b) => a.id.compareTo(b.id));
-            return list;
-          } else if (raw is List) {
-            final List<Student> list = [];
-            for (int i = 0; i < raw.length; i++) {
-              final item = raw[i];
-              if (item is Map) {
-                list.add(
-                  Student.fromMap(item, id: item['id']?.toString() ?? 'S$i'),
-                );
-              }
-            }
-            return list;
-          }
-          return defaultStudentRoster;
-        })
-        .handleError((error) {
-          print('FirebaseService: Error streaming students: $error');
-          return defaultStudentRoster;
         });
+        list.sort((a, b) => a.id.compareTo(b.id));
+        return list;
+      } else if (raw is List) {
+        final List<Student> list = [];
+        for (int i = 0; i < raw.length; i++) {
+          final item = raw[i];
+          if (item is Map) {
+            list.add(
+              Student.fromMap(item, id: item['id']?.toString() ?? 'S$i'),
+            );
+          }
+        }
+        return list;
+      }
+      return <Student>[];
+    });
   }
 
   /// Streams a single child's status for the Parent Boarding Status screen.
-  Stream<Student> streamStudent(String busId, String studentId) {
+  /// Emits null when the student doesn't exist (yet) instead of falling
+  /// back to fake demo data.
+  Stream<Student?> streamStudent(String busId, String studentId) {
     return _root
         .child('studentRosters/$busId/$studentId')
         .onValue
-        .map<Student>((event) {
+        .map<Student?>((event) {
           final val = event.snapshot.value;
           if (val != null && val is Map) {
             return Student.fromMap(val, id: studentId);
           }
-          return defaultStudentRoster.firstWhere(
-            (s) => s.id == studentId,
-            orElse: () => defaultStudentRoster[1],
-          );
-        })
-        .handleError((error) {
-          print('FirebaseService: Error streaming student: $error');
-          return defaultStudentRoster.firstWhere(
-            (s) => s.id == studentId,
-            orElse: () => defaultStudentRoster[1],
-          );
+          return null;
         });
   }
 
@@ -171,18 +164,21 @@ class FirebaseService {
       childSubs[studentId] = _root
           .child('studentRosters/$busId/$studentId')
           .onValue
-          .listen((event) {
-            final val = event.snapshot.value;
-            if (val is Map) {
-              latest[studentId] = Student.fromMap(val, id: studentId);
-            } else {
+          .listen(
+            (event) {
+              final val = event.snapshot.value;
+              if (val is Map) {
+                latest[studentId] = Student.fromMap(val, id: studentId);
+              } else {
+                latest.remove(studentId);
+              }
+              emit();
+            },
+            onError: (_) {
               latest.remove(studentId);
-            }
-            emit();
-          }, onError: (_) {
-            latest.remove(studentId);
-            emit();
-          });
+              emit();
+            },
+          );
     }
 
     void handleIndexUpdate(dynamic raw) {
@@ -200,8 +196,9 @@ class FirebaseService {
         });
       }
 
-      final removedIds =
-          childSubs.keys.where((id) => !currentIds.contains(id)).toList();
+      final removedIds = childSubs.keys
+          .where((id) => !currentIds.contains(id))
+          .toList();
       for (final id in removedIds) {
         childSubs.remove(id)?.cancel();
         latest.remove(id);
@@ -246,12 +243,20 @@ class FirebaseService {
     if (stopName != null) {
       updates['stopName'] = stopName;
     }
-    await _root
-        .child('studentRosters/$busId/$studentId')
-        .update(updates)
-        .catchError((error) {
+    final path = 'studentRosters/$busId/$studentId';
+    try {
+      await _root.child(path).update(updates);
+    } catch (error) {
+      if (_shouldQueueWrite(error)) {
+        await _writeQueue.enqueue(
+          path: path,
+          operation: OfflineWriteOperation.update,
+          value: updates,
+        );
+      }
       print('FirebaseService: Error updating student status: $error');
-    });
+      rethrow;
+    }
   }
 
   /// Marks all students on the bus with the given status.
@@ -264,15 +269,30 @@ class FirebaseService {
       final Map<String, Object?> updates = {};
       data.forEach((key, _) {
         updates['$key/status'] = status.name;
-        updates['$key/boardedAt'] = status == StudentStatus.boarded ? now : null;
+        updates['$key/boardedAt'] = status == StudentStatus.boarded
+            ? now
+            : null;
       });
-      await _root.child('studentRosters/$busId').update(updates);
+      final path = 'studentRosters/$busId';
+      try {
+        await _root.child(path).update(updates);
+      } catch (error) {
+        if (_shouldQueueWrite(error)) {
+          await _writeQueue.enqueue(
+            path: path,
+            operation: OfflineWriteOperation.update,
+            value: updates,
+          );
+        }
+        print('FirebaseService: Error marking all student statuses: $error');
+        rethrow;
+      }
     } else {
-      final updated = defaultStudentRoster.map((s) => s.copyWith(
-            status: status,
-            boardedAt: status == StudentStatus.boarded ? DateTime.now() : null,
-          )).toList();
-      await seedStudents(busId, updated);
+      // No roster exists for this bus yet — nothing to mark, so no-op
+      // instead of seeding fake demo students.
+      print(
+        'FirebaseService: markAllStudentsStatus skipped — no roster for $busId',
+      );
     }
   }
 
@@ -440,5 +460,139 @@ class FirebaseService {
       print('FirebaseService: Error getting all students: $error');
       return [];
     }
+  }
+
+  // ============================================================
+  // FLEET MANAGEMENT (10 physical buses, /busesFleet/{busId})
+  //
+  // Kept separate from /buses/{busId}, which is owned by the ESP32
+  // hardware telemetry pipeline and must never be written to from here.
+  // ============================================================
+
+  static const int totalFleetSize = 10;
+
+  String _padBusId(int n) => 'bus_${n.toString().padLeft(2, '0')}';
+
+  /// Ensures exactly bus_01..bus_10 exist under /busesFleet, creating any
+  /// missing ones with status idle and placeholder driver/route info.
+  /// Safe to call repeatedly — it never overwrites a bus that already
+  /// exists, so it will not clobber a real, already-imported roster's
+  /// on-route status.
+  Future<void> ensureTenBusesExist() async {
+    try {
+      final snapshot = await _root.child('busesFleet').get();
+      final existing = snapshot.value;
+      final existingIds = <String>{};
+      if (existing is Map) {
+        existingIds.addAll(existing.keys.map((k) => k.toString()));
+      }
+
+      final Map<String, dynamic> missing = {};
+      for (int i = 1; i <= totalFleetSize; i++) {
+        final id = _padBusId(i);
+        if (!existingIds.contains(id)) {
+          missing[id] = BusFleet(
+            busId: id,
+            driverName: 'Unassigned',
+            routeName: 'No route assigned',
+            estArrival: '--',
+            status: FleetStatus.idle,
+            speedMph: 0,
+            fuelPercent: 100,
+          ).toMap();
+        }
+      }
+
+      if (missing.isNotEmpty) {
+        await _root.child('busesFleet').update(missing);
+      }
+    } catch (error) {
+      print('FirebaseService: Error ensuring fleet exists: $error');
+    }
+  }
+
+  /// Streams all 10 buses from /busesFleet, sorted by busId (bus_01 first).
+  Stream<List<BusFleet>> streamFleet() {
+    return _root
+        .child('busesFleet')
+        .onValue
+        .map<List<BusFleet>>((event) {
+          final raw = event.snapshot.value;
+          if (raw is! Map) return <BusFleet>[];
+          final List<BusFleet> list = [];
+          raw.forEach((key, val) {
+            if (val is Map) {
+              list.add(BusFleet.fromMap(val, busId: key.toString()));
+            }
+          });
+          list.sort((a, b) => a.busId.compareTo(b.busId));
+          return list;
+        })
+        .handleError((error) {
+          print('FirebaseService: Error streaming fleet: $error');
+          return <BusFleet>[];
+        });
+  }
+
+  /// Updates just the given fields of one bus under /busesFleet/{busId}.
+  /// Uses update() (not set()) so unrelated fields (e.g. fuelPercent) are
+  /// never clobbered by a status-only change.
+  Future<void> updateFleetStatus(
+    String busId,
+    FleetStatus status, {
+    String? driverName,
+    String? routeName,
+    String? driverUid,
+    String? driverPhone,
+  }) async {
+    try {
+      final Map<String, dynamic> updates = {'status': status.name};
+      if (driverName != null && driverName.trim().isNotEmpty) {
+        updates['driverName'] = driverName.trim();
+      }
+      if (routeName != null && routeName.trim().isNotEmpty) {
+        updates['routeName'] = routeName.trim();
+      }
+      if (driverUid != null) {
+        updates['driverUid'] = driverUid.trim().isEmpty
+            ? null
+            : driverUid.trim();
+      }
+      if (driverPhone != null) {
+        updates['driverPhone'] = driverPhone.trim().isEmpty
+            ? null
+            : driverPhone.trim();
+      }
+      await _root.child('busesFleet/$busId').update(updates);
+    } catch (error) {
+      print('FirebaseService: Error updating fleet status: $error');
+      rethrow;
+    }
+  }
+
+  Future<BusFleet?> fetchFleetBusOnce(String busId) async {
+    try {
+      final snapshot = await _root.child('busesFleet/$busId').get();
+      final value = snapshot.value;
+      if (value is Map) {
+        return BusFleet.fromMap(value, busId: busId);
+      }
+    } catch (error) {
+      print('FirebaseService: Error fetching fleet bus: $error');
+    }
+    return null;
+  }
+
+  Future<void> syncDriverContactToFleet({
+    required String uid,
+    required String busId,
+    required String name,
+    required String phone,
+  }) async {
+    await _root.child('busesFleet/$busId').update({
+      'driverUid': uid,
+      'driverName': name.trim(),
+      'driverPhone': phone.trim().isEmpty ? null : phone.trim(),
+    });
   }
 }

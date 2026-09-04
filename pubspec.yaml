@@ -1,4 +1,4 @@
-name: smart_school_bus
+name: schoolbus_safe
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -42,6 +42,11 @@ dependencies:
   shared_preferences: ^2.5.0
   firebase_auth: ^6.6.1
   url_launcher: ^6.3.1
+  # Bulk Admin roster import (Fleet Management -> Import Roster): parses
+  # the school office's .xlsx sheet, and lets the Admin pick that file
+  # from disk on any platform (web/desktop/mobile).
+  excel: ^4.0.3
+  file_picker: ^12.2.0
 
 dev_dependencies:
   flutter_test:

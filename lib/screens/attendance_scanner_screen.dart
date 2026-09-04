@@ -90,6 +90,7 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
         stopName: student.stopName,
         isBoarding: newStatus == StudentStatus.boarded,
         parentUid: student.parentUid,
+        studentId: student.id,
       );
     }
 
@@ -239,7 +240,7 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
           child: StreamBuilder<List<Student>>(
             stream: _studentsStream,
             builder: (context, snapshot) {
-              final students = snapshot.data ?? FirebaseService.defaultStudentRoster;
+              final students = snapshot.data ?? const <Student>[];
               final boardedCount =
                   students.where((s) => s.status == StudentStatus.boarded).length;
               final pendingCount =

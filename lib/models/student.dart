@@ -24,6 +24,8 @@ class Student {
   final String stopName;
   final DateTime? boardedAt;
   final String? parentUid;
+  final String? parentName;
+  final String? parentPhone;
   final String? busId;
 
   Student({
@@ -36,6 +38,8 @@ class Student {
     required this.stopName,
     this.boardedAt,
     this.parentUid,
+    this.parentName,
+    this.parentPhone,
     this.busId,
   });
 
@@ -75,8 +79,15 @@ class Student {
     }
   }
 
-  /// Check if student is linked to a parent
+  /// Check if student is linked to a parent (has a real login account)
   bool get isLinkedToParent => parentUid != null && parentUid!.isNotEmpty;
+
+  /// Best-available parent display name — falls back gracefully when only
+  /// one of the two (uid-linked account vs. imported contact info) exists.
+  String get parentDisplayName =>
+      (parentName != null && parentName!.trim().isNotEmpty)
+          ? parentName!.trim()
+          : 'No parent info';
 
   Map<String, dynamic> toMap() {
     return {
@@ -89,6 +100,8 @@ class Student {
       'stopName': stopName,
       'boardedAt': boardedAt?.millisecondsSinceEpoch,
       'parentUid': parentUid,
+      'parentName': parentName,
+      'parentPhone': parentPhone,
     };
   }
 
@@ -113,6 +126,8 @@ class Student {
       stopName: map['stopName']?.toString() ?? 'Main Stop',
       boardedAt: parseBoardedAt(map['boardedAt']),
       parentUid: map['parentUid']?.toString(),
+      parentName: map['parentName']?.toString(),
+      parentPhone: map['parentPhone']?.toString(),
       busId: busId,
     );
   }
@@ -127,6 +142,8 @@ class Student {
     String? stopName,
     DateTime? boardedAt,
     String? parentUid,
+    String? parentName,
+    String? parentPhone,
     String? busId,
   }) {
     return Student(
@@ -139,7 +156,18 @@ class Student {
       stopName: stopName ?? this.stopName,
       boardedAt: boardedAt ?? this.boardedAt,
       parentUid: parentUid ?? this.parentUid,
+      parentName: parentName ?? this.parentName,
+      parentPhone: parentPhone ?? this.parentPhone,
       busId: busId ?? this.busId,
     );
   }
 }
+
+
+
+
+
+
+
+
+

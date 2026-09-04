@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/student.dart';
 import '../services/firebase_service.dart';
-import '../services/notification_service.dart';
 
 class BoardingStatusScreen extends StatefulWidget {
   const BoardingStatusScreen({super.key});

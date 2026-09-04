@@ -4,14 +4,12 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../services/session_service.dart';
-import '../widgets/notification_badge.dart';
 import 'live_tracking_screen.dart';
 import 'boarding_status_screen.dart';
 import 'fleet_management_screen.dart';
-import 'route_planning_screen.dart';
 import 'profile_screen.dart';
 import 'attendance_scanner_screen.dart';
-import 'notifications_screen.dart';
+import 'route_planning_screen.dart';
 
 class AuthorizedTab {
   final String title;
@@ -55,7 +53,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
   void initState() {
     super.initState();
     _restoreTabIndex();
-    
+
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -98,10 +96,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         ),
         AuthorizedTab(
           title: 'Driver Profile',
-          screen: ProfileScreen(
-            activeRole: role,
-            onSignOut: widget.onSignOut,
-          ),
+          screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
@@ -140,10 +135,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         ),
         AuthorizedTab(
           title: 'Conductor Profile',
-          screen: ProfileScreen(
-            activeRole: role,
-            onSignOut: widget.onSignOut,
-          ),
+          screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
@@ -170,17 +162,6 @@ class _MainNavigationShellState extends State<MainNavigationShell>
           activeIcon: Icons.directions_bus,
         ),
         AuthorizedTab(
-          title: 'Route Planning & Dispatch',
-          screen: const RoutePlanningScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.alt_route_outlined),
-            activeIcon: Icon(Icons.alt_route),
-            label: 'Routes',
-          ),
-          icon: Icons.alt_route_outlined,
-          activeIcon: Icons.alt_route,
-        ),
-        AuthorizedTab(
           title: 'Master GPS Bus Tracking',
           screen: LiveTrackingScreen(busId: widget.busId),
           navItem: const BottomNavigationBarItem(
@@ -192,11 +173,19 @@ class _MainNavigationShellState extends State<MainNavigationShell>
           activeIcon: Icons.map,
         ),
         AuthorizedTab(
-          title: 'Admin System Profile',
-          screen: ProfileScreen(
-            activeRole: role,
-            onSignOut: widget.onSignOut,
+          title: 'Route Planning',
+          screen: const RoutePlanningScreen(),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.alt_route_outlined),
+            activeIcon: Icon(Icons.alt_route),
+            label: 'Routes',
           ),
+          icon: Icons.alt_route_outlined,
+          activeIcon: Icons.alt_route,
+        ),
+        AuthorizedTab(
+          title: 'Admin System Profile',
+          screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
@@ -234,10 +223,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
       ),
       AuthorizedTab(
         title: 'Parent Profile',
-        screen: ProfileScreen(
-          activeRole: role,
-          onSignOut: widget.onSignOut,
-        ),
+        screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
         navItem: const BottomNavigationBarItem(
           icon: Icon(Icons.person_outline),
           activeIcon: Icon(Icons.person),
@@ -367,10 +353,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
                         : Colors.transparent,
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    tab.icon,
-                    size: isSelected ? 22 : 24,
-                  ),
+                  child: Icon(tab.icon, size: isSelected ? 22 : 24),
                 ),
                 activeIcon: Icon(
                   tab.activeIcon,
@@ -454,10 +437,10 @@ class _DesktopSidebarState extends State<_DesktopSidebar>
           // Sidebar Header
           _buildSidebarHeader(scheme),
           Divider(color: scheme.outlineVariant.withValues(alpha: 0.3)),
-          
+
           // Role Badge
           _buildRoleBadge(scheme),
-          
+
           // Navigation Items
           Expanded(
             child: ListView.separated(
@@ -467,7 +450,7 @@ class _DesktopSidebarState extends State<_DesktopSidebar>
               itemBuilder: (context, index) {
                 final tab = widget.tabs[index];
                 final isSelected = index == widget.currentIndex;
-                
+
                 return _SidebarNavItem(
                   tab: tab,
                   isSelected: isSelected,
@@ -477,7 +460,7 @@ class _DesktopSidebarState extends State<_DesktopSidebar>
               },
             ),
           ),
-          
+
           // Footer
           _buildSidebarFooter(),
         ],
@@ -524,10 +507,7 @@ class _DesktopSidebarState extends State<_DesktopSidebar>
               ),
               Text(
                 'Fleet Management',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: scheme.onSurfaceVariant,
-                ),
+                style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
               ),
             ],
           ),
@@ -672,9 +652,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem>
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: Material(
-        color: widget.isSelected
-            ? scheme.primaryContainer
-            : Colors.transparent,
+        color: widget.isSelected ? scheme.primaryContainer : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
@@ -686,9 +664,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: widget.isSelected
-                  ? Border.all(
-                      color: scheme.primary.withValues(alpha: 0.2),
-                    )
+                  ? Border.all(color: scheme.primary.withValues(alpha: 0.2))
                   : null,
             ),
             child: Row(
@@ -704,15 +680,13 @@ class _SidebarNavItemState extends State<_SidebarNavItem>
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    widget.isSelected
-                        ? widget.tab.activeIcon
-                        : widget.tab.icon,
+                    widget.isSelected ? widget.tab.activeIcon : widget.tab.icon,
                     size: widget.isSelected ? 20 : 22,
                     color: widget.isSelected
                         ? scheme.primary
                         : _isHovered
-                            ? scheme.onSurface
-                            : scheme.onSurfaceVariant,
+                        ? scheme.onSurface
+                        : scheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -730,8 +704,8 @@ class _SidebarNavItemState extends State<_SidebarNavItem>
                       color: widget.isSelected
                           ? scheme.primary
                           : _isHovered
-                              ? scheme.onSurface
-                              : scheme.onSurfaceVariant,
+                          ? scheme.onSurface
+                          : scheme.onSurfaceVariant,
                     ),
                   ),
                 ),

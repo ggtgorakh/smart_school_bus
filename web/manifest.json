@@ -1,11 +1,11 @@
 {
-    "name": "schoolbus_safe",
-    "short_name": "schoolbus_safe",
+    "name": "Smart School Bus",
+    "short_name": "Smart School Bus",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Live GPS tracking and cloud sync for school bus safety.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

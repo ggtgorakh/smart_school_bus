@@ -25,7 +25,6 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen>
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _showSuccess = false;
-  String _successMessage = '';
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -97,7 +96,6 @@ class _AdminCreateUserScreenState extends State<AdminCreateUserScreen>
 
       setState(() {
         _showSuccess = true;
-        _successMessage = 'Successfully provisioned $role account for $name!';
         _isLoading = false;
       });
 

@@ -135,9 +135,11 @@ class AppNotification {
           ? DateTime.fromMillisecondsSinceEpoch(map['timestamp'].toInt())
           : DateTime.tryParse(map['timestamp']?.toString() ?? '') ?? DateTime.now(),
       isRead: map['isRead'] ?? false,
-      busId: map['busId'],
-      studentId: map['studentId'],
-      metadata: map['metadata'] as Map<String, dynamic>?,
+      busId: map['busId']?.toString(),
+      studentId: map['studentId']?.toString(),
+      metadata: map['metadata'] is Map
+          ? Map<String, dynamic>.from(map['metadata'] as Map)
+          : null,
     );
   }
 

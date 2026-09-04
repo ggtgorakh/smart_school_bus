@@ -4,8 +4,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
+import '../models/bus_fleet.dart';
 import '../models/bus_location.dart';
-import '../models/app_notification.dart';
 import '../services/firebase_service.dart';
 import '../services/notification_service.dart';
 import '../widgets/live_map_canvas.dart';
@@ -19,8 +19,8 @@ class LiveTrackingScreen extends StatefulWidget {
   const LiveTrackingScreen({
     super.key,
     this.busId = 'bus_01',
-    this.studentName = 'Sarah Johnson',
-    this.studentGradeAndSeat = '4th Grade • Seat 3A',
+    this.studentName = '',
+    this.studentGradeAndSeat = '',
   });
 
   @override
@@ -31,14 +31,16 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
     with TickerProviderStateMixin {
   late final Stream<BusLocation?> _locationStream;
   StreamSubscription<BusLocation?>? _statusSub;
+  Timer? _staleTimer;
   BusRunStatus? _lastNotifiedStatus;
-  String? _lastNotifiedStop;
-  int? _lastNotifiedEta;
-  bool _isInitialNotificationSent = false;
+  bool? _lastStaleState;
+  BusLocation? _lastLocation;
+  Future<void> _notificationQueue = Future<void>.value();
   bool _isLoading = true;
   bool _hasError = false;
   String _errorMessage = '';
   bool _isBottomSheetExpanded = false;
+  BusFleet? _fleetBus;
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -48,7 +50,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize animations
     _animationController = AnimationController(
       vsync: this,
@@ -58,13 +60,13 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
       parent: _animationController,
       curve: Curves.easeOut,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.05),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
     _pulseController = AnimationController(
       vsync: this,
@@ -72,6 +74,9 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
     )..repeat(reverse: true);
 
     _locationStream = FirebaseService.instance.streamBusLocation(widget.busId);
+    FirebaseService.instance.fetchFleetBusOnce(widget.busId).then((bus) {
+      if (mounted) setState(() => _fleetBus = bus);
+    });
     _statusSub = _locationStream.listen(
       _handleLocationUpdate,
       onError: (error) {
@@ -83,6 +88,10 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
         debugPrint('LiveTrackingScreen location stream error: $error');
       },
     );
+    _staleTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      final location = _lastLocation;
+      if (location != null) _processLocation(location);
+    });
 
     // Start animation after a short delay
     Future.delayed(const Duration(milliseconds: 300), () {
@@ -93,141 +102,79 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
   @override
   void dispose() {
     _statusSub?.cancel();
+    _staleTimer?.cancel();
     _animationController.dispose();
     _pulseController.dispose();
     super.dispose();
   }
 
-  void _handleLocationUpdate(BusLocation? location) async {
+  void _handleLocationUpdate(BusLocation? location) {
+    if (!mounted) return;
     setState(() {
       _isLoading = false;
       _hasError = false;
     });
 
     if (location == null) return;
-
-    // Send initial notification when first valid location is received
-    if (!_isInitialNotificationSent) {
-      _isInitialNotificationSent = true;
-      await NotificationService.instance.add(
-        kind: NotificationKind.info,
-        title: '${location.busNumber} tracking started',
-        message: 'Live tracking is now active. Current location: ${location.currentStopLabel}',
-        busId: widget.busId,
-        metadata: {
-          'stopLabel': location.currentStopLabel,
-          'etaMinutes': location.etaMinutes,
-          'isInitial': true,
-        },
-      );
-    }
-
-    // Check for status change
-    final statusChanged = _lastNotifiedStatus != location.status;
-    if (statusChanged && _lastNotifiedStatus != null) {
-      await NotificationService.instance.notifyBusStatusChange(
-        busId: widget.busId,
-        busNumber: location.busNumber,
-        oldStatus: _lastNotifiedStatus!.name,
-        newStatus: location.status.name,
-        stopLabel: location.currentStopLabel,
-        etaMinutes: location.etaMinutes,
-      );
-    }
-    _lastNotifiedStatus = location.status;
-
-    // Check for stop change
-    if (_lastNotifiedStop != location.currentStopLabel) {
-      await NotificationService.instance.add(
-        kind: NotificationKind.info,
-        title: '${location.busNumber} approaching ${location.currentStopLabel}',
-        message: 'ETA: ${location.etaLabel}',
-        busId: widget.busId,
-        metadata: {
-          'stopLabel': location.currentStopLabel,
-          'etaMinutes': location.etaMinutes,
-          'stopIndex': location.currentStopIndex,
-          'totalStops': location.totalStops,
-          'busNumber': location.busNumber,
-        },
-      );
-      _lastNotifiedStop = location.currentStopLabel;
-    }
-
-    _lastNotifiedEta = location.etaMinutes;
+    _lastLocation = location;
+    _processLocation(location);
   }
 
-  Future<void> _advanceSimulation(BusLocation current) async {
-    final nextIndex = (current.currentStopIndex + 1) % current.totalStops;
-    final stops = [
-      'Depot Departure',
-      'Pine & 5th Ave',
-      'Oak St & Maple Ave',
-      'Sycamore Lane',
-      'Elm Street',
-      'Oakridge Elementary',
-    ];
-    final nextLabel = stops[nextIndex % stops.length];
-    final nextEta = (6 - nextIndex).clamp(1, 15);
+  void _processLocation(BusLocation location) {
+    final oldStatus = _lastNotifiedStatus;
+    final stale = location.isStale();
+    final staleChanged = _lastStaleState != stale;
+    final statusChanged = _lastNotifiedStatus != location.status;
+    _lastNotifiedStatus = location.status;
+    _lastStaleState = stale;
+    if ((!statusChanged || oldStatus == null) && !staleChanged) return;
 
-    final updated = BusLocation(
-      lat: current.lat + 0.001,
-      lng: current.lng + 0.001,
-      speedKmph: nextIndex == 0 ? 0 : 38.0,
-      status: nextIndex == current.totalStops - 1
-          ? BusRunStatus.arrived
-          : BusRunStatus.onRoute,
-      lastUpdated: DateTime.now(),
-      currentStopIndex: nextIndex,
-      totalStops: current.totalStops,
-      currentStopLabel: nextLabel,
-      etaMinutes: nextEta,
-      busNumber: current.busNumber,
-    );
-
-    await FirebaseService.instance.updateBusLocation(widget.busId, updated);
-
-    await NotificationService.instance.add(
-      kind: NotificationKind.info,
-      title: '🚌 Simulation: Advanced to $nextLabel',
-      message: 'Next stop: ${nextIndex + 1}/${current.totalStops}',
-      busId: widget.busId,
-      metadata: {
-        'isSimulation': true,
-        'nextStop': nextLabel,
-        'nextIndex': nextIndex,
-      },
-    );
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 20),
-              const SizedBox(width: 10),
-              Expanded(child: Text('Simulated GPS: Advanced to $nextLabel')),
-            ],
-          ),
-          duration: const Duration(seconds: 2),
-          backgroundColor: AppColors.safetyBlue,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-    }
+    _notificationQueue = _notificationQueue.then((_) async {
+      try {
+        if (statusChanged && oldStatus != null) {
+          await NotificationService.instance.notifyBusStatusChange(
+            busId: widget.busId,
+            busNumber: location.busNumber,
+            oldStatus: oldStatus.name,
+            newStatus: location.status.name,
+            stopLabel: location.currentStopLabel,
+            etaMinutes: location.etaMinutes,
+          );
+        }
+        if (staleChanged) {
+          await NotificationService.instance.notifyTrackerStale(
+            busId: widget.busId,
+            busNumber: location.busNumber,
+            isStale: stale,
+            lastUpdated: location.lastUpdated,
+          );
+        }
+      } catch (error) {
+        debugPrint('Unable to save live tracking notification: $error');
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      floatingActionButton: _fleetBus?.driverPhone?.trim().isNotEmpty == true
+          ? FloatingActionButton.extended(
+              onPressed: _callDriver,
+              backgroundColor: AppColors.successGreen,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.call_rounded),
+              label: const Text('Call driver'),
+            )
+          : null,
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: StreamBuilder<BusLocation?>(
           stream: _locationStream,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting || _isLoading) {
+            if (snapshot.connectionState == ConnectionState.waiting ||
+                _isLoading) {
               return const _LoadingState();
             }
 
@@ -266,9 +213,10 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
                 location: location,
                 studentName: widget.studentName,
                 studentGradeAndSeat: widget.studentGradeAndSeat,
-                onSimulateNextStop: () => _advanceSimulation(location),
                 isExpanded: _isBottomSheetExpanded,
-                onExpandToggle: () => setState(() => _isBottomSheetExpanded = !_isBottomSheetExpanded),
+                onExpandToggle: () => setState(
+                  () => _isBottomSheetExpanded = !_isBottomSheetExpanded,
+                ),
                 pulseController: _pulseController,
               ),
             );
@@ -276,6 +224,18 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _callDriver() async {
+    final phone = _fleetBus?.driverPhone?.trim();
+    if (phone == null || phone.isEmpty) return;
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+        mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open the phone app.')),
+      );
+    }
   }
 }
 
@@ -333,9 +293,9 @@ class _LoadingState extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             'Connecting to bus...',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
           Text(
@@ -358,10 +318,7 @@ class _ErrorState extends StatelessWidget {
   final String errorMessage;
   final VoidCallback onRetry;
 
-  const _ErrorState({
-    required this.errorMessage,
-    required this.onRetry,
-  });
+  const _ErrorState({required this.errorMessage, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -408,7 +365,10 @@ class _ErrorState extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.safetyBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -480,7 +440,6 @@ class _LiveTrackingContent extends StatelessWidget {
   final BusLocation location;
   final String studentName;
   final String studentGradeAndSeat;
-  final VoidCallback onSimulateNextStop;
   final bool isExpanded;
   final VoidCallback onExpandToggle;
   final AnimationController pulseController;
@@ -489,42 +448,10 @@ class _LiveTrackingContent extends StatelessWidget {
     required this.location,
     required this.studentName,
     required this.studentGradeAndSeat,
-    required this.onSimulateNextStop,
     required this.isExpanded,
     required this.onExpandToggle,
     required this.pulseController,
   });
-
-  Future<void> _handleCallDriver(BuildContext context) async {
-    final Uri telUri = Uri(scheme: 'tel', path: '+18005550199');
-    try {
-      if (await canLaunchUrl(telUri)) {
-        await launchUrl(telUri);
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Calling driver of ${location.busNumber}: +1 (800) 555-0199',
-              ),
-              backgroundColor: AppColors.safetyBlue,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Driver Hotline: +1 (800) 555-0199'),
-            backgroundColor: AppColors.safetyBlue,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -545,41 +472,9 @@ class _LiveTrackingContent extends StatelessWidget {
             busNumber: location.busNumber,
             progress: progress,
             speedKmph: location.speedKmph,
-            topBanner: stale ? _StaleBanner(lastUpdated: location.lastUpdated) : null,
-            trailingAction: Material(
-              color: Theme.of(context).colorScheme.surface,
-              elevation: 3,
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: onSimulateNextStop,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: const [
-                      Icon(
-                        Icons.play_arrow_rounded,
-                        color: AppColors.safetyBlue,
-                        size: 18,
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        'Next Stop',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.safetyBlue,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            topBanner: stale
+                ? _StaleBanner(lastUpdated: location.lastUpdated)
+                : null,
           ),
         ),
 
@@ -659,11 +554,13 @@ class _LiveTrackingContent extends StatelessWidget {
                                     const SizedBox(height: 2),
                                     Text(
                                       'Stop ${location.currentStopIndex + 1} of ${location.totalStops} • ${location.etaLabel}',
-                                      style: Theme.of(context).textTheme.bodyMedium
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodyMedium
                                           ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
                                             fontSize: isMobile ? 12 : 13,
                                           ),
                                     ),
@@ -688,16 +585,23 @@ class _LiveTrackingContent extends StatelessWidget {
                                 RouteProgressTrack(
                                   totalStops: location.totalStops,
                                   currentStopIndex: location.currentStopIndex,
-                                  currentStopLabel: 'Next: ${location.currentStopLabel}',
+                                  currentStopLabel:
+                                      'Next: ${location.currentStopLabel}',
                                   etaLabel: location.etaLabel,
                                 ),
 
                                 const SizedBox(height: 14),
-                                const Divider(color: AppColors.outlineVariant, height: 1),
+                                _buildTelemetry(context, location, isMobile),
+                                const SizedBox(height: 14),
+                                const Divider(
+                                  color: AppColors.outlineVariant,
+                                  height: 1,
+                                ),
                                 const SizedBox(height: 14),
 
                                 // Student Info Row
-                                _buildStudentInfo(context, isMobile),
+                                if (studentName.trim().isNotEmpty)
+                                  _buildStudentInfo(context, isMobile),
                               ],
                             ),
                             crossFadeState: isExpanded
@@ -740,14 +644,22 @@ class _LiveTrackingContent extends StatelessWidget {
               return Transform.scale(
                 scale: pulseScale,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: stale ? AppColors.alertOrange : AppColors.successGreen,
+                    color: stale
+                        ? AppColors.alertOrange
+                        : AppColors.successGreen,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: (stale ? AppColors.alertOrange : AppColors.successGreen)
-                            .withValues(alpha: 0.3),
+                        color:
+                            (stale
+                                    ? AppColors.alertOrange
+                                    : AppColors.successGreen)
+                                .withValues(alpha: 0.3),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -855,48 +767,91 @@ class _LiveTrackingContent extends StatelessWidget {
               children: [
                 Text(
                   studentName,
-                  style: Theme.of(context).textTheme.bodyLarge
-                      ?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: isMobile ? 14 : 15,
-                      ),
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: isMobile ? 14 : 15,
+                  ),
                 ),
                 Text(
                   studentGradeAndSeat,
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelMedium
-                      ?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurfaceVariant,
-                        fontSize: isMobile ? 11 : 12,
-                      ),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: isMobile ? 11 : 12,
+                  ),
                 ),
               ],
-            ),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Theme.of(context).colorScheme.surface,
-              border: Border.all(
-                color: AppColors.outlineVariant,
-              ),
-            ),
-            child: IconButton(
-              icon: const Icon(
-                Icons.call_rounded,
-                color: AppColors.safetyBlue,
-                size: 20,
-              ),
-              onPressed: () => _handleCallDriver(context),
-              tooltip: 'Call Driver',
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildTelemetry(
+    BuildContext context,
+    BusLocation location,
+    bool isMobile,
+  ) {
+    final textStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+      fontSize: isMobile ? 11 : 12,
+    );
+    return Row(
+      children: [
+        Expanded(
+          child: _telemetryValue(
+            context,
+            Icons.speed_rounded,
+            '${location.speedKmph.toStringAsFixed(1)} km/h',
+            'Speed',
+            textStyle,
+          ),
+        ),
+        Expanded(
+          child: _telemetryValue(
+            context,
+            Icons.gps_fixed_rounded,
+            location.coordinateLabel,
+            'GPS position',
+            textStyle,
+          ),
+        ),
+        Expanded(
+          child: _telemetryValue(
+            context,
+            Icons.update_rounded,
+            _updatedLabel(location.lastUpdated),
+            'Last update',
+            textStyle,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _telemetryValue(
+    BuildContext context,
+    IconData icon,
+    String value,
+    String label,
+    TextStyle? labelStyle,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: AppColors.safetyBlue),
+        const SizedBox(height: 4),
+        Text(value, maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(label, style: labelStyle),
+      ],
+    );
+  }
+
+  String _updatedLabel(DateTime value) {
+    final seconds = DateTime.now().difference(value).inSeconds;
+    if (seconds < 10) return 'Just now';
+    if (seconds < 60) return '$seconds sec ago';
+    return '${seconds ~/ 60} min ago';
   }
 }
 
@@ -912,7 +867,7 @@ class _StaleBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final minutesAgo = DateTime.now().difference(lastUpdated).inMinutes;
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(

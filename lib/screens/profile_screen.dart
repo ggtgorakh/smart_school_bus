@@ -3,11 +3,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_service.dart';
-import '../services/notification_service.dart';
 import 'admin/create_user_screen.dart';
 
 class _ProfileData {
@@ -25,7 +23,10 @@ class _ProfileData {
     required this.busId,
   });
 
-  factory _ProfileData.fromMap(Map<dynamic, dynamic> map, {required String fallbackEmail}) {
+  factory _ProfileData.fromMap(
+    Map<dynamic, dynamic> map, {
+    required String fallbackEmail,
+  }) {
     return _ProfileData(
       name: (map['name']?.toString().trim().isNotEmpty ?? false)
           ? map['name'].toString()
@@ -73,20 +74,16 @@ class _ProfileScreenState extends State<ProfileScreen>
       parent: _animationController,
       curve: Curves.easeOut,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.04),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
-    _scaleAnimation = Tween<double>(
-      begin: 0.95,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutBack,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+    _scaleAnimation = Tween<double>(begin: 0.95, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
+    );
     _animationController.forward();
   }
 
@@ -96,8 +93,15 @@ class _ProfileScreenState extends State<ProfileScreen>
     super.dispose();
   }
 
-  void _openEditNameSheet(String currentName, String uid) {
+  void _openEditNameSheet(
+    String currentName,
+    String? currentPhone,
+    String uid,
+    String role,
+    String? busId,
+  ) {
     final controller = TextEditingController(text: currentName);
+    final phoneController = TextEditingController(text: currentPhone ?? '');
     final formKey = GlobalKey<FormState>();
 
     showModalBottomSheet(
@@ -145,7 +149,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: AppColors.safetyBlue.withValues(alpha: 0.1),
+                              color: AppColors.safetyBlue.withValues(
+                                alpha: 0.1,
+                              ),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: const Icon(
@@ -166,7 +172,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'You can update your name. Email and phone are managed by your administrator.',
+                        'Keep your name and contact number up to date for safe dispatch communication.',
                         style: TextStyle(
                           fontSize: 13,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -193,7 +199,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                             size: 20,
                           ),
                           filled: true,
-                          fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                          fillColor: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerLow,
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 14,
@@ -210,8 +218,42 @@ class _ProfileScreenState extends State<ProfileScreen>
                             ),
                           ),
                         ),
-                        validator: (val) =>
-                            (val == null || val.trim().isEmpty) ? 'Name is required' : null,
+                        validator: (val) => (val == null || val.trim().isEmpty)
+                            ? 'Name is required'
+                            : null,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Phone Number',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        controller: phoneController,
+                        enabled: !isSaving,
+                        keyboardType: TextInputType.phone,
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(
+                            Icons.phone_outlined,
+                            color: AppColors.outline,
+                            size: 20,
+                          ),
+                          filled: true,
+                          fillColor: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerLow,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 24),
 
@@ -226,13 +268,33 @@ class _ProfileScreenState extends State<ProfileScreen>
                                   if (!formKey.currentState!.validate()) return;
                                   setSheetState(() => isSaving = true);
                                   try {
-                                    await AuthService.instance
-                                        .updateOwnName(uid, controller.text.trim());
-                                    if (context.mounted) Navigator.of(context).pop();
+                                    await AuthService.instance.updateOwnName(
+                                      uid,
+                                      controller.text.trim(),
+                                    );
+                                    await AuthService.instance.updateOwnPhone(
+                                      uid,
+                                      phoneController.text,
+                                    );
+                                    if (role == 'Driver' &&
+                                        busId != null &&
+                                        busId.trim().isNotEmpty) {
+                                      await FirebaseService.instance
+                                          .syncDriverContactToFleet(
+                                            uid: uid,
+                                            busId: busId,
+                                            name: controller.text,
+                                            phone: phoneController.text,
+                                          );
+                                    }
+                                    if (context.mounted)
+                                      Navigator.of(context).pop();
                                   } catch (e) {
                                     setSheetState(() => isSaving = false);
                                     if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
                                           content: Text('Could not save: $e'),
                                           backgroundColor: AppColors.errorRed,
@@ -284,14 +346,17 @@ class _ProfileScreenState extends State<ProfileScreen>
       case 'Driver':
         return ['🚌 Bus Route Navigation', '👤 Driver Profile'];
       case 'Conductor':
-        return ['📋 Student Check-in/Check-out', '🗺️ Bus Route Map', '👤 Conductor Profile'];
+        return [
+          '📋 Student Check-in/Check-out',
+          '🗺️ Bus Route Map',
+          '👤 Conductor Profile',
+        ];
       case 'Admin':
         return [
           '🚌 Fleet Overview & Telemetry',
-          '📍 Route Planning & Stop Builder',
           '🗺️ Master GPS Map',
-          '📋 Student Boarding Manifest',
-          '⚙️ Admin Settings & Dispatch',
+          '📋 Student and user management',
+          '⚙️ Dispatch messaging',
         ];
       default:
         return ['📍 Live Child Bus Tracking', '🔔 Parent Profile & Alerts'];
@@ -362,7 +427,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                             "Firebase error: ${snapshot.error}",
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -383,13 +450,18 @@ class _ProfileScreenState extends State<ProfileScreen>
 
                 if (!snapshot.hasData) {
                   return const Center(
-                    child: CircularProgressIndicator(color: AppColors.safetyBlue),
+                    child: CircularProgressIndicator(
+                      color: AppColors.safetyBlue,
+                    ),
                   );
                 }
 
                 final raw = snapshot.data!.snapshot.value;
                 final profile = (raw is Map)
-                    ? _ProfileData.fromMap(raw, fallbackEmail: user.email ?? '---')
+                    ? _ProfileData.fromMap(
+                        raw,
+                        fallbackEmail: user.email ?? '---',
+                      )
                     : _ProfileData(
                         name: 'Unnamed user',
                         email: user.email ?? '---',
@@ -419,13 +491,13 @@ class _ProfileScreenState extends State<ProfileScreen>
 
                           // Permissions Card
                           _buildPermissionsCard(context, authorizedScope),
-                          
+
                           // Admin Card (if admin)
                           if (profile.role == 'Admin') ...[
                             const SizedBox(height: 16),
                             _buildAdminCard(context),
                           ],
-                          
+
                           const SizedBox(height: 16),
 
                           // Emergency Contacts
@@ -451,7 +523,11 @@ class _ProfileScreenState extends State<ProfileScreen>
   // PROFILE HEADER
   // ============================================================
 
-  Widget _buildProfileHeader(BuildContext context, _ProfileData profile, String uid) {
+  Widget _buildProfileHeader(
+    BuildContext context,
+    _ProfileData profile,
+    String uid,
+  ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
@@ -460,7 +536,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -512,7 +590,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                     shape: BoxShape.circle,
                   ),
                   child: InkWell(
-                    onTap: () => _openEditNameSheet(profile.name, uid),
+                    onTap: () => _openEditNameSheet(
+                      profile.name,
+                      profile.phone,
+                      uid,
+                      profile.role,
+                      profile.busId,
+                    ),
                     borderRadius: BorderRadius.circular(20),
                     child: Container(
                       padding: const EdgeInsets.all(6),
@@ -540,9 +624,9 @@ class _ProfileScreenState extends State<ProfileScreen>
           // Name
           Text(
             profile.name,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
 
@@ -618,7 +702,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -665,7 +751,11 @@ class _ProfileScreenState extends State<ProfileScreen>
   }) {
     return Column(
       children: [
-        Icon(icon, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+        Icon(
+          icon,
+          size: 18,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
         const SizedBox(height: 6),
         Text(
           value,
@@ -698,7 +788,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -728,9 +820,9 @@ class _ProfileScreenState extends State<ProfileScreen>
               const SizedBox(width: 12),
               Text(
                 'Your Access',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const Spacer(),
               Container(
@@ -751,37 +843,39 @@ class _ProfileScreenState extends State<ProfileScreen>
             ],
           ),
           const SizedBox(height: 12),
-          ...scopes.map((scope) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 20,
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: AppColors.mintSoft,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.check_rounded,
-                        color: AppColors.successGreen,
-                        size: 14,
+          ...scopes.map(
+            (scope) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: AppColors.mintSoft,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_rounded,
+                      color: AppColors.successGreen,
+                      size: 14,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      scope,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        scope,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              )),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -802,9 +896,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           ],
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: Colors.purple.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
         boxShadow: [
           BoxShadow(
             color: Colors.purple.withValues(alpha: 0.1),
@@ -898,7 +990,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -928,49 +1022,13 @@ class _ProfileScreenState extends State<ProfileScreen>
               const SizedBox(width: 12),
               Text(
                 'Emergency & Support',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          _ContactTile(
-            icon: Icons.phone_in_talk_rounded,
-            iconBg: AppColors.amberSoft,
-            iconColor: AppColors.alertOrangeDark,
-            title: 'School Dispatch Hotline',
-            subtitle: '+1 (800) 555-0199 • Tap to call',
-            onTap: () async {
-              final Uri telUri = Uri(scheme: 'tel', path: '+18005550199');
-              try {
-                if (await canLaunchUrl(telUri)) {
-                  await launchUrl(telUri);
-                } else {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Hotline: +1 (800) 555-0199'),
-                        backgroundColor: AppColors.safetyBlue,
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  }
-                }
-              } catch (_) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Hotline: +1 (800) 555-0199'),
-                      backgroundColor: AppColors.safetyBlue,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                }
-              }
-            },
-          ),
-          const SizedBox(height: 8),
           _ContactTile(
             icon: Icons.shield_outlined,
             iconBg: AppColors.safetyBlue.withValues(alpha: 0.1),
@@ -1084,10 +1142,7 @@ class _ContactTile extends StatelessWidget {
             Container(
               width: 38,
               height: 38,
-              decoration: BoxDecoration(
-                color: iconBg,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: iconBg, shape: BoxShape.circle),
               child: Icon(icon, color: iconColor, size: 18),
             ),
             const SizedBox(width: 12),

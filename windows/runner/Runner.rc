@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.schoolbussafe" "\0"
-            VALUE "FileDescription", "schoolbus_safe" "\0"
+            VALUE "FileDescription", "Smart School Bus" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "schoolbus_safe" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.schoolbussafe. All rights reserved." "\0"
             VALUE "OriginalFilename", "schoolbus_safe.exe" "\0"
-            VALUE "ProductName", "schoolbus_safe" "\0"
+            VALUE "ProductName", "Smart School Bus" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

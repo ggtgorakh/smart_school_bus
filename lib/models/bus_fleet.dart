@@ -1,10 +1,30 @@
 // lib/models/bus_fleet.dart
 
-enum FleetStatus { onRoute, delayed, maintenance }
+enum FleetStatus { onRoute, delayed, maintenance, idle }
+
+/// Parses a status string stored in Firebase (/busesFleet/{busId}/status)
+/// back into a FleetStatus. Defaults to idle for unknown/missing values so
+/// a bus never silently shows as "On Route" when its real state is unknown.
+FleetStatus fleetStatusFromString(String? value) {
+  switch (value?.toLowerCase()) {
+    case 'onroute':
+    case 'on_route':
+      return FleetStatus.onRoute;
+    case 'delayed':
+      return FleetStatus.delayed;
+    case 'maintenance':
+      return FleetStatus.maintenance;
+    case 'idle':
+    default:
+      return FleetStatus.idle;
+  }
+}
 
 class BusFleet {
   final String busId;
   final String driverName;
+  final String? driverUid;
+  final String? driverPhone;
   final String routeName;
   final String estArrival;
   final FleetStatus status;
@@ -14,6 +34,8 @@ class BusFleet {
   BusFleet({
     required this.busId,
     required this.driverName,
+    this.driverUid,
+    this.driverPhone,
     required this.routeName,
     required this.estArrival,
     required this.status,
@@ -30,6 +52,8 @@ class BusFleet {
         return 'Delayed';
       case FleetStatus.maintenance:
         return 'Maintenance';
+      case FleetStatus.idle:
+        return 'Idle';
     }
   }
 
@@ -42,6 +66,8 @@ class BusFleet {
         return 0xFFF59E0B;
       case FleetStatus.maintenance:
         return 0xFFDC2626;
+      case FleetStatus.idle:
+        return 0xFF6B7280;
     }
   }
 
@@ -54,6 +80,8 @@ class BusFleet {
         return 'warning_amber';
       case FleetStatus.maintenance:
         return 'build';
+      case FleetStatus.idle:
+        return 'pause_circle';
     }
   }
 
@@ -81,6 +109,8 @@ class BusFleet {
   BusFleet copyWith({
     String? busId,
     String? driverName,
+    String? driverUid,
+    String? driverPhone,
     String? routeName,
     String? estArrival,
     FleetStatus? status,
@@ -90,11 +120,49 @@ class BusFleet {
     return BusFleet(
       busId: busId ?? this.busId,
       driverName: driverName ?? this.driverName,
+      driverUid: driverUid ?? this.driverUid,
+      driverPhone: driverPhone ?? this.driverPhone,
       routeName: routeName ?? this.routeName,
       estArrival: estArrival ?? this.estArrival,
       status: status ?? this.status,
       speedMph: speedMph ?? this.speedMph,
       fuelPercent: fuelPercent ?? this.fuelPercent,
+    );
+  }
+
+  /// Serializes this bus for storage at /busesFleet/{busId} in Firebase.
+  Map<String, dynamic> toMap() {
+    return {
+      'busId': busId,
+      'driverName': driverName,
+      if (driverUid != null && driverUid!.trim().isNotEmpty)
+        'driverUid': driverUid!.trim(),
+      if (driverPhone != null && driverPhone!.trim().isNotEmpty)
+        'driverPhone': driverPhone!.trim(),
+      'routeName': routeName,
+      'estArrival': estArrival,
+      'status': status.name,
+      'speedMph': speedMph,
+      'fuelPercent': fuelPercent,
+    };
+  }
+
+  /// Builds a BusFleet from a /busesFleet/{busId} Firebase snapshot.
+  /// [busId] should be passed explicitly (the RTDB key), falling back to
+  /// any 'busId' field inside the map itself.
+  factory BusFleet.fromMap(Map<dynamic, dynamic> map, {String? busId}) {
+    return BusFleet(
+      busId: busId ?? (map['busId']?.toString() ?? ''),
+      driverName: map['driverName']?.toString() ?? 'Unassigned',
+      driverUid: map['driverUid']?.toString(),
+      driverPhone: map['driverPhone']?.toString(),
+      routeName: map['routeName']?.toString() ?? 'No route assigned',
+      estArrival: map['estArrival']?.toString() ?? '--',
+      status: fleetStatusFromString(map['status']?.toString()),
+      speedMph: (map['speedMph'] is num) ? (map['speedMph'] as num).toInt() : 0,
+      fuelPercent: (map['fuelPercent'] is num)
+          ? (map['fuelPercent'] as num).toInt()
+          : 100,
     );
   }
 }

@@ -80,7 +80,10 @@ class AuthService {
   }
 
   /// Fetch the bus a Driver/Conductor is assigned to.
-  Future<String> fetchBusId(String uid, {String defaultBusId = 'bus_01'}) async {
+  Future<String> fetchBusId(
+    String uid, {
+    String defaultBusId = 'bus_01',
+  }) async {
     try {
       final snap = await _db.child('users/$uid/busId').get();
       if (snap.exists && snap.value != null) {
@@ -108,7 +111,12 @@ class AuthService {
   }
 
   /// Re-persists a user's own already-known role/profile fields.
-  Future<void> setUserRole(String uid, String role, {String? email, String? name}) async {
+  Future<void> setUserRole(
+    String uid,
+    String role, {
+    String? email,
+    String? name,
+  }) async {
     try {
       final Map<String, dynamic> data = {'role': role};
       if (email != null) data['email'] = email;
@@ -184,6 +192,17 @@ class AuthService {
       await _db.child('users/$uid').update({'name': name.trim()});
     } catch (error) {
       print('AuthService: Error updating name: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> updateOwnPhone(String uid, String phone) async {
+    try {
+      await _db.child('users/$uid').update({
+        'phone': phone.trim().isEmpty ? null : phone.trim(),
+      });
+    } catch (error) {
+      print('AuthService: Error updating phone: $error');
       rethrow;
     }
   }

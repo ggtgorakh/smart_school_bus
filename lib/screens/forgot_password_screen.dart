@@ -22,8 +22,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
   late final TextEditingController _emailController;
   bool _isLoading = false;
   bool _isEmailFocused = false;
-  bool _isSuccess = false;
-  String _successMessage = '';
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -88,15 +86,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
     setState(() {
       _isLoading = true;
-      _isSuccess = false;
     });
 
     try {
       await AuthService.instance.sendPasswordResetEmail(email);
 
       setState(() {
-        _isSuccess = true;
-        _successMessage = 'Password reset link sent to $email';
         _isLoading = false;
       });
 
@@ -249,10 +244,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       onPressed: () {
                         Navigator.of(context).pop();
                         _emailController.clear();
-                        setState(() {
-                          _isSuccess = false;
-                          _successMessage = '';
-                        });
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.safetyBlue,

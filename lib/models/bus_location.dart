@@ -84,6 +84,9 @@ class BusLocation {
     return '$etaMinutes min${etaMinutes == 1 ? '' : 's'} away';
   }
 
+  String get coordinateLabel =>
+      '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+
   /// Get status color
   int get statusColor {
     switch (status) {

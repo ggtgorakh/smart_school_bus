@@ -3,6 +3,16 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/kpi_card.dart';
+import '../services/firebase_service.dart';
+import '../models/bus_fleet.dart';
+import '../models/bus_location.dart';
+import '../models/app_notification.dart';
+import '../services/notification_service.dart';
+import 'admin/create_user_screen.dart';
+import 'attendance_scanner_screen.dart';
+import 'boarding_status_screen.dart';
+import 'fleet_management_screen.dart';
+import 'live_tracking_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userRole;
@@ -60,15 +70,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                 // Welcome Header
                 _buildWelcomeHeader(),
                 const SizedBox(height: 20),
-                
+
                 // KPI Grid
                 _buildKpiGrid(),
                 const SizedBox(height: 20),
-                
+
                 // Quick Actions
                 _buildQuickActions(),
                 const SizedBox(height: 20),
-                
+
                 // Recent Activity
                 _buildRecentActivity(),
               ],
@@ -84,9 +94,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ============================================================
 
   Widget _buildWelcomeHeader() {
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -141,7 +148,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(20),
@@ -207,6 +217,26 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ============================================================
 
   Widget _buildKpiGrid() {
+    if (widget.userRole == 'Admin') {
+      return StreamBuilder<List<BusFleet>>(
+        stream: FirebaseService.instance.streamFleet(),
+        builder: (context, snapshot) {
+          return _buildKpiGridContent(fleet: snapshot.data);
+        },
+      );
+    }
+    if (widget.userRole == 'Driver') {
+      return StreamBuilder<BusLocation?>(
+        stream: FirebaseService.instance.streamBusLocation(widget.busId),
+        builder: (context, snapshot) {
+          return _buildKpiGridContent(location: snapshot.data);
+        },
+      );
+    }
+    return _buildKpiGridContent();
+  }
+
+  Widget _buildKpiGridContent({List<BusFleet>? fleet, BusLocation? location}) {
     final isMobile = context.isMobile;
     final role = widget.userRole;
 
@@ -416,6 +446,29 @@ class _DashboardScreenState extends State<DashboardScreen>
       ];
     }
 
+    if (role == 'Admin' && fleet != null) {
+      final active = fleet
+          .where((bus) => bus.status == FleetStatus.onRoute)
+          .length;
+      final maintenance = fleet
+          .where((bus) => bus.status == FleetStatus.maintenance)
+          .length;
+      kpis[0]['value'] = '$active';
+      kpis[0]['badgeText'] = active == 0 ? 'No active buses' : 'On Route';
+      kpis[3]['value'] = '$maintenance';
+      kpis[3]['badgeText'] = maintenance == 0
+          ? 'All clear'
+          : 'Requires attention';
+    }
+    if (role == 'Driver') {
+      kpis[0]['value'] = location == null
+          ? '--'
+          : '${location.speedKmph.toStringAsFixed(1)} km/h';
+      kpis[0]['badgeText'] = location?.statusLabel ?? 'Waiting for GPS';
+      kpis[1]['value'] = location?.etaLabel ?? '--';
+      kpis[1]['badgeText'] = location?.currentStopLabel ?? 'No live stop';
+    }
+
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -444,39 +497,137 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ============================================================
+  Future<void> _showLiveReport() async {
+    final buses = await FirebaseService.instance.streamFleet().first;
+    if (!mounted) return;
+    final active = buses
+        .where((bus) => bus.status == FleetStatus.onRoute)
+        .length;
+    final maintenance = buses
+        .where((bus) => bus.status == FleetStatus.maintenance)
+        .length;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Live fleet report'),
+        content: Text(
+          'Connected buses: ${buses.length}\n'
+          'On route: $active\n'
+          'In maintenance: $maintenance',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showSettings() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Settings'),
+        content: const Text(
+          'Use the theme control in the app header to change appearance.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // QUICK ACTIONS
   // ============================================================
 
   Widget _buildQuickActions() {
-    final isMobile = context.isMobile;
     final role = widget.userRole;
 
     List<Map<String, dynamic>> actions = [];
 
     if (role == 'Admin') {
       actions = [
-        {'icon': Icons.person_add_rounded, 'label': 'Add User', 'color': AppColors.safetyBlue},
-        {'icon': Icons.directions_bus_rounded, 'label': 'Dispatch Bus', 'color': AppColors.alertOrange},
-        {'icon': Icons.assessment_rounded, 'label': 'Reports', 'color': AppColors.successGreen},
-        {'icon': Icons.settings_rounded, 'label': 'Settings', 'color': AppColors.purpleSoft},
+        {
+          'icon': Icons.person_add_rounded,
+          'label': 'Add User',
+          'color': AppColors.safetyBlue,
+          'onTap': () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const AdminCreateUserScreen()),
+          ),
+        },
+        {
+          'icon': Icons.directions_bus_rounded,
+          'label': 'Fleet',
+          'color': AppColors.alertOrange,
+          'onTap': () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const FleetManagementScreen()),
+          ),
+        },
+        {
+          'icon': Icons.assessment_rounded,
+          'label': 'Reports',
+          'color': AppColors.successGreen,
+          'onTap': _showLiveReport,
+        },
+        {
+          'icon': Icons.settings_rounded,
+          'label': 'Settings',
+          'color': AppColors.outline,
+          'onTap': _showSettings,
+        },
       ];
     } else if (role == 'Driver') {
       actions = [
-        {'icon': Icons.map_rounded, 'label': 'View Route', 'color': AppColors.safetyBlue},
-        {'icon': Icons.chat_rounded, 'label': 'Message Dispatch', 'color': AppColors.alertOrange},
-        {'icon': Icons.warning_amber_rounded, 'label': 'Report Issue', 'color': AppColors.errorRed},
+        {
+          'icon': Icons.map_rounded,
+          'label': 'View Route',
+          'color': AppColors.safetyBlue,
+          'onTap': () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => LiveTrackingScreen(busId: widget.busId),
+            ),
+          ),
+        },
       ];
     } else if (role == 'Conductor') {
       actions = [
-        {'icon': Icons.qr_code_scanner_rounded, 'label': 'Scan Badge', 'color': AppColors.safetyBlue},
-        {'icon': Icons.list_alt_rounded, 'label': 'View Roster', 'color': AppColors.alertOrange},
-        {'icon': Icons.chat_rounded, 'label': 'Message Driver', 'color': AppColors.successGreen},
+        {
+          'icon': Icons.qr_code_scanner_rounded,
+          'label': 'Scan Badge',
+          'color': AppColors.safetyBlue,
+          'onTap': () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => AttendanceScannerScreen(busId: widget.busId),
+            ),
+          ),
+        },
       ];
     } else {
       actions = [
-        {'icon': Icons.map_rounded, 'label': 'Live Map', 'color': AppColors.safetyBlue},
-        {'icon': Icons.face_rounded, 'label': 'Child Status', 'color': AppColors.successGreen},
-        {'icon': Icons.chat_rounded, 'label': 'Contact Driver', 'color': AppColors.alertOrange},
+        {
+          'icon': Icons.map_rounded,
+          'label': 'Live Map',
+          'color': AppColors.safetyBlue,
+          'onTap': () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => LiveTrackingScreen(busId: widget.busId),
+            ),
+          ),
+        },
+        {
+          'icon': Icons.face_rounded,
+          'label': 'Child Status',
+          'color': AppColors.successGreen,
+          'onTap': () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const BoardingStatusScreen()),
+          ),
+        },
       ];
     }
 
@@ -485,9 +636,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       children: [
         Text(
           'Quick Actions',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         SizedBox(
@@ -499,19 +650,14 @@ class _DashboardScreenState extends State<DashboardScreen>
             itemBuilder: (context, index) {
               final action = actions[index];
               return Padding(
-                padding: EdgeInsets.only(right: index < actions.length - 1 ? 12 : 0),
+                padding: EdgeInsets.only(
+                  right: index < actions.length - 1 ? 12 : 0,
+                ),
                 child: _QuickActionCard(
                   icon: action['icon'],
                   label: action['label'],
                   color: action['color'],
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('${action['label']} tapped'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
+                  onTap: action['onTap'] as VoidCallback,
                 ),
               );
             },
@@ -533,9 +679,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       children: [
         Text(
           'Recent Activity',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         Container(
@@ -544,7 +690,9 @@ class _DashboardScreenState extends State<DashboardScreen>
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+              color: Theme.of(
+                context,
+              ).colorScheme.outlineVariant.withValues(alpha: 0.3),
             ),
             boxShadow: [
               BoxShadow(
@@ -554,44 +702,55 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ],
           ),
-          child: Column(
-            children: [
-              _buildActivityItem(
-                icon: Icons.directions_bus_rounded,
-                color: AppColors.successGreen,
-                title: 'BUS-402 arrived at Oak St & Maple',
-                time: '2 min ago',
-                isDark: isDark,
-              ),
-              const Divider(),
-              _buildActivityItem(
-                icon: Icons.face_rounded,
-                color: AppColors.safetyBlue,
-                title: 'Sarah Johnson boarded the bus',
-                time: '5 min ago',
-                isDark: isDark,
-              ),
-              const Divider(),
-              _buildActivityItem(
-                icon: Icons.warning_amber_rounded,
-                color: AppColors.alertOrange,
-                title: 'BUS-115 delayed by 6 minutes',
-                time: '12 min ago',
-                isDark: isDark,
-              ),
-              const Divider(),
-              _buildActivityItem(
-                icon: Icons.check_circle_rounded,
-                color: AppColors.successGreen,
-                title: 'All students checked in on BUS-208',
-                time: '18 min ago',
-                isDark: isDark,
-              ),
-            ],
+          child: StreamBuilder<List<AppNotification>>(
+            stream: NotificationService.instance.notificationStream,
+            builder: (context, snapshot) {
+              final items = (snapshot.data ?? const <AppNotification>[])
+                  .take(4)
+                  .toList();
+              if (items.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  child: Text('No recent activity'),
+                );
+              }
+              return Column(
+                children: [
+                  for (var i = 0; i < items.length; i++) ...[
+                    _buildActivityItem(
+                      icon: _activityIcon(items[i].kind),
+                      color: Color(items[i].kindColor),
+                      title: items[i].title,
+                      time: items[i].relativeTime,
+                      isDark: isDark,
+                    ),
+                    if (i < items.length - 1) const Divider(),
+                  ],
+                ],
+              );
+            },
           ),
         ),
       ],
     );
+  }
+
+  IconData _activityIcon(NotificationKind kind) {
+    switch (kind) {
+      case NotificationKind.arrival:
+        return Icons.directions_bus_rounded;
+      case NotificationKind.boarding:
+        return Icons.face_rounded;
+      case NotificationKind.delay:
+      case NotificationKind.alert:
+        return Icons.warning_amber_rounded;
+      case NotificationKind.emergency:
+        return Icons.sos_rounded;
+      case NotificationKind.departure:
+        return Icons.play_arrow_rounded;
+      case NotificationKind.info:
+        return Icons.info_outline_rounded;
+    }
   }
 
   Widget _buildActivityItem({
@@ -612,11 +771,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               color: color.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 18,
-            ),
+            child: Icon(icon, color: color, size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -682,7 +837,9 @@ class _QuickActionCard extends StatelessWidget {
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+              color: Theme.of(
+                context,
+              ).colorScheme.outlineVariant.withValues(alpha: 0.3),
             ),
           ),
           child: Column(
@@ -695,11 +852,7 @@ class _QuickActionCard extends StatelessWidget {
                   color: color.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 20,
-                ),
+                child: Icon(icon, color: color, size: 20),
               ),
               const SizedBox(height: 4),
               Text(

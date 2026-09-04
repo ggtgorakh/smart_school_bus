@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/student.dart';
 import '../../services/firebase_service.dart';
 import '../../theme/app_theme.dart';
+import 'import_roster_screen.dart';
 
 class _ParentOption {
   final String uid;
@@ -135,6 +136,14 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
         ),
         actions: [
+          IconButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ImportRosterScreen()),
+            ),
+            icon: const Icon(Icons.upload_file_rounded),
+            tooltip: 'Import Roster',
+          ),
           IconButton(
             onPressed: () => _openStudentForm(),
             icon: const Icon(Icons.person_add_alt_1_rounded),

@@ -46,7 +46,7 @@ class PeopleDirectoryScreen extends StatefulWidget {
 }
 
 class _PeopleDirectoryScreenState extends State<PeopleDirectoryScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final TabController _tabController;
   final DatabaseReference _root = FirebaseDatabase.instance.ref();
   String _searchQuery = '';

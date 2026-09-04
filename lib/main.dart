@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
@@ -9,19 +8,18 @@ import 'screens/main_navigation_shell.dart';
 import 'services/auth_service.dart';
 import 'services/session_service.dart';
 import 'services/notification_service.dart';
+import 'services/offline_write_queue.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  
-  // Initialize Notification Service (starts listening to Firebase)
-  NotificationService.instance;
-  
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const SchoolBusApp());
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    OfflineWriteQueue.instance.initialize();
+    NotificationService.instance;
+  });
 }
 
 class SchoolBusApp extends StatelessWidget {
@@ -68,7 +66,7 @@ class AuthGate extends StatelessWidget {
 
 class RoleResolutionShell extends StatefulWidget {
   final User user;
-  const RoleResolutionShell({required this.user});
+  const RoleResolutionShell({super.key, required this.user});
 
   @override
   State<RoleResolutionShell> createState() => _RoleResolutionShellState();
@@ -94,8 +92,12 @@ class _RoleResolutionShellState extends State<RoleResolutionShell> {
   }
 
   Future<void> _resolveRole() async {
-    final cachedRole = await SessionService.instance.getCachedRole();
-    final cachedBusId = await SessionService.instance.getCachedBusId();
+    final cachedValues = await Future.wait([
+      SessionService.instance.getCachedRole(),
+      SessionService.instance.getCachedBusId(),
+    ]);
+    final cachedRole = cachedValues[0] as String?;
+    final cachedBusId = cachedValues[1] as String?;
     if (cachedRole != null && mounted) {
       setState(() {
         _role = cachedRole;
@@ -104,12 +106,16 @@ class _RoleResolutionShellState extends State<RoleResolutionShell> {
       });
     }
 
-    final freshRole = await AuthService.instance.fetchRole(widget.user.uid);
-    final freshBusId = await AuthService.instance.fetchBusId(widget.user.uid);
-    
+    final freshValues = await Future.wait([
+      AuthService.instance.fetchRole(widget.user.uid),
+      AuthService.instance.fetchBusId(widget.user.uid),
+    ]);
+    final freshRole = freshValues[0] as String;
+    final freshBusId = freshValues[1] as String;
+
     await SessionService.instance.saveRole(freshRole);
     await SessionService.instance.saveBusId(freshBusId);
-    
+
     if (mounted) {
       setState(() {
         _role = freshRole;
