@@ -296,13 +296,13 @@ class NotificationService {
 
   /// Clear all notifications (persists to Firebase)
   Future<void> clearAll() async {
-    _requireUid();
-
     notifications.value = [];
+    final uid = _uid;
+    if (uid == null) return;
 
     // Remove all from Firebase
     try {
-      await _db.child(_notificationsPath).remove();
+      await _db.child('notifications/$uid').remove();
     } on FirebaseException catch (error, stackTrace) {
       debugPrint('Error clearing notifications: $error');
       Error.throwWithStackTrace(error, stackTrace);

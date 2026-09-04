@@ -207,6 +207,34 @@ class AuthService {
     }
   }
 
+  Future<void> updateOwnProfileImage(String uid, String? imageData) async {
+    try {
+      await _db.child('users/$uid').update({'profileImage': imageData});
+    } catch (error) {
+      print('AuthService: Error updating profile image: $error');
+      rethrow;
+    }
+  }
+
+  /// Updates fields that an Admin is allowed to manage on another profile.
+  Future<void> updateManagedUser({
+    required String uid,
+    required String name,
+    required String phone,
+    required String? busId,
+  }) async {
+    try {
+      await _db.child('users/$uid').update({
+        'name': name.trim(),
+        'phone': phone.trim().isEmpty ? null : phone.trim(),
+        'busId': busId == null || busId.trim().isEmpty ? null : busId.trim(),
+      });
+    } catch (error) {
+      print('AuthService: Error updating managed user: $error');
+      rethrow;
+    }
+  }
+
   /// Sends a password reset email to the given address.
   Future<void> sendPasswordResetEmail(String email) async {
     try {

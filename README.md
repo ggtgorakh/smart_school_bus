@@ -35,6 +35,13 @@ The `busId` field in a user profile assigns a Driver or Conductor to a bus.
 The application currently uses the canonical fleet IDs `bus_01` through
 `bus_10`.
 
+Admins have a dedicated **People & Assignments** view from Fleet Overview and
+Admin Profile. It keeps the limited operational directory (drivers, conductors,
+and parents) separate from the large student roster, shows unassigned staff and
+bus coverage, and allows Admins to update contact details and staff bus
+assignments. Driver and conductor assignment metadata is stored on the related
+`/busesFleet/{busId}` record.
+
 ## Technology
 
 - Flutter and Dart
@@ -64,16 +71,26 @@ test/                       Flutter tests
 The main Realtime Database paths are:
 
 - `/users/{uid}`: profile, exact-case role, contact details, and optional bus
-  assignment.
+  assignment. Profiles may also contain a `profileImage` base64 string for
+  the user's optional profile photo; the client limits uploads to 1.5 MB.
 - `/buses/{busId}`: live ESP32 GPS and telemetry data.
 - `/busesFleet/{busId}`: administrative fleet metadata and status.
 - `/studentRosters/{busId}/{studentId}`: student profiles and attendance.
 - `/parentChildIndex/{parentUid}/{busId}/{studentId}`: parent-child lookup.
 - `/notifications/{uid}/{notificationId}`: persisted user notifications.
+- `/trips/{busId}/{tripId}`: software trip lifecycle records for scheduled,
+  preparing, active, paused, completed, and cancelled trips.
+- `/attendanceEvents/{busId}/{eventId}`: auditable attendance events linked to
+  a student, bus, trip, actor, timestamp, and source.
 
 `database.rules.json` is part of the application contract. Keep client
 operations compatible with its role and bus-assignment checks. Do not replace
 Firebase initialization with a mock in application code.
+
+Current trip and attendance workflows are software-only. Live location
+telemetry remains an external Firebase data source; the Flutter application
+does not emulate GPS or depend on physical hardware for trip and attendance
+state management.
 
 ## Quick start
 

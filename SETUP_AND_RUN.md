@@ -65,6 +65,9 @@ Before using the app with real data, confirm that the Firebase project has:
 5. A `busId` assigned to each Driver and Conductor, such as `bus_01`.
 6. Parent-child index records and student roster records created for Parent
    accounts.
+7. Configured route stop records under `/routes/{routeId}/stops`.
+8. Trip records created by the Driver workflow under
+   `/trips/{busId}/{tripId}` when operating a route.
 
 Do not place service-account private keys in the Flutter application or commit
 secrets to the repository. Client access is enforced by the Realtime Database
@@ -131,6 +134,14 @@ Use a Firebase Authentication account whose `/users/{uid}` profile has been
 prepared in Realtime Database. The role is case-sensitive. A missing or
 incorrect role can prevent the intended role-specific screens from loading.
 
+### Profile images
+
+From any role's Profile page, select the avatar action to **Add profile image**,
+**Change profile image**, or **Delete profile image**. Images are stored in the
+user's Firebase profile as a size-limited base64 value so the workflow works on
+Android, web, and desktop without Firebase Storage configuration. Choose an
+image smaller than 1.5 MB.
+
 ## 6. Validate changes
 
 Run static analysis and tests from the repository root:
@@ -193,6 +204,20 @@ Confirm that the selected platform is supported by
 `lib/firebase_options.dart` and that the platform-specific configuration file
 is present. Regenerate configuration with `flutterfire configure` if the
 Firebase project changed.
+
+### Trip or attendance updates are denied
+
+Confirm that the Driver or Conductor has the correct assigned `busId`, that
+the trip uses that same bus ID, and that the account is authenticated. Trip
+and attendance event writes are restricted by `database.rules.json`; deploy
+the updated rules after changing them.
+
+### No live location is available
+
+The Flutter application displays only telemetry already present at
+`/buses/{busId}`. It does not generate simulated GPS or hardware data. Check
+that the expected software telemetry producer is writing a valid record and
+that its `lastUpdated` value is current.
 
 ### Login succeeds but the wrong screen opens
 

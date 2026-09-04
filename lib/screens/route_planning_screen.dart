@@ -84,49 +84,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
   static const _routeId = 'route_7a_morning';
   StreamSubscription<List<Map<String, dynamic>>>? _routeSubscription;
 
-  // Mock Data
-  static List<RouteStop> _stops = [
-    const RouteStop(
-      time: '07:30 AM',
-      name: 'Depot Departure (Central Station)',
-      isCompleted: true,
-      statusMessage: 'Departed',
-    ),
-    const RouteStop(
-      time: '07:45 AM',
-      name: 'Stop 1: Pine & 5th Avenue',
-      studentsCount: 4,
-      isCompleted: true,
-      statusMessage: '4 students picked up',
-    ),
-    const RouteStop(
-      time: '08:00 AM',
-      name: 'Stop 2: Elm Street & Park Rd',
-      studentsCount: 6,
-      isCompleted: true,
-      statusMessage: '6 students picked up',
-    ),
-    const RouteStop(
-      time: '08:14 AM',
-      name: 'Stop 3: Oak St & Maple Ave',
-      studentsCount: 5,
-      isCurrent: true,
-      eta: 'ETA: 2 min',
-      statusMessage: 'Approaching stop',
-    ),
-    const RouteStop(
-      time: '08:28 AM',
-      name: 'Stop 4: Sycamore Lane',
-      studentsCount: 3,
-      eta: 'ETA: 14 min',
-    ),
-    const RouteStop(
-      time: '08:45 AM',
-      name: 'Destination: Oakridge Elementary',
-      studentsCount: 18,
-      eta: 'ETA: 31 min',
-    ),
-  ];
+  static List<RouteStop> _stops = [];
 
   @override
   void initState() {

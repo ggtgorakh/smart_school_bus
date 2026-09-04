@@ -19,6 +19,9 @@
         },
         "phone": {
           ".validate": "!data.exists() || newData.val() === data.val() || root.child('users').child(auth.uid).child('role').val() === 'Admin'"
+        },
+        "profileImage": {
+          ".validate": "newData.val() == null || (newData.isString() && newData.val().length <= 2000000)"
         }
       }
     },
@@ -76,6 +79,18 @@
         "driverName": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId))",
           ".validate": "newData.isString()"
+        },
+        "conductorUid": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
+          ".validate": "newData.val() == null || newData.isString()"
+        },
+        "conductorName": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
+          ".validate": "newData.val() == null || newData.isString()"
+        },
+        "conductorPhone": {
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
+          ".validate": "newData.val() == null || newData.isString()"
         }
       }
     },
@@ -92,6 +107,27 @@
             "isCompleted": { ".validate": "newData.isBoolean()" },
             "isCurrent": { ".validate": "newData.isBoolean()" }
           }
+        }
+      }
+    },
+
+    "trips": {
+      "$busId": {
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId) || root.child('parentChildIndex').child(auth.uid).child($busId).exists())",
+        "$tripId": {
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId && newData.child('driverUid').val() === auth.uid) || (root.child('users').child(auth.uid).child('role').val() === 'Conductor' && root.child('users').child(auth.uid).child('busId').val() === $busId && newData.child('conductorUid').val() === auth.uid))",
+          ".validate": "newData.hasChildren(['tripId', 'busId', 'routeId', 'driverUid', 'status']) && newData.child('tripId').val() === $tripId && newData.child('busId').val() === $busId && newData.child('routeId').isString() && newData.child('driverUid').isString() && newData.child('status').val().matches(/^(scheduled|preparing|active|paused|completed|cancelled)$/) && (!newData.child('startTime').exists() || newData.child('startTime').isNumber()) && (!newData.child('endTime').exists() || newData.child('endTime').isNumber())"
+        }
+      }
+    },
+
+    "attendanceEvents": {
+      "$busId": {
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId))",
+        "$eventId": {
+          ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId) || root.child('parentChildIndex').child(auth.uid).child($busId).child(data.child('studentId').val()).exists())",
+          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId))",
+          ".validate": "newData.hasChildren(['eventId', 'studentId', 'busId', 'tripId', 'actorUid', 'status', 'source', 'timestamp']) && newData.child('eventId').val() === $eventId && newData.child('busId').val() === $busId && newData.child('studentId').isString() && newData.child('tripId').isString() && newData.child('actorUid').isString() && newData.child('status').val().matches(/^(boarded|pending|notBoarded|flagged)$/) && newData.child('source').isString() && newData.child('timestamp').isNumber() && (!newData.child('correctionOf').exists() || newData.child('correctionOf').isString()) && (!newData.child('correctionReason').exists() || newData.child('correctionReason').isString())"
         }
       }
     },

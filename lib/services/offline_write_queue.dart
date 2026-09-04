@@ -7,16 +7,38 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum OfflineWriteOperation { set, update, remove }
 
 class OfflineWrite {
-  const OfflineWrite({required this.path, required this.operation, this.value});
+  const OfflineWrite({
+    required this.path,
+    required this.operation,
+    this.value,
+    this.userId,
+    this.busId,
+    this.tripId,
+    this.studentId,
+    this.eventId,
+    this.source,
+  });
 
   final String path;
   final OfflineWriteOperation operation;
   final dynamic value;
+  final String? userId;
+  final String? busId;
+  final String? tripId;
+  final String? studentId;
+  final String? eventId;
+  final String? source;
 
   Map<String, dynamic> toJson() => {
     'path': path,
     'operation': operation.name,
     if (value != null) 'value': value,
+    if (userId != null) 'userId': userId,
+    if (busId != null) 'busId': busId,
+    if (tripId != null) 'tripId': tripId,
+    if (studentId != null) 'studentId': studentId,
+    if (eventId != null) 'eventId': eventId,
+    if (source != null) 'source': source,
   };
 
   factory OfflineWrite.fromJson(Map<String, dynamic> json) {
@@ -26,6 +48,12 @@ class OfflineWrite {
         json['operation'] as String,
       ),
       value: json['value'],
+      userId: json['userId']?.toString(),
+      busId: json['busId']?.toString(),
+      tripId: json['tripId']?.toString(),
+      studentId: json['studentId']?.toString(),
+      eventId: json['eventId']?.toString(),
+      source: json['source']?.toString(),
     );
   }
 }
@@ -84,9 +112,27 @@ class OfflineWriteQueue {
     required String path,
     required OfflineWriteOperation operation,
     dynamic value,
+    String? userId,
+    String? busId,
+    String? tripId,
+    String? studentId,
+    String? eventId,
+    String? source,
   }) async {
     await initialize();
-    _writes.add(OfflineWrite(path: path, operation: operation, value: value));
+    _writes.add(
+      OfflineWrite(
+        path: path,
+        operation: operation,
+        value: value,
+        userId: userId,
+        busId: busId,
+        tripId: tripId,
+        studentId: studentId,
+        eventId: eventId,
+        source: source,
+      ),
+    );
     await _persist();
   }
 

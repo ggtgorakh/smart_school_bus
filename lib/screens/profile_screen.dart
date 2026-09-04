@@ -1,12 +1,16 @@
 // lib/screens/profile_screen.dart
 
+import 'dart:convert';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_service.dart';
 import 'admin/create_user_screen.dart';
+import 'admin/admin_operations_screen.dart';
 
 class _ProfileData {
   final String name;
@@ -14,6 +18,7 @@ class _ProfileData {
   final String? phone;
   final String role;
   final String? busId;
+  final String? profileImage;
 
   _ProfileData({
     required this.name,
@@ -21,6 +26,7 @@ class _ProfileData {
     required this.phone,
     required this.role,
     required this.busId,
+    required this.profileImage,
   });
 
   factory _ProfileData.fromMap(
@@ -37,6 +43,7 @@ class _ProfileData {
       phone: map['phone']?.toString(),
       role: map['role']?.toString() ?? 'Parent',
       busId: map['busId']?.toString(),
+      profileImage: map['profileImage']?.toString(),
     );
   }
 }
@@ -62,6 +69,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _scaleAnimation;
+  bool _isProfileImageSaving = false;
 
   @override
   void initState() {
@@ -468,46 +476,76 @@ class _ProfileScreenState extends State<ProfileScreen>
                         phone: null,
                         role: widget.activeRole,
                         busId: null,
+                        profileImage: null,
                       );
 
                 final authorizedScope = _authorizedScope(profile.role);
+                final isDesktop = context.isDesktop;
 
                 return SingleChildScrollView(
-                  padding: EdgeInsets.all(isMobile ? 16 : 24),
+                  padding: EdgeInsets.all(isMobile ? 16 : 28),
                   child: Center(
                     child: Container(
                       constraints: BoxConstraints(
-                        maxWidth: isMobile ? double.infinity : 600,
+                        maxWidth: isMobile ? double.infinity : 1180,
                       ),
-                      child: Column(
-                        children: [
-                          // Profile Header
-                          _buildProfileHeader(context, profile, user.uid),
-                          const SizedBox(height: 16),
-
-                          // Stats Row
-                          _buildStatsRow(context, profile),
-                          const SizedBox(height: 16),
-
-                          // Permissions Card
-                          _buildPermissionsCard(context, authorizedScope),
-
-                          // Admin Card (if admin)
-                          if (profile.role == 'Admin') ...[
-                            const SizedBox(height: 16),
-                            _buildAdminCard(context),
-                          ],
-
-                          const SizedBox(height: 16),
-
-                          // Emergency Contacts
-                          _buildEmergencyContacts(context),
-                          const SizedBox(height: 20),
-
-                          // Sign Out Button
-                          _buildSignOutButton(context),
-                        ],
-                      ),
+                      child: isDesktop
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  flex: 5,
+                                  child: Column(
+                                    children: [
+                                      _buildProfileHeader(
+                                        context,
+                                        profile,
+                                        user.uid,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      _buildStatsRow(context, profile),
+                                      const SizedBox(height: 16),
+                                      _buildPermissionsCard(
+                                        context,
+                                        authorizedScope,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 24),
+                                Expanded(
+                                  flex: 4,
+                                  child: Column(
+                                    children: [
+                                      if (profile.role == 'Admin') ...[
+                                        _buildAdminCard(context),
+                                        const SizedBox(height: 16),
+                                      ],
+                                      _buildEmergencyContacts(context),
+                                      const SizedBox(height: 20),
+                                      _buildSignOutButton(context),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                _buildProfileHeader(context, profile, user.uid),
+                                const SizedBox(height: 16),
+                                _buildStatsRow(context, profile),
+                                const SizedBox(height: 16),
+                                _buildPermissionsCard(context, authorizedScope),
+                                if (profile.role == 'Admin') ...[
+                                  const SizedBox(height: 16),
+                                  _buildAdminCard(context),
+                                ],
+                                const SizedBox(height: 16),
+                                _buildEmergencyContacts(context),
+                                const SizedBox(height: 20),
+                                _buildSignOutButton(context),
+                              ],
+                            ),
                     ),
                   ),
                 );
@@ -572,13 +610,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                     ),
                   ],
                 ),
-                child: const Center(
-                  child: Icon(
-                    Icons.person_rounded,
-                    size: 52,
-                    color: Colors.white,
-                  ),
-                ),
+                child: _buildProfileAvatar(context, profile.profileImage),
               ),
               Positioned(
                 bottom: 0,
@@ -590,13 +622,15 @@ class _ProfileScreenState extends State<ProfileScreen>
                     shape: BoxShape.circle,
                   ),
                   child: InkWell(
-                    onTap: () => _openEditNameSheet(
-                      profile.name,
-                      profile.phone,
-                      uid,
-                      profile.role,
-                      profile.busId,
-                    ),
+                    onTap: _isProfileImageSaving
+                        ? null
+                        : () => _showProfileImageActions(
+                            context,
+                            uid,
+                            hasImage:
+                                profile.profileImage != null &&
+                                profile.profileImage!.isNotEmpty,
+                          ),
                     borderRadius: BorderRadius.circular(20),
                     child: Container(
                       padding: const EdgeInsets.all(6),
@@ -608,11 +642,22 @@ class _ProfileScreenState extends State<ProfileScreen>
                           width: 2,
                         ),
                       ),
-                      child: const Icon(
-                        Icons.edit_rounded,
-                        color: Colors.white,
-                        size: 16,
-                      ),
+                      child: _isProfileImageSaving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : Icon(
+                              profile.profileImage?.isNotEmpty == true
+                                  ? Icons.photo_camera_rounded
+                                  : Icons.add_a_photo_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            ),
                     ),
                   ),
                 ),
@@ -684,9 +729,180 @@ class _ProfileScreenState extends State<ProfileScreen>
               ],
             ),
           ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: _isProfileImageSaving
+                ? null
+                : () => _openEditNameSheet(
+                    profile.name,
+                    profile.phone,
+                    uid,
+                    profile.role,
+                    profile.busId,
+                  ),
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            label: const Text('Edit profile details'),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildProfileAvatar(BuildContext context, String? imageData) {
+    if (imageData != null && imageData.isNotEmpty) {
+      try {
+        return ClipOval(
+          child: Image.memory(
+            base64Decode(imageData),
+            width: 100,
+            height: 100,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _defaultProfileAvatar(),
+          ),
+        );
+      } on FormatException {
+        return _defaultProfileAvatar();
+      }
+    }
+    return _defaultProfileAvatar();
+  }
+
+  Widget _defaultProfileAvatar() {
+    return const Center(
+      child: Icon(Icons.person_rounded, size: 52, color: Colors.white),
+    );
+  }
+
+  Future<void> _showProfileImageActions(
+    BuildContext context,
+    String uid, {
+    required bool hasImage,
+  }) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: Text(
+                hasImage ? 'Change profile image' : 'Add profile image',
+              ),
+              onTap: () => Navigator.pop(sheetContext, 'pick'),
+            ),
+            if (hasImage)
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_outline,
+                  color: AppColors.errorRed,
+                ),
+                title: const Text('Delete profile image'),
+                onTap: () => Navigator.pop(sheetContext, 'delete'),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || action == null) return;
+    if (action == 'pick') {
+      await _pickProfileImage(uid);
+    } else if (action == 'delete') {
+      await _deleteProfileImage(uid);
+    }
+  }
+
+  Future<void> _pickProfileImage(String uid) async {
+    final file = await FilePicker.pickFile(type: FileType.image);
+    if (!mounted || file == null) return;
+
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    if (bytes.length > 1500000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Choose an image smaller than 1.5 MB.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isProfileImageSaving = true);
+    try {
+      await AuthService.instance.updateOwnProfileImage(
+        uid,
+        base64Encode(bytes),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile image updated.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not update profile image: $error'),
+            backgroundColor: AppColors.errorRed,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProfileImageSaving = false);
+    }
+  }
+
+  Future<void> _deleteProfileImage(String uid) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete profile image?'),
+        content: const Text('Your profile will return to the default avatar.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    setState(() => _isProfileImageSaving = true);
+    try {
+      await AuthService.instance.updateOwnProfileImage(uid, null);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile image deleted.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not delete profile image: $error'),
+            backgroundColor: AppColors.errorRed,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProfileImageSaving = false);
+    }
   }
 
   // ============================================================
@@ -972,6 +1188,46 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                 );
               },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Material(
+            color: Colors.transparent,
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.successGreen.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.manage_accounts_rounded,
+                  color: AppColors.successGreen,
+                  size: 18,
+                ),
+              ),
+              title: const Text(
+                'People & Bus Assignments',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+              ),
+              subtitle: Text(
+                'Edit drivers, conductors, parents, and assigned buses',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              trailing: const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.outline,
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const AdminOperationsScreen(),
+                ),
+              ),
             ),
           ),
         ],

@@ -10,6 +10,9 @@ import 'fleet_management_screen.dart';
 import 'profile_screen.dart';
 import 'attendance_scanner_screen.dart';
 import 'route_planning_screen.dart';
+import 'notifications_screen.dart';
+import 'parent_tracking_screen.dart';
+import 'trip_workflow_screen.dart';
 
 class AuthorizedTab {
   final String title;
@@ -105,6 +108,39 @@ class _MainNavigationShellState extends State<MainNavigationShell>
           icon: Icons.person_outline,
           activeIcon: Icons.person,
         ),
+        AuthorizedTab(
+          title: 'Driver Student Attendance',
+          screen: AttendanceScannerScreen(busId: widget.busId),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.how_to_reg_outlined),
+            activeIcon: Icon(Icons.how_to_reg),
+            label: 'Students',
+          ),
+          icon: Icons.how_to_reg_outlined,
+          activeIcon: Icons.how_to_reg,
+        ),
+        AuthorizedTab(
+          title: 'Driver Trip Operations',
+          screen: TripWorkflowScreen(busId: widget.busId, role: role),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.route_outlined),
+            activeIcon: Icon(Icons.route),
+            label: 'Trip',
+          ),
+          icon: Icons.route_outlined,
+          activeIcon: Icons.route,
+        ),
+        AuthorizedTab(
+          title: 'Driver Notifications',
+          screen: const NotificationsScreen(),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.notifications_none),
+            activeIcon: Icon(Icons.notifications),
+            label: 'Alerts',
+          ),
+          icon: Icons.notifications_none,
+          activeIcon: Icons.notifications,
+        ),
       ];
     }
 
@@ -143,6 +179,28 @@ class _MainNavigationShellState extends State<MainNavigationShell>
           ),
           icon: Icons.person_outline,
           activeIcon: Icons.person,
+        ),
+        AuthorizedTab(
+          title: 'Conductor Notifications',
+          screen: const NotificationsScreen(),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.notifications_none),
+            activeIcon: Icon(Icons.notifications),
+            label: 'Alerts',
+          ),
+          icon: Icons.notifications_none,
+          activeIcon: Icons.notifications,
+        ),
+        AuthorizedTab(
+          title: 'Conductor Trip Status',
+          screen: TripWorkflowScreen(busId: widget.busId, role: role),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.route_outlined),
+            activeIcon: Icon(Icons.route),
+            label: 'Trip',
+          ),
+          icon: Icons.route_outlined,
+          activeIcon: Icons.route,
         ),
       ];
     }
@@ -194,6 +252,17 @@ class _MainNavigationShellState extends State<MainNavigationShell>
           icon: Icons.person_outline,
           activeIcon: Icons.person,
         ),
+        AuthorizedTab(
+          title: 'Admin Notifications',
+          screen: const NotificationsScreen(),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.notifications_none),
+            activeIcon: Icon(Icons.notifications),
+            label: 'Alerts',
+          ),
+          icon: Icons.notifications_none,
+          activeIcon: Icons.notifications,
+        ),
       ];
     }
 
@@ -212,7 +281,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
       ),
       AuthorizedTab(
         title: 'Live Bus Tracking',
-        screen: LiveTrackingScreen(busId: widget.busId),
+        screen: const ParentTrackingScreen(),
         navItem: const BottomNavigationBarItem(
           icon: Icon(Icons.map_outlined),
           activeIcon: Icon(Icons.map),
@@ -231,6 +300,17 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         ),
         icon: Icons.person_outline,
         activeIcon: Icons.person,
+      ),
+      AuthorizedTab(
+        title: 'Parent Notifications',
+        screen: const NotificationsScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.notifications_none),
+          activeIcon: Icon(Icons.notifications),
+          label: 'Alerts',
+        ),
+        icon: Icons.notifications_none,
+        activeIcon: Icons.notifications,
       ),
     ];
   }

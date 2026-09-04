@@ -25,6 +25,9 @@ class BusFleet {
   final String driverName;
   final String? driverUid;
   final String? driverPhone;
+  final String? conductorUid;
+  final String? conductorName;
+  final String? conductorPhone;
   final String routeName;
   final String estArrival;
   final FleetStatus status;
@@ -36,6 +39,9 @@ class BusFleet {
     required this.driverName,
     this.driverUid,
     this.driverPhone,
+    this.conductorUid,
+    this.conductorName,
+    this.conductorPhone,
     required this.routeName,
     required this.estArrival,
     required this.status,
@@ -111,6 +117,9 @@ class BusFleet {
     String? driverName,
     String? driverUid,
     String? driverPhone,
+    String? conductorUid,
+    String? conductorName,
+    String? conductorPhone,
     String? routeName,
     String? estArrival,
     FleetStatus? status,
@@ -122,6 +131,9 @@ class BusFleet {
       driverName: driverName ?? this.driverName,
       driverUid: driverUid ?? this.driverUid,
       driverPhone: driverPhone ?? this.driverPhone,
+      conductorUid: conductorUid ?? this.conductorUid,
+      conductorName: conductorName ?? this.conductorName,
+      conductorPhone: conductorPhone ?? this.conductorPhone,
       routeName: routeName ?? this.routeName,
       estArrival: estArrival ?? this.estArrival,
       status: status ?? this.status,
@@ -139,6 +151,12 @@ class BusFleet {
         'driverUid': driverUid!.trim(),
       if (driverPhone != null && driverPhone!.trim().isNotEmpty)
         'driverPhone': driverPhone!.trim(),
+      if (conductorUid != null && conductorUid!.trim().isNotEmpty)
+        'conductorUid': conductorUid!.trim(),
+      if (conductorName != null && conductorName!.trim().isNotEmpty)
+        'conductorName': conductorName!.trim(),
+      if (conductorPhone != null && conductorPhone!.trim().isNotEmpty)
+        'conductorPhone': conductorPhone!.trim(),
       'routeName': routeName,
       'estArrival': estArrival,
       'status': status.name,
@@ -156,6 +174,9 @@ class BusFleet {
       driverName: map['driverName']?.toString() ?? 'Unassigned',
       driverUid: map['driverUid']?.toString(),
       driverPhone: map['driverPhone']?.toString(),
+      conductorUid: map['conductorUid']?.toString(),
+      conductorName: map['conductorName']?.toString(),
+      conductorPhone: map['conductorPhone']?.toString(),
       routeName: map['routeName']?.toString() ?? 'No route assigned',
       estArrival: map['estArrival']?.toString() ?? '--',
       status: fleetStatusFromString(map['status']?.toString()),

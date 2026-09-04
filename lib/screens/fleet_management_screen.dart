@@ -10,9 +10,9 @@ import '../services/firebase_service.dart';
 import '../services/notification_service.dart';
 import '../widgets/kpi_card.dart';
 import 'admin/create_user_screen.dart';
-import 'admin/people_directory_screen.dart';
 import 'admin/manage_students_screen.dart';
 import 'admin/import_roster_screen.dart';
+import 'admin/admin_operations_screen.dart';
 import 'live_tracking_screen.dart';
 
 class FleetManagementScreen extends StatefulWidget {
@@ -246,11 +246,11 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
             _buildActionButton(
               context,
               icon: Icons.groups_rounded,
-              label: 'People',
+              label: 'People & Assignments',
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const PeopleDirectoryScreen(),
+                  builder: (_) => const AdminOperationsScreen(),
                 ),
               ),
             ),

@@ -1,11 +1,13 @@
 // lib/services/firebase_service.dart
 
 import 'dart:async';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import '../models/bus_fleet.dart';
 import '../models/bus_location.dart';
 import '../models/student.dart';
+import '../models/attendance_event.dart';
+import '../models/trip.dart';
 import 'offline_write_queue.dart';
 
 /// Central wrapper around Firebase Realtime Database for live telemetry
@@ -16,6 +18,191 @@ class FirebaseService {
 
   final DatabaseReference _root = FirebaseDatabase.instance.ref();
   final OfflineWriteQueue _writeQueue = OfflineWriteQueue.instance;
+
+  String? get currentUserUid => FirebaseAuth.instance.currentUser?.uid;
+
+  Stream<List<Trip>> streamTripsForBus(String busId) {
+    return _root.child('trips/$busId').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return <Trip>[];
+      final trips = <Trip>[];
+      raw.forEach((key, value) {
+        if (value is Map) {
+          trips.add(Trip.fromMap(value, tripId: key.toString()));
+        }
+      });
+      trips.sort((a, b) {
+        final aTime = a.startTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = b.startTime ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime);
+      });
+      return trips;
+    });
+  }
+
+  Stream<Trip?> streamActiveTrip(String busId) {
+    return streamTripsForBus(busId).map((trips) {
+      for (final trip in trips) {
+        if (trip.isOpen) return trip;
+      }
+      return null;
+    });
+  }
+
+  Future<Trip> createTrip({
+    required String busId,
+    required String routeId,
+    required String driverUid,
+    String? conductorUid,
+  }) async {
+    final active = await _root.child('trips/$busId').get();
+    if (active.value is Map) {
+      for (final entry in (active.value as Map).entries) {
+        if (entry.value is Map) {
+          final trip = Trip.fromMap(
+            entry.value as Map,
+            tripId: entry.key.toString(),
+          );
+          if (trip.isOpen) {
+            throw StateError('This bus already has an open trip.');
+          }
+        }
+      }
+    }
+
+    final tripId = _root.child('trips/$busId').push().key;
+    if (tripId == null) throw StateError('Unable to create a trip ID.');
+    final trip = Trip(
+      tripId: tripId,
+      busId: busId,
+      routeId: routeId,
+      driverUid: driverUid,
+      conductorUid: conductorUid,
+      status: TripStatus.scheduled,
+    );
+    await _root.child('trips/$busId/$tripId').set(trip.toMap());
+    return trip;
+  }
+
+  Future<Trip> transitionTrip({
+    required String busId,
+    required String tripId,
+    required TripStatus nextStatus,
+  }) async {
+    final snapshot = await _root.child('trips/$busId/$tripId').get();
+    if (snapshot.value is! Map) {
+      throw StateError('Trip $tripId does not exist.');
+    }
+    final current = Trip.fromMap(snapshot.value as Map, tripId: tripId);
+    if (!Trip.canTransition(current.status, nextStatus)) {
+      throw StateError(
+        'Cannot transition trip from ${current.status.name} to ${nextStatus.name}.',
+      );
+    }
+
+    final now = DateTime.now();
+    final updates = <String, dynamic>{'status': nextStatus.name};
+    if (nextStatus == TripStatus.active && current.startTime == null) {
+      updates['startTime'] = now.millisecondsSinceEpoch;
+    }
+    if (nextStatus == TripStatus.completed ||
+        nextStatus == TripStatus.cancelled) {
+      updates['endTime'] = now.millisecondsSinceEpoch;
+    }
+    await _root.child('trips/$busId/$tripId').update(updates);
+    return current.copyWith(
+      status: nextStatus,
+      startTime: updates.containsKey('startTime') ? now : current.startTime,
+      endTime: updates.containsKey('endTime') ? now : current.endTime,
+    );
+  }
+
+  Stream<List<AttendanceEvent>> streamAttendanceEvents(String tripId) {
+    return _root.child('attendanceEvents').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return <AttendanceEvent>[];
+      final events = <AttendanceEvent>[];
+      raw.forEach((busId, busEvents) {
+        if (busEvents is! Map) return;
+        busEvents.forEach((key, value) {
+          if (value is Map && value['tripId']?.toString() == tripId) {
+            events.add(AttendanceEvent.fromMap(value, eventId: key.toString()));
+          }
+        });
+      });
+      events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return events;
+    });
+  }
+
+  Future<AttendanceEvent> recordAttendanceEvent({
+    required String studentId,
+    required String busId,
+    required String tripId,
+    required AttendanceEventStatus status,
+    required String source,
+    String? correctionOf,
+    String? correctionReason,
+  }) async {
+    final actorUid = currentUserUid;
+    if (actorUid == null) {
+      throw StateError('Attendance updates require an authenticated user.');
+    }
+    final eventId = _root.child('attendanceEvents').push().key;
+    if (eventId == null) throw StateError('Unable to create an attendance ID.');
+    final event = AttendanceEvent(
+      eventId: eventId,
+      studentId: studentId,
+      busId: busId,
+      tripId: tripId,
+      actorUid: actorUid,
+      status: status,
+      source: source,
+      timestamp: DateTime.now(),
+      correctionOf: correctionOf,
+      correctionReason: correctionReason,
+    );
+    final eventPath = 'attendanceEvents/$busId/$eventId';
+    final studentPath = 'studentRosters/$busId/$studentId';
+    final studentUpdates = <String, dynamic>{
+      'status': status == AttendanceEventStatus.boarded
+          ? StudentStatus.boarded.name
+          : status == AttendanceEventStatus.flagged
+          ? StudentStatus.alert.name
+          : StudentStatus.pending.name,
+      'boardedAt': status == AttendanceEventStatus.boarded
+          ? event.timestamp.millisecondsSinceEpoch
+          : null,
+    };
+    try {
+      final updates = <String, dynamic>{
+        eventPath: event.toMap(),
+        '$studentPath/status': studentUpdates['status'],
+        '$studentPath/boardedAt': studentUpdates['boardedAt'],
+      };
+      await _root.update(updates);
+    } catch (error) {
+      if (_shouldQueueWrite(error)) {
+        await _writeQueue.enqueue(
+          path: '',
+          operation: OfflineWriteOperation.update,
+          value: {
+            eventPath: event.toMap(),
+            '$studentPath/status': studentUpdates['status'],
+            '$studentPath/boardedAt': studentUpdates['boardedAt'],
+          },
+          userId: actorUid,
+          busId: busId,
+          tripId: tripId,
+          studentId: studentId,
+          eventId: eventId,
+          source: source,
+        );
+      }
+      rethrow;
+    }
+    return event;
+  }
 
   bool _shouldQueueWrite(Object error) {
     if (error is! FirebaseException) return true;
@@ -168,7 +355,11 @@ class FirebaseService {
             (event) {
               final val = event.snapshot.value;
               if (val is Map) {
-                latest[studentId] = Student.fromMap(val, id: studentId);
+                latest[studentId] = Student.fromMap(
+                  val,
+                  id: studentId,
+                  busId: busId,
+                );
               } else {
                 latest.remove(studentId);
               }
@@ -544,15 +735,20 @@ class FirebaseService {
     String? routeName,
     String? driverUid,
     String? driverPhone,
+    String? conductorUid,
+    String? conductorName,
+    String? conductorPhone,
   }) async {
     try {
       final Map<String, dynamic> updates = {'status': status.name};
       if (driverName != null && driverName.trim().isNotEmpty) {
         updates['driverName'] = driverName.trim();
       }
+
       if (routeName != null && routeName.trim().isNotEmpty) {
         updates['routeName'] = routeName.trim();
       }
+
       if (driverUid != null) {
         updates['driverUid'] = driverUid.trim().isEmpty
             ? null
@@ -563,9 +759,44 @@ class FirebaseService {
             ? null
             : driverPhone.trim();
       }
+      if (conductorUid != null) {
+        updates['conductorUid'] = conductorUid.trim().isEmpty
+            ? null
+            : conductorUid.trim();
+      }
+      if (conductorName != null) {
+        updates['conductorName'] = conductorName.trim().isEmpty
+            ? null
+            : conductorName.trim();
+      }
+      if (conductorPhone != null) {
+        updates['conductorPhone'] = conductorPhone.trim().isEmpty
+            ? null
+            : conductorPhone.trim();
+      }
       await _root.child('busesFleet/$busId').update(updates);
     } catch (error) {
       print('FirebaseService: Error updating fleet status: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> updateFleetAssignmentForRole(
+    String busId, {
+    required String role,
+    required String? uid,
+    required String name,
+    required String? phone,
+  }) async {
+    final prefix = role == 'Driver' ? 'driver' : 'conductor';
+    try {
+      await _root.child('busesFleet/$busId').update({
+        '${prefix}Uid': uid,
+        '${prefix}Name': name,
+        '${prefix}Phone': phone,
+      });
+    } catch (error) {
+      print('FirebaseService: Error updating $role assignment: $error');
       rethrow;
     }
   }

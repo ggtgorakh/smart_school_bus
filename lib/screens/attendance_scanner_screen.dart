@@ -6,16 +6,14 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/student.dart';
 import '../models/app_notification.dart';
+import '../models/attendance_event.dart';
 import '../services/firebase_service.dart';
 import '../services/notification_service.dart';
 
 class AttendanceScannerScreen extends StatefulWidget {
   final String busId;
 
-  const AttendanceScannerScreen({
-    super.key,
-    this.busId = 'bus_01',
-  });
+  const AttendanceScannerScreen({super.key, this.busId = 'bus_01'});
 
   @override
   State<AttendanceScannerScreen> createState() =>
@@ -44,13 +42,13 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
       parent: _animationController,
       curve: Curves.easeOut,
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.04),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
     _animationController.forward();
   }
 
@@ -64,6 +62,25 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
     final newStatus = student.status == StudentStatus.boarded
         ? StudentStatus.pending
         : StudentStatus.boarded;
+    await _setStudentAttendance(
+      student,
+      newStatus == StudentStatus.boarded
+          ? AttendanceEventStatus.boarded
+          : AttendanceEventStatus.pending,
+    );
+  }
+
+  Future<void> _setStudentAttendance(
+    Student student,
+    AttendanceEventStatus eventStatus, {
+    String? correctionReason,
+  }) async {
+    final newStatus = switch (eventStatus) {
+      AttendanceEventStatus.boarded => StudentStatus.boarded,
+      AttendanceEventStatus.flagged => StudentStatus.alert,
+      AttendanceEventStatus.pending ||
+      AttendanceEventStatus.notBoarded => StudentStatus.pending,
+    };
 
     // Get bus information for notification context
     final busSnapshot = await FirebaseDatabase.instance
@@ -73,13 +90,26 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
         ? (busSnapshot.value as Map)['busNumber']?.toString() ?? widget.busId
         : widget.busId;
 
-    // Update status in Firebase
-    await FirebaseService.instance.updateStudentStatus(
-      widget.busId,
-      student.id,
-      newStatus,
-      stopName: student.stopName,
-    );
+    final activeTrip = await FirebaseService.instance
+        .streamActiveTrip(widget.busId)
+        .first;
+    if (activeTrip != null) {
+      await FirebaseService.instance.recordAttendanceEvent(
+        studentId: student.id,
+        busId: widget.busId,
+        tripId: activeTrip.tripId,
+        status: eventStatus,
+        source: 'manual',
+        correctionReason: correctionReason,
+      );
+    } else {
+      await FirebaseService.instance.updateStudentStatus(
+        widget.busId,
+        student.id,
+        newStatus,
+        stopName: student.stopName,
+      );
+    }
 
     // Send notification to parent (if linked)
     if (student.parentUid != null && student.parentUid!.isNotEmpty) {
@@ -144,7 +174,52 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
     }
   }
 
+  Future<void> _showAttendanceActions(Student student) async {
+    final selected = await showModalBottomSheet<AttendanceEventStatus>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            for (final entry in const [
+              (AttendanceEventStatus.boarded, 'Boarded', Icons.check_circle),
+              (AttendanceEventStatus.notBoarded, 'Not boarded', Icons.cancel),
+              (AttendanceEventStatus.pending, 'Pending', Icons.hourglass_top),
+              (AttendanceEventStatus.flagged, 'Flagged', Icons.flag),
+            ])
+              ListTile(
+                leading: Icon(entry.$3),
+                title: Text(entry.$2),
+                onTap: () => Navigator.pop(context, entry.$1),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return;
+    await _setStudentAttendance(
+      student,
+      selected,
+      correctionReason: 'Corrected by attendance operator',
+    );
+  }
+
   Future<void> _confirmAllBoarded(List<Student> students) async {
+    final activeTrip = await FirebaseService.instance
+        .streamActiveTrip(widget.busId)
+        .first;
+    if (activeTrip != null) {
+      for (final student in students.where(
+        (student) => student.status != StudentStatus.boarded,
+      )) {
+        await FirebaseService.instance.recordAttendanceEvent(
+          studentId: student.id,
+          busId: widget.busId,
+          tripId: activeTrip.tripId,
+          status: AttendanceEventStatus.boarded,
+          source: 'bulk-confirm',
+        );
+      }
+    }
     await FirebaseService.instance.markAllStudentsStatus(
       widget.busId,
       StudentStatus.boarded,
@@ -176,12 +251,16 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
             children: [
               Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
               SizedBox(width: 10),
-              Expanded(child: Text('✓ All students boarded and synced to Firebase!')),
+              Expanded(
+                child: Text('✓ All students boarded and synced to Firebase!'),
+              ),
             ],
           ),
           backgroundColor: AppColors.successGreen,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       );
     }
@@ -208,22 +287,25 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
 
   List<Student> _getFilteredStudents(List<Student> students) {
     var filtered = students;
-    
+
     // Apply status filter
     if (_filterStatus != 'all') {
       filtered = filtered.where((s) => s.status.name == _filterStatus).toList();
     }
-    
+
     // Apply search filter
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase().trim();
-      filtered = filtered.where((s) =>
-        s.name.toLowerCase().contains(query) ||
-        s.id.toLowerCase().contains(query) ||
-        s.grade.toLowerCase().contains(query)
-      ).toList();
+      filtered = filtered
+          .where(
+            (s) =>
+                s.name.toLowerCase().contains(query) ||
+                s.id.toLowerCase().contains(query) ||
+                s.grade.toLowerCase().contains(query),
+          )
+          .toList();
     }
-    
+
     return filtered;
   }
 
@@ -241,13 +323,16 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
             stream: _studentsStream,
             builder: (context, snapshot) {
               final students = snapshot.data ?? const <Student>[];
-              final boardedCount =
-                  students.where((s) => s.status == StudentStatus.boarded).length;
-              final pendingCount =
-                  students.where((s) => s.status == StudentStatus.pending).length;
+              final boardedCount = students
+                  .where((s) => s.status == StudentStatus.boarded)
+                  .length;
+              final pendingCount = students
+                  .where((s) => s.status == StudentStatus.pending)
+                  .length;
               final filteredStudents = _getFilteredStudents(students);
-              final progress =
-                  students.isEmpty ? 0.0 : boardedCount / students.length;
+              final progress = students.isEmpty
+                  ? 0.0
+                  : boardedCount / students.length;
 
               return SafeArea(
                 child: Column(
@@ -261,19 +346,19 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
                       progress,
                       () => _openScannerDialog(students),
                     ),
-                    
+
                     // Search & Filter
                     _buildSearchAndFilter(
                       boardedCount,
                       pendingCount,
                       students.length,
                     ),
-                    
+
                     // Student List
                     Expanded(
                       child: _buildStudentList(filteredStudents, students),
                     ),
-                    
+
                     // Confirm Button
                     if (pendingCount > 0)
                       _buildConfirmButton(pendingCount, students),
@@ -355,10 +440,7 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
                     const SizedBox(height: 4),
                     const Text(
                       'Live Cloud Attendance Sync',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12.5,
-                      ),
+                      style: TextStyle(color: Colors.white70, fontSize: 12.5),
                     ),
                   ],
                 ),
@@ -452,7 +534,11 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
   // SEARCH & FILTER
   // ============================================================
 
-  Widget _buildSearchAndFilter(int boardedCount, int pendingCount, int totalCount) {
+  Widget _buildSearchAndFilter(
+    int boardedCount,
+    int pendingCount,
+    int totalCount,
+  ) {
     final isMobile = context.isMobile;
 
     return Container(
@@ -461,7 +547,9 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.3),
           ),
         ),
       ),
@@ -530,7 +618,9 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
       backgroundColor: Theme.of(context).colorScheme.surface,
       selectedColor: AppColors.safetyBlue.withValues(alpha: 0.12),
       labelStyle: TextStyle(
-        color: isSelected ? AppColors.safetyBlue : Theme.of(context).colorScheme.onSurfaceVariant,
+        color: isSelected
+            ? AppColors.safetyBlue
+            : Theme.of(context).colorScheme.onSurfaceVariant,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         fontSize: 12.5,
       ),
@@ -546,17 +636,16 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
   // STUDENT LIST
   // ============================================================
 
-  Widget _buildStudentList(List<Student> filteredStudents, List<Student> allStudents) {
+  Widget _buildStudentList(
+    List<Student> filteredStudents,
+    List<Student> allStudents,
+  ) {
     if (filteredStudents.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.search_off_rounded,
-              size: 48,
-              color: AppColors.outline,
-            ),
+            Icon(Icons.search_off_rounded, size: 48, color: AppColors.outline),
             const SizedBox(height: 12),
             Text(
               'No students found',
@@ -579,10 +668,13 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
       itemCount: filteredStudents.length,
       itemBuilder: (context, index) {
         return Padding(
-          padding: EdgeInsets.only(bottom: index < filteredStudents.length - 1 ? 10 : 0),
+          padding: EdgeInsets.only(
+            bottom: index < filteredStudents.length - 1 ? 10 : 0,
+          ),
           child: _StudentCard(
             student: filteredStudents[index],
             onToggle: () => _toggleStudentStatus(filteredStudents[index]),
+            onManage: () => _showAttendanceActions(filteredStudents[index]),
             index: index,
           ),
         );
@@ -601,7 +693,9 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           top: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            color: Theme.of(
+              context,
+            ).colorScheme.outlineVariant.withValues(alpha: 0.3),
           ),
         ),
         boxShadow: [
@@ -618,10 +712,14 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
           width: double.infinity,
           height: 50,
           child: ElevatedButton.icon(
-            onPressed: pendingCount > 0 ? () => _confirmAllBoarded(students) : null,
+            onPressed: pendingCount > 0
+                ? () => _confirmAllBoarded(students)
+                : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.successGreen,
-              disabledBackgroundColor: AppColors.successGreen.withValues(alpha: 0.4),
+              disabledBackgroundColor: AppColors.successGreen.withValues(
+                alpha: 0.4,
+              ),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -632,7 +730,10 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
               pendingCount > 0
                   ? 'Mark All Boarded ($pendingCount remaining)'
                   : '✓ All Students Boarded',
-              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),
@@ -648,11 +749,13 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
 class _StudentCard extends StatelessWidget {
   final Student student;
   final VoidCallback onToggle;
+  final VoidCallback onManage;
   final int index;
 
   const _StudentCard({
     required this.student,
     required this.onToggle,
+    required this.onManage,
     required this.index,
   });
 
@@ -667,80 +770,85 @@ class _StudentCard extends StatelessWidget {
       duration: const Duration(milliseconds: 300),
       tween: Tween<double>(begin: 0.0, end: 1.0),
       curve: Curves.easeOut,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isBoarded
-              ? AppColors.successGreen.withValues(alpha: 0.06)
-              : Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isBoarded ? AppColors.successGreen : AppColors.outlineVariant,
-            width: isBoarded ? 1.6 : 1.0,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
+      child: GestureDetector(
+        onLongPress: onManage,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isBoarded
+                ? AppColors.successGreen.withValues(alpha: 0.06)
+                : Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isBoarded
+                  ? AppColors.successGreen
+                  : AppColors.outlineVariant,
+              width: isBoarded ? 1.6 : 1.0,
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            _buildAvatar(),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    student.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14.5,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${student.grade} • ${student.seat} • ID: ${student.id}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: AppColors.onSurfaceVariant,
-                      fontSize: 12,
-                    ),
-                  ),
-                  if (isBoarded && timeStr.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.check_circle_rounded,
-                            size: 12,
-                            color: AppColors.successGreen,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Boarded at $timeStr',
-                            style: const TextStyle(
-                              color: AppColors.successGreen,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              _buildAvatar(),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      student.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14.5,
                       ),
                     ),
-                ],
+                    const SizedBox(height: 2),
+                    Text(
+                      '${student.grade} • ${student.seat} • ID: ${student.id}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                    if (isBoarded && timeStr.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.check_circle_rounded,
+                              size: 12,
+                              color: AppColors.successGreen,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Boarded at $timeStr',
+                              style: const TextStyle(
+                                color: AppColors.successGreen,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            _buildActionButton(isBoarded),
-          ],
+              const SizedBox(width: 8),
+              _buildActionButton(isBoarded),
+            ],
+          ),
         ),
       ),
       builder: (context, value, child) {
@@ -793,11 +901,7 @@ class _StudentCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: AppColors.successGreen,
               ),
-              child: const Icon(
-                Icons.check,
-                size: 12,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.check, size: 12, color: Colors.white),
             ),
           ),
       ],
@@ -890,13 +994,9 @@ class _BadgeScannerModalState extends State<_BadgeScannerModal>
       duration: const Duration(milliseconds: 1400),
     )..repeat(reverse: true);
 
-    _scanAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeInOut,
-    ));
+    _scanAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -977,10 +1077,8 @@ class _BadgeScannerModalState extends State<_BadgeScannerModal>
                   children: [
                     Text(
                       'Student Scanner',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontSize: 17, fontWeight: FontWeight.bold),
                     ),
                     Text(
                       'Scan by ID or Name',
@@ -1045,7 +1143,9 @@ class _BadgeScannerModalState extends State<_BadgeScannerModal>
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.alertOrange.withValues(alpha: 0.8),
+                              color: AppColors.alertOrange.withValues(
+                                alpha: 0.8,
+                              ),
                               blurRadius: 6,
                             ),
                           ],
@@ -1058,10 +1158,7 @@ class _BadgeScannerModalState extends State<_BadgeScannerModal>
                   bottom: 12,
                   child: Text(
                     'Align badge or ID card',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 11.5,
-                    ),
+                    style: TextStyle(color: Colors.white70, fontSize: 11.5),
                   ),
                 ),
               ],
@@ -1074,12 +1171,18 @@ class _BadgeScannerModalState extends State<_BadgeScannerModal>
             children: [
               Expanded(
                 child: TextField(
-                  controller: _scanMode == 'id' ? _idController : _nameController,
+                  controller: _scanMode == 'id'
+                      ? _idController
+                      : _nameController,
                   onSubmitted: _scanById,
                   decoration: InputDecoration(
-                    hintText: _scanMode == 'id' ? 'Enter Student ID (e.g. S1)' : 'Enter Student Name',
+                    hintText: _scanMode == 'id'
+                        ? 'Enter Student ID (e.g. S1)'
+                        : 'Enter Student Name',
                     prefixIcon: Icon(
-                      _scanMode == 'id' ? Icons.badge_rounded : Icons.person_rounded,
+                      _scanMode == 'id'
+                          ? Icons.badge_rounded
+                          : Icons.person_rounded,
                       color: AppColors.outline,
                       size: 20,
                     ),
@@ -1091,7 +1194,9 @@ class _BadgeScannerModalState extends State<_BadgeScannerModal>
                       borderRadius: BorderRadius.circular(10),
                     ),
                     filled: true,
-                    fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                    fillColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerLow,
                   ),
                 ),
               ),
@@ -1135,7 +1240,9 @@ class _BadgeScannerModalState extends State<_BadgeScannerModal>
                   child: ActionChip(
                     avatar: CircleAvatar(
                       radius: 12,
-                      backgroundColor: AppColors.safetyBlue.withValues(alpha: 0.1),
+                      backgroundColor: AppColors.safetyBlue.withValues(
+                        alpha: 0.1,
+                      ),
                       child: Text(
                         s.name.isNotEmpty ? s.name[0].toUpperCase() : 'S',
                         style: const TextStyle(
@@ -1147,7 +1254,9 @@ class _BadgeScannerModalState extends State<_BadgeScannerModal>
                     ),
                     label: Text(s.name),
                     onPressed: () => widget.onStudentScanned(s),
-                    backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerLow,
                   ),
                 );
               },
@@ -1172,7 +1281,9 @@ class _BadgeScannerModalState extends State<_BadgeScannerModal>
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: isSelected ? AppColors.safetyBlue : AppColors.outlineVariant,
+              color: isSelected
+                  ? AppColors.safetyBlue
+                  : AppColors.outlineVariant,
               width: isSelected ? 1.5 : 1,
             ),
           ),

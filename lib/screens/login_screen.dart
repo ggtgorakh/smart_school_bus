@@ -20,6 +20,8 @@ class _LoginScreenState extends State<LoginScreen>
   String _selectedRole = 'Parent';
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _emailFocusNode = FocusNode();
+  final _passwordFocusNode = FocusNode();
   bool _obscurePassword = true;
   bool _isLoading = false;
   bool _rememberMe = true;
@@ -32,10 +34,26 @@ class _LoginScreenState extends State<LoginScreen>
   late final Animation<double> _scaleAnimation;
 
   final List<Map<String, dynamic>> _roles = [
-    {'label': 'Parent', 'icon': Icons.family_restroom_rounded, 'color': AppColors.safetyBlue},
-    {'label': 'Driver', 'icon': Icons.local_shipping_rounded, 'color': AppColors.alertOrange},
-    {'label': 'Conductor', 'icon': Icons.how_to_reg_rounded, 'color': AppColors.successGreen},
-    {'label': 'Admin', 'icon': Icons.admin_panel_settings_rounded, 'color': Colors.purple},
+    {
+      'label': 'Parent',
+      'icon': Icons.family_restroom_rounded,
+      'color': AppColors.safetyBlue,
+    },
+    {
+      'label': 'Driver',
+      'icon': Icons.local_shipping_rounded,
+      'color': AppColors.alertOrange,
+    },
+    {
+      'label': 'Conductor',
+      'icon': Icons.how_to_reg_rounded,
+      'color': AppColors.successGreen,
+    },
+    {
+      'label': 'Admin',
+      'icon': Icons.admin_panel_settings_rounded,
+      'color': Colors.purple,
+    },
   ];
 
   final Map<String, String> _roleDescriptions = {
@@ -58,21 +76,17 @@ class _LoginScreenState extends State<LoginScreen>
       curve: Curves.easeOut,
     );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.06),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _entranceController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _entranceController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
 
-    _scaleAnimation = Tween<double>(
-      begin: 0.95,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _entranceController,
-      curve: Curves.easeOutBack,
-    ));
+    _scaleAnimation = Tween<double>(begin: 0.95, end: 1.0).animate(
+      CurvedAnimation(parent: _entranceController, curve: Curves.easeOutBack),
+    );
 
     _entranceController.forward();
   }
@@ -81,6 +95,8 @@ class _LoginScreenState extends State<LoginScreen>
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _emailFocusNode.dispose();
+    _passwordFocusNode.dispose();
     _entranceController.dispose();
     super.dispose();
   }
@@ -156,7 +172,9 @@ class _LoginScreenState extends State<LoginScreen>
         content: Row(
           children: [
             Icon(
-              isError ? Icons.error_outline_rounded : Icons.check_circle_rounded,
+              isError
+                  ? Icons.error_outline_rounded
+                  : Icons.check_circle_rounded,
               color: Colors.white,
               size: 20,
             ),
@@ -192,7 +210,7 @@ class _LoginScreenState extends State<LoginScreen>
         children: [
           // Animated Background
           _buildBackground(isDark),
-          
+
           // Main Content
           SafeArea(
             child: Center(
@@ -293,7 +311,9 @@ class _LoginScreenState extends State<LoginScreen>
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  AppColors.successGreen.withValues(alpha: isDark ? 0.06 : 0.04),
+                  AppColors.successGreen.withValues(
+                    alpha: isDark ? 0.06 : 0.04,
+                  ),
                   AppColors.successGreen.withValues(alpha: 0.0),
                 ],
                 radius: 1.0,
@@ -317,10 +337,7 @@ class _LoginScreenState extends State<LoginScreen>
           duration: const Duration(milliseconds: 600),
           tween: Tween<double>(begin: 0.0, end: 1.0),
           builder: (context, value, child) {
-            return Transform.scale(
-              scale: value,
-              child: child,
-            );
+            return Transform.scale(scale: value, child: child);
           },
           child: Container(
             width: 76,
@@ -376,7 +393,9 @@ class _LoginScreenState extends State<LoginScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color: Theme.of(
+            context,
+          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -392,23 +411,23 @@ class _LoginScreenState extends State<LoginScreen>
           // Role Selector
           _buildRoleSelector(isMobile),
           const SizedBox(height: 16),
-          
+
           // Role Description
           _buildRoleDescription(),
           const SizedBox(height: 20),
-          
+
           // Email Field
           _buildEmailField(),
           const SizedBox(height: 14),
-          
+
           // Password Field
           _buildPasswordField(),
           const SizedBox(height: 12),
-          
+
           // Options Row
           _buildOptionsRow(),
           const SizedBox(height: 24),
-          
+
           // Login Button
           _buildLoginButton(),
         ],
@@ -537,9 +556,11 @@ class _LoginScreenState extends State<LoginScreen>
         const SizedBox(height: 6),
         TextField(
           controller: _emailController,
+          focusNode: _emailFocusNode,
           enabled: !_isLoading,
           keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
+          onSubmitted: (_) => _passwordFocusNode.requestFocus(),
           onTap: () => setState(() => _isEmailFocused = true),
           onTapOutside: (_) => setState(() => _isEmailFocused = false),
           style: TextStyle(
@@ -553,10 +574,7 @@ class _LoginScreenState extends State<LoginScreen>
               size: 20,
             ),
             hintText: 'Enter your email',
-            hintStyle: TextStyle(
-              fontSize: 14,
-              color: AppColors.outline,
-            ),
+            hintStyle: TextStyle(fontSize: 14, color: AppColors.outline),
             filled: true,
             fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
             contentPadding: const EdgeInsets.symmetric(
@@ -607,12 +625,12 @@ class _LoginScreenState extends State<LoginScreen>
               onPressed: _isLoading
                   ? null
                   : () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => ForgotPasswordScreen(
-                            initialEmail: _emailController.text.trim(),
-                          ),
+                      MaterialPageRoute(
+                        builder: (_) => ForgotPasswordScreen(
+                          initialEmail: _emailController.text.trim(),
                         ),
                       ),
+                    ),
               style: TextButton.styleFrom(
                 padding: EdgeInsets.zero,
                 minimumSize: Size.zero,
@@ -632,6 +650,7 @@ class _LoginScreenState extends State<LoginScreen>
         const SizedBox(height: 6),
         TextField(
           controller: _passwordController,
+          focusNode: _passwordFocusNode,
           enabled: !_isLoading,
           obscureText: _obscurePassword,
           textInputAction: TextInputAction.done,
@@ -645,22 +664,24 @@ class _LoginScreenState extends State<LoginScreen>
           decoration: InputDecoration(
             prefixIcon: Icon(
               Icons.lock_outline_rounded,
-              color: _isPasswordFocused ? AppColors.safetyBlue : AppColors.outline,
+              color: _isPasswordFocused
+                  ? AppColors.safetyBlue
+                  : AppColors.outline,
               size: 20,
             ),
             suffixIcon: IconButton(
               icon: Icon(
-                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                _obscurePassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
                 color: AppColors.outline,
                 size: 20,
               ),
-              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              onPressed: () =>
+                  setState(() => _obscurePassword = !_obscurePassword),
             ),
             hintText: 'Enter your password',
-            hintStyle: TextStyle(
-              fontSize: 14,
-              color: AppColors.outline,
-            ),
+            hintStyle: TextStyle(fontSize: 14, color: AppColors.outline),
             filled: true,
             fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
             contentPadding: const EdgeInsets.symmetric(
@@ -725,12 +746,12 @@ class _LoginScreenState extends State<LoginScreen>
           onPressed: _isLoading
               ? null
               : () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ForgotPasswordScreen(
-                        initialEmail: _emailController.text.trim(),
-                      ),
+                  MaterialPageRoute(
+                    builder: (_) => ForgotPasswordScreen(
+                      initialEmail: _emailController.text.trim(),
                     ),
                   ),
+                ),
           style: TextButton.styleFrom(
             padding: EdgeInsets.zero,
             minimumSize: Size.zero,
@@ -900,18 +921,16 @@ class _RoleChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: isSelected ? color : AppColors.outline,
-              size: 18,
-            ),
+            Icon(icon, color: isSelected ? color : AppColors.outline, size: 18),
             const SizedBox(width: 6),
             Text(
               role,
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                color: isSelected ? color : Theme.of(context).colorScheme.onSurface,
+                color: isSelected
+                    ? color
+                    : Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ],
