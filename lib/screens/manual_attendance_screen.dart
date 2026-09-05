@@ -1,8 +1,9 @@
-// lib/screens/attendance_scanner_screen.dart
+// lib/screens/manual_attendance_screen.dart
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+
 import '../theme/app_theme.dart';
 import '../models/student.dart';
 import '../models/app_notification.dart';
@@ -10,17 +11,16 @@ import '../models/attendance_event.dart';
 import '../services/firebase_service.dart';
 import '../services/notification_service.dart';
 
-class AttendanceScannerScreen extends StatefulWidget {
+class ManualAttendanceScreen extends StatefulWidget {
   final String busId;
 
-  const AttendanceScannerScreen({super.key, this.busId = 'bus_01'});
+  const ManualAttendanceScreen({super.key, required this.busId});
 
   @override
-  State<AttendanceScannerScreen> createState() =>
-      _AttendanceScannerScreenState();
+  State<ManualAttendanceScreen> createState() => _ManualAttendanceScreenState();
 }
 
-class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
+class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
     with SingleTickerProviderStateMixin {
   String _filterStatus = 'all';
   String _searchQuery = '';
@@ -266,25 +266,6 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
     }
   }
 
-  void _openScannerDialog(List<Student> students) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _BadgeScannerModal(
-        students: students,
-        onStudentScanned: (student) async {
-          Navigator.of(ctx).pop();
-          await _toggleStudentStatus(
-            student.status == StudentStatus.pending
-                ? student
-                : student.copyWith(status: StudentStatus.pending),
-          );
-        },
-      ),
-    );
-  }
-
   List<Student> _getFilteredStudents(List<Student> students) {
     var filtered = students;
 
@@ -344,7 +325,6 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
                       pendingCount,
                       students.length,
                       progress,
-                      () => _openScannerDialog(students),
                     ),
 
                     // Search & Filter
@@ -382,7 +362,6 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
     int pendingCount,
     int totalCount,
     double progress,
-    VoidCallback onScanTap,
   ) {
     final isMobile = context.isMobile;
 
@@ -443,27 +422,6 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
                       style: TextStyle(color: Colors.white70, fontSize: 12.5),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton.icon(
-                onPressed: onScanTap,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.alertOrange,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
-                label: const Text(
-                  'Scan',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -547,9 +505,8 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(
-              context,
-            ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            color: Theme.of(context).colorScheme.outlineVariant
+                .withValues(alpha: 0.3),
           ),
         ),
       ),
@@ -693,9 +650,8 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen>
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           top: BorderSide(
-            color: Theme.of(
-              context,
-            ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            color: Theme.of(context).colorScheme.outlineVariant
+                .withValues(alpha: 0.3),
           ),
         ),
         boxShadow: [
@@ -955,348 +911,6 @@ class _StudentCard extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// BADGE SCANNER MODAL
-// ============================================================
-
-class _BadgeScannerModal extends StatefulWidget {
-  final List<Student> students;
-  final Function(Student) onStudentScanned;
-
-  const _BadgeScannerModal({
-    required this.students,
-    required this.onStudentScanned,
-  });
-
-  @override
-  State<_BadgeScannerModal> createState() => _BadgeScannerModalState();
-}
-
-class _BadgeScannerModalState extends State<_BadgeScannerModal>
-    with SingleTickerProviderStateMixin {
-  final TextEditingController _idController = TextEditingController();
-  final TextEditingController _nameController = TextEditingController();
-  late final AnimationController _animController;
-  late final Animation<double> _scanAnimation;
-  String _scanMode = 'id'; // 'id' or 'name'
-
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
-
-    _scanAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _animController.dispose();
-    _idController.dispose();
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  void _scanById(String query) {
-    final clean = query.trim().toLowerCase();
-    if (clean.isEmpty) return;
-
-    Student? found;
-    if (_scanMode == 'id') {
-      found = widget.students.firstWhere(
-        (s) => s.id.toLowerCase() == clean,
-        orElse: () => widget.students.first,
-      );
-    } else {
-      found = widget.students.firstWhere(
-        (s) => s.name.toLowerCase().contains(clean),
-        orElse: () => widget.students.first,
-      );
-    }
-    widget.onStudentScanned(found);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        left: 20,
-        right: 20,
-        top: 20,
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag Handle
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Header
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.safetyBlue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.qr_code_scanner_rounded,
-                  color: AppColors.safetyBlue,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Student Scanner',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontSize: 17, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      'Scan by ID or Name',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Scanner Mode Toggle
-          Row(
-            children: [
-              _buildModeToggle('ID', 'id'),
-              const SizedBox(width: 8),
-              _buildModeToggle('Name', 'name'),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Viewfinder
-          Container(
-            height: 160,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.black87,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                // Scanner Frame
-                Container(
-                  width: 200,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.safetyBlue, width: 2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                // Scanning Line
-                AnimatedBuilder(
-                  animation: _scanAnimation,
-                  builder: (context, _) {
-                    return Positioned(
-                      top: 20 + (_scanAnimation.value * 90),
-                      child: Container(
-                        width: 180,
-                        height: 2,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.transparent,
-                              AppColors.alertOrange,
-                              Colors.transparent,
-                            ],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.alertOrange.withValues(
-                                alpha: 0.8,
-                              ),
-                              blurRadius: 6,
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                Positioned(
-                  bottom: 12,
-                  child: Text(
-                    'Align badge or ID card',
-                    style: TextStyle(color: Colors.white70, fontSize: 11.5),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Input Field
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _scanMode == 'id'
-                      ? _idController
-                      : _nameController,
-                  onSubmitted: _scanById,
-                  decoration: InputDecoration(
-                    hintText: _scanMode == 'id'
-                        ? 'Enter Student ID (e.g. S1)'
-                        : 'Enter Student Name',
-                    prefixIcon: Icon(
-                      _scanMode == 'id'
-                          ? Icons.badge_rounded
-                          : Icons.person_rounded,
-                      color: AppColors.outline,
-                      size: 20,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    filled: true,
-                    fillColor: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerLow,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () => _scanById(
-                  _scanMode == 'id' ? _idController.text : _nameController.text,
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.safetyBlue,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                child: const Text('Scan'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Quick Scan List
-          Text(
-            'Quick Select:',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: AppColors.textMain,
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 40,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              itemCount: widget.students.length,
-              itemBuilder: (context, index) {
-                final s = widget.students[index];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ActionChip(
-                    avatar: CircleAvatar(
-                      radius: 12,
-                      backgroundColor: AppColors.safetyBlue.withValues(
-                        alpha: 0.1,
-                      ),
-                      child: Text(
-                        s.name.isNotEmpty ? s.name[0].toUpperCase() : 'S',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.safetyBlue,
-                        ),
-                      ),
-                    ),
-                    label: Text(s.name),
-                    onPressed: () => widget.onStudentScanned(s),
-                    backgroundColor: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerLow,
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModeToggle(String label, String value) {
-    final isSelected = _scanMode == value;
-    return Expanded(
-      child: InkWell(
-        onTap: () => setState(() => _scanMode = value),
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected
-                ? AppColors.safetyBlue.withValues(alpha: 0.1)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSelected
-                  ? AppColors.safetyBlue
-                  : AppColors.outlineVariant,
-              width: isSelected ? 1.5 : 1,
-            ),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? AppColors.safetyBlue : AppColors.outline,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                fontSize: 13,
-              ),
-            ),
-          ),
         ),
       ),
     );

@@ -81,14 +81,6 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
           final visible = _visibleUsers(users);
           final drivers = users.where((u) => u.role == 'Driver').length;
           final conductors = users.where((u) => u.role == 'Conductor').length;
-          final parents = users.where((u) => u.role == 'Parent').length;
-          final unassigned = users
-              .where(
-                (u) =>
-                    (u.role == 'Driver' || u.role == 'Conductor') &&
-                    (u.busId == null || u.busId!.isEmpty),
-              )
-              .length;
 
           return StreamBuilder<List<BusFleet>>(
             stream: FirebaseService.instance.streamFleet(),
@@ -130,18 +122,6 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
                               conductors,
                               Icons.badge_rounded,
                               AppColors.successGreen,
-                            ),
-                            (
-                              'Parents',
-                              parents,
-                              Icons.family_restroom_rounded,
-                              AppColors.safetyBlue,
-                            ),
-                            (
-                              'Unassigned staff',
-                              unassigned,
-                              Icons.warning_amber_rounded,
-                              AppColors.errorRed,
                             ),
                             (
                               'Buses',
@@ -191,7 +171,6 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
             ButtonSegment(value: 'All', label: Text('All')),
             ButtonSegment(value: 'Driver', label: Text('Drivers')),
             ButtonSegment(value: 'Conductor', label: Text('Conductors')),
-            ButtonSegment(value: 'Parent', label: Text('Parents')),
           ],
           selected: {_filter},
           onSelectionChanged: (value) => setState(() => _filter = value.first),

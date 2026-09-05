@@ -1,6 +1,7 @@
 // lib/services/auth_service.dart
 
 import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -80,10 +81,7 @@ class AuthService {
   }
 
   /// Fetch the bus a Driver/Conductor is assigned to.
-  Future<String> fetchBusId(
-    String uid, {
-    String defaultBusId = 'bus_01',
-  }) async {
+  Future<String> fetchBusId(String uid, {String defaultBusId = ''}) async {
     try {
       final snap = await _db.child('users/$uid/busId').get();
       if (snap.exists && snap.value != null) {
@@ -216,6 +214,28 @@ class AuthService {
     }
   }
 
+  Future<void> updateOwnProfileFields(
+    String uid, {
+    String? licenseNumber,
+    String? schoolId,
+    String? emergencyContact,
+  }) async {
+    try {
+      await _db.child('users/$uid').update({
+        'licenseNumber': licenseNumber?.trim().isEmpty == true
+            ? null
+            : licenseNumber?.trim(),
+        'schoolId': schoolId?.trim().isEmpty == true ? null : schoolId?.trim(),
+        'emergencyContact': emergencyContact?.trim().isEmpty == true
+            ? null
+            : emergencyContact?.trim(),
+      });
+    } catch (error) {
+      print('AuthService: Error updating profile fields: $error');
+      rethrow;
+    }
+  }
+
   /// Updates fields that an Admin is allowed to manage on another profile.
   Future<void> updateManagedUser({
     required String uid,
@@ -248,11 +268,14 @@ class AuthService {
   /// Delete a user account (Admin only).
   Future<void> deleteUser(String uid) async {
     try {
-      // First delete the user profile from Realtime Database
+      final currentUser = _auth.currentUser;
+      if (currentUser?.uid != uid) {
+        throw StateError(
+          'Admin account deletion requires a trusted backend. No account was deleted.',
+        );
+      }
       await _db.child('users/$uid').remove();
-      // Note: Deleting Firebase Auth user requires admin SDK or re-authentication
-      // This is a placeholder for future implementation
-      print('AuthService: User profile deleted: $uid');
+      await currentUser!.delete();
     } catch (error) {
       print('AuthService: Error deleting user: $error');
       rethrow;

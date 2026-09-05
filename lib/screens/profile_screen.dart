@@ -6,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_service.dart';
@@ -19,6 +21,12 @@ class _ProfileData {
   final String role;
   final String? busId;
   final String? profileImage;
+  final String? licenseNumber;
+  final String? schoolId;
+  final String? emergencyContact;
+  final String? schoolName;
+  final String? schoolAddress;
+  final String? schoolContact;
 
   _ProfileData({
     required this.name,
@@ -27,6 +35,12 @@ class _ProfileData {
     required this.role,
     required this.busId,
     required this.profileImage,
+    required this.licenseNumber,
+    required this.schoolId,
+    required this.emergencyContact,
+    required this.schoolName,
+    required this.schoolAddress,
+    required this.schoolContact,
   });
 
   factory _ProfileData.fromMap(
@@ -44,6 +58,12 @@ class _ProfileData {
       role: map['role']?.toString() ?? 'Parent',
       busId: map['busId']?.toString(),
       profileImage: map['profileImage']?.toString(),
+      licenseNumber: map['licenseNumber']?.toString(),
+      schoolId: map['schoolId']?.toString(),
+      emergencyContact: map['emergencyContact']?.toString(),
+      schoolName: map['schoolName']?.toString(),
+      schoolAddress: map['schoolAddress']?.toString(),
+      schoolContact: map['schoolContact']?.toString(),
     );
   }
 }
@@ -107,9 +127,19 @@ class _ProfileScreenState extends State<ProfileScreen>
     String uid,
     String role,
     String? busId,
+    String? licenseNumber,
+    String? schoolId,
+    String? emergencyContact,
   ) {
     final controller = TextEditingController(text: currentName);
     final phoneController = TextEditingController(text: currentPhone ?? '');
+    final roleFieldController = TextEditingController(
+      text: role == 'Driver'
+          ? licenseNumber
+          : role == 'Admin'
+          ? schoolId
+          : emergencyContact,
+    );
     final formKey = GlobalKey<FormState>();
 
     showModalBottomSheet(
@@ -264,6 +294,83 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ),
                       ),
                       const SizedBox(height: 24),
+                      if (role != 'Conductor') ...[
+                        Text(
+                          role == 'Driver'
+                              ? 'License Number'
+                              : role == 'Admin'
+                              ? 'School ID'
+                              : 'Emergency Contact',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: roleFieldController,
+                          enabled: !isSaving,
+                          keyboardType: role == 'Parent'
+                              ? TextInputType.phone
+                              : TextInputType.text,
+                          decoration: InputDecoration(
+                            prefixIcon: Icon(
+                              role == 'Driver'
+                                  ? Icons.badge_outlined
+                                  : role == 'Admin'
+                                  ? Icons.school_outlined
+                                  : Icons.contact_phone_outlined,
+                            ),
+                            filled: true,
+                            fillColor: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerLow,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      TextButton.icon(
+                        onPressed: isSaving
+                            ? null
+                            : () async {
+                                try {
+                                  await AuthService.instance
+                                      .sendPasswordResetEmail(
+                                        FirebaseAuth
+                                                .instance
+                                                .currentUser
+                                                ?.email ??
+                                            '',
+                                      );
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Password reset instructions sent to your email.',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                } catch (error) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Could not send password reset email: $error',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                        icon: const Icon(Icons.lock_reset_outlined),
+                        label: const Text('Send password reset email'),
+                      ),
+                      const SizedBox(height: 8),
 
                       // Save Button
                       SizedBox(
@@ -284,6 +391,19 @@ class _ProfileScreenState extends State<ProfileScreen>
                                       uid,
                                       phoneController.text,
                                     );
+                                    await AuthService.instance
+                                        .updateOwnProfileFields(
+                                          uid,
+                                          licenseNumber: role == 'Driver'
+                                              ? roleFieldController.text
+                                              : null,
+                                          schoolId: role == 'Admin'
+                                              ? roleFieldController.text
+                                              : null,
+                                          emergencyContact: role == 'Parent'
+                                              ? roleFieldController.text
+                                              : null,
+                                        );
                                     if (role == 'Driver' &&
                                         busId != null &&
                                         busId.trim().isNotEmpty) {
@@ -477,6 +597,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                         role: widget.activeRole,
                         busId: null,
                         profileImage: null,
+                        licenseNumber: null,
+                        schoolId: null,
+                        emergencyContact: null,
+                        schoolName: null,
+                        schoolAddress: null,
+                        schoolContact: null,
                       );
 
                 final authorizedScope = _authorizedScope(profile.role);
@@ -509,6 +635,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                                         context,
                                         authorizedScope,
                                       ),
+                                      const SizedBox(height: 16),
+                                      _buildRoleDetails(context, profile),
                                     ],
                                   ),
                                 ),
@@ -536,6 +664,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 _buildStatsRow(context, profile),
                                 const SizedBox(height: 16),
                                 _buildPermissionsCard(context, authorizedScope),
+                                const SizedBox(height: 16),
+                                _buildRoleDetails(context, profile),
                                 if (profile.role == 'Admin') ...[
                                   const SizedBox(height: 16),
                                   _buildAdminCard(context),
@@ -739,6 +869,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                     uid,
                     profile.role,
                     profile.busId,
+                    profile.licenseNumber,
+                    profile.schoolId,
+                    profile.emergencyContact,
                   ),
             icon: const Icon(Icons.edit_outlined, size: 16),
             label: const Text('Edit profile details'),
@@ -939,13 +1072,14 @@ class _ProfileScreenState extends State<ProfileScreen>
             value: profile.role,
             icon: Icons.badge_rounded,
           ),
-          _buildStatItem(
-            context,
-            label: 'Bus ID',
-            value: profile.busId ?? 'Not Assigned',
-            icon: Icons.directions_bus_rounded,
-            valueColor: profile.busId == null ? AppColors.alertOrange : null,
-          ),
+          if (profile.role != 'Admin')
+            _buildStatItem(
+              context,
+              label: 'Bus ID',
+              value: profile.busId ?? 'Not Assigned',
+              icon: Icons.directions_bus_rounded,
+              valueColor: profile.busId == null ? AppColors.alertOrange : null,
+            ),
           _buildStatItem(
             context,
             label: 'Status',
@@ -1209,11 +1343,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
               ),
               title: const Text(
-                'People & Bus Assignments',
+                'People & Assignments',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
               ),
               subtitle: Text(
-                'Edit drivers, conductors, parents, and assigned buses',
+                'Edit drivers, conductors, and assigned buses',
                 style: TextStyle(
                   fontSize: 11.5,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -1286,6 +1420,29 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           const SizedBox(height: 12),
           _ContactTile(
+            icon: Icons.sos_rounded,
+            iconBg: AppColors.errorRed.withValues(alpha: 0.1),
+            iconColor: AppColors.errorRed,
+            title: 'Emergency services',
+            subtitle: 'Call 112',
+            onTap: () => _callNumber('112'),
+          ),
+          _ContactTile(
+            icon: Icons.local_hospital_outlined,
+            iconBg: AppColors.alertOrange.withValues(alpha: 0.1),
+            iconColor: AppColors.alertOrange,
+            title: 'Medical emergency',
+            subtitle: 'Call 108',
+            onTap: () => _callNumber('108'),
+          ),
+          _ContactTile(
+            icon: Icons.support_agent_rounded,
+            iconBg: AppColors.safetyBlue.withValues(alpha: 0.1),
+            iconColor: AppColors.safetyBlue,
+            title: 'School transport desk',
+            subtitle: 'Contact the school office for route support',
+          ),
+          _ContactTile(
             icon: Icons.shield_outlined,
             iconBg: AppColors.safetyBlue.withValues(alpha: 0.1),
             iconColor: AppColors.safetyBlue,
@@ -1333,6 +1490,140 @@ class _ProfileScreenState extends State<ProfileScreen>
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _callNumber(String number) async {
+    final uri = Uri(scheme: 'tel', path: number);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
+        mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open the phone app.')),
+      );
+    }
+  }
+
+  Widget _buildRoleDetails(BuildContext context, _ProfileData profile) {
+    final details = switch (profile.role) {
+      'Admin' => const [
+        (
+          'School operations',
+          'Fleet, users, routes, and safety oversight',
+          Icons.admin_panel_settings_outlined,
+        ),
+        (
+          'Maintenance',
+          'Review assignments and keep route data current',
+          Icons.build_circle_outlined,
+        ),
+        (
+          'Support',
+          'Coordinate transport desk and emergency escalation',
+          Icons.support_agent_outlined,
+        ),
+      ],
+      'Driver' => const [
+        (
+          'Dispatch',
+          'Follow the assigned route and report trip status',
+          Icons.route_outlined,
+        ),
+        (
+          'Vehicle safety',
+          'Complete pre-trip checks before departure',
+          Icons.fact_check_outlined,
+        ),
+        (
+          'Communication',
+          'Keep dispatch contact details current',
+          Icons.phone_outlined,
+        ),
+      ],
+      'Conductor' => const [
+        (
+          'Attendance',
+          'Update student boarding status at each stop',
+          Icons.how_to_reg_outlined,
+        ),
+        (
+          'Safety',
+          'Keep the roster and emergency details available',
+          Icons.health_and_safety_outlined,
+        ),
+        (
+          'Communication',
+          'Escalate attendance or route issues to dispatch',
+          Icons.phone_outlined,
+        ),
+      ],
+      _ => const [
+        (
+          'Child safety',
+          'View live status and attendance updates',
+          Icons.child_care_outlined,
+        ),
+        (
+          'School transport',
+          'Review assigned bus and staff information',
+          Icons.directions_bus_outlined,
+        ),
+        (
+          'Support',
+          'Contact the school office for account or route help',
+          Icons.support_agent_outlined,
+        ),
+      ],
+    };
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Role information',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(
+                Icons.school_outlined,
+                color: AppColors.safetyBlue,
+              ),
+              title: Text(
+                profile.schoolName?.trim().isNotEmpty == true
+                    ? profile.schoolName!
+                    : 'School transport service',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                [profile.schoolAddress, profile.schoolContact]
+                        .where((value) => value?.trim().isNotEmpty == true)
+                        .join(' • ')
+                        .isEmpty
+                    ? 'Route, attendance, and safety operations'
+                    : [profile.schoolAddress, profile.schoolContact]
+                          .where((value) => value?.trim().isNotEmpty == true)
+                          .join(' • '),
+              ),
+            ),
+            for (final detail in details)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(detail.$3, color: AppColors.safetyBlue),
+                title: Text(
+                  detail.$1,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(detail.$2),
+              ),
+          ],
+        ),
       ),
     );
   }

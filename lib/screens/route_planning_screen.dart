@@ -122,8 +122,6 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = context.isMobile;
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: FadeTransition(
@@ -738,6 +736,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
           busNumber: 'Route 7A',
           progress: 0.4,
           speedKmph: 0,
+          showInfoOverlay: false,
         ),
       ),
     );

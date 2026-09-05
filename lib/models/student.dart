@@ -27,6 +27,18 @@ class Student {
   final String? parentName;
   final String? parentPhone;
   final String? busId;
+  final String? section;
+  final String? schoolName;
+  final String? schoolId;
+  final DateTime? dateOfBirth;
+  final String? homeAddress;
+  final String? pickupStop;
+  final String? dropOffStop;
+  final String? emergencyContact;
+  final String? authorizedPickupPerson;
+  final String? transportationInstructions;
+  final String? medicalNotes;
+  final String? rollNumber;
 
   Student({
     required this.id,
@@ -41,6 +53,18 @@ class Student {
     this.parentName,
     this.parentPhone,
     this.busId,
+    this.section,
+    this.schoolName,
+    this.schoolId,
+    this.dateOfBirth,
+    this.homeAddress,
+    this.pickupStop,
+    this.dropOffStop,
+    this.emergencyContact,
+    this.authorizedPickupPerson,
+    this.transportationInstructions,
+    this.medicalNotes,
+    this.rollNumber,
   });
 
   /// Get human-readable status label
@@ -102,10 +126,31 @@ class Student {
       'parentUid': parentUid,
       'parentName': parentName,
       'parentPhone': parentPhone,
+      'section': section,
+      'schoolName': schoolName,
+      'schoolId': schoolId,
+      'dateOfBirth': dateOfBirth?.toIso8601String(),
+      'homeAddress': homeAddress,
+      'pickupStop': pickupStop,
+      'dropOffStop': dropOffStop,
+      'emergencyContact': emergencyContact,
+      'authorizedPickupPerson': authorizedPickupPerson,
+      'transportationInstructions': transportationInstructions,
+      'medicalNotes': medicalNotes,
+      'rollNumber': rollNumber ?? id,
     };
   }
 
   factory Student.fromMap(Map<dynamic, dynamic> map, {String? id, String? busId}) {
+    DateTime? parseDate(dynamic raw) {
+      if (raw is num) {
+        return DateTime.fromMillisecondsSinceEpoch(raw.toInt());
+      } else if (raw is String) {
+        return DateTime.tryParse(raw);
+      }
+      return null;
+    }
+
     DateTime? parseBoardedAt(dynamic raw) {
       if (raw is num) {
         return DateTime.fromMillisecondsSinceEpoch(raw.toInt());
@@ -129,6 +174,18 @@ class Student {
       parentName: map['parentName']?.toString(),
       parentPhone: map['parentPhone']?.toString(),
       busId: busId,
+      section: map['section']?.toString(),
+      schoolName: map['schoolName']?.toString(),
+      schoolId: map['schoolId']?.toString(),
+      dateOfBirth: parseDate(map['dateOfBirth']),
+      homeAddress: map['homeAddress']?.toString(),
+      pickupStop: map['pickupStop']?.toString(),
+      dropOffStop: map['dropOffStop']?.toString() ?? map['dropoffStop']?.toString(),
+      emergencyContact: map['emergencyContact']?.toString(),
+      authorizedPickupPerson: map['authorizedPickupPerson']?.toString(),
+      transportationInstructions: map['transportationInstructions']?.toString(),
+      medicalNotes: map['medicalNotes']?.toString(),
+      rollNumber: map['rollNumber']?.toString() ?? map['studentId']?.toString(),
     );
   }
 
@@ -145,6 +202,18 @@ class Student {
     String? parentName,
     String? parentPhone,
     String? busId,
+    String? section,
+    String? schoolName,
+    String? schoolId,
+    DateTime? dateOfBirth,
+    String? homeAddress,
+    String? pickupStop,
+    String? dropOffStop,
+    String? emergencyContact,
+    String? authorizedPickupPerson,
+    String? transportationInstructions,
+    String? medicalNotes,
+    String? rollNumber,
   }) {
     return Student(
       id: id ?? this.id,
@@ -159,6 +228,19 @@ class Student {
       parentName: parentName ?? this.parentName,
       parentPhone: parentPhone ?? this.parentPhone,
       busId: busId ?? this.busId,
+      section: section ?? this.section,
+      schoolName: schoolName ?? this.schoolName,
+      schoolId: schoolId ?? this.schoolId,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
+      homeAddress: homeAddress ?? this.homeAddress,
+      pickupStop: pickupStop ?? this.pickupStop,
+      dropOffStop: dropOffStop ?? this.dropOffStop,
+      emergencyContact: emergencyContact ?? this.emergencyContact,
+      authorizedPickupPerson: authorizedPickupPerson ?? this.authorizedPickupPerson,
+      transportationInstructions:
+          transportationInstructions ?? this.transportationInstructions,
+      medicalNotes: medicalNotes ?? this.medicalNotes,
+      rollNumber: rollNumber ?? this.rollNumber,
     );
   }
 }

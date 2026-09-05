@@ -1,6 +1,7 @@
 // lib/screens/main_navigation_shell.dart
 
 import 'package:flutter/material.dart';
+
 import '../theme/app_theme.dart';
 import '../widgets/app_header.dart';
 import '../services/session_service.dart';
@@ -8,11 +9,15 @@ import 'live_tracking_screen.dart';
 import 'boarding_status_screen.dart';
 import 'fleet_management_screen.dart';
 import 'profile_screen.dart';
-import 'attendance_scanner_screen.dart';
-import 'route_planning_screen.dart';
-import 'notifications_screen.dart';
+import 'manual_attendance_screen.dart';
 import 'parent_tracking_screen.dart';
 import 'trip_workflow_screen.dart';
+import 'admin/admin_operations_screen.dart';
+import 'admin/admin_bus_operations_screen.dart';
+import 'admin/admin_students_overview_screen.dart';
+import 'admin_fleet_tracking_screen.dart';
+import 'parent_people_screen.dart';
+import 'parent_assigned_staff_screen.dart';
 
 class AuthorizedTab {
   final String title;
@@ -88,7 +93,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
       return [
         AuthorizedTab(
           title: 'Bus Route Navigation',
-          screen: LiveTrackingScreen(busId: widget.busId),
+          screen: LiveTrackingScreen(busId: widget.busId, canCallDriver: false),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.map_outlined),
             activeIcon: Icon(Icons.map),
@@ -110,7 +115,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         ),
         AuthorizedTab(
           title: 'Driver Student Attendance',
-          screen: AttendanceScannerScreen(busId: widget.busId),
+          screen: ManualAttendanceScreen(busId: widget.busId),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.how_to_reg_outlined),
             activeIcon: Icon(Icons.how_to_reg),
@@ -128,18 +133,8 @@ class _MainNavigationShellState extends State<MainNavigationShell>
             label: 'Trip',
           ),
           icon: Icons.route_outlined,
+
           activeIcon: Icons.route,
-        ),
-        AuthorizedTab(
-          title: 'Driver Notifications',
-          screen: const NotificationsScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_none),
-            activeIcon: Icon(Icons.notifications),
-            label: 'Alerts',
-          ),
-          icon: Icons.notifications_none,
-          activeIcon: Icons.notifications,
         ),
       ];
     }
@@ -149,7 +144,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
       return [
         AuthorizedTab(
           title: 'Student Check-in / Check-out',
-          screen: AttendanceScannerScreen(busId: widget.busId),
+          screen: ManualAttendanceScreen(busId: widget.busId),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.how_to_reg_outlined),
             activeIcon: Icon(Icons.how_to_reg),
@@ -160,7 +155,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         ),
         AuthorizedTab(
           title: 'Bus Route Map',
-          screen: LiveTrackingScreen(busId: widget.busId),
+          screen: LiveTrackingScreen(busId: widget.busId, canCallDriver: false),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.map_outlined),
             activeIcon: Icon(Icons.map),
@@ -179,17 +174,6 @@ class _MainNavigationShellState extends State<MainNavigationShell>
           ),
           icon: Icons.person_outline,
           activeIcon: Icons.person,
-        ),
-        AuthorizedTab(
-          title: 'Conductor Notifications',
-          screen: const NotificationsScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_none),
-            activeIcon: Icon(Icons.notifications),
-            label: 'Alerts',
-          ),
-          icon: Icons.notifications_none,
-          activeIcon: Icons.notifications,
         ),
         AuthorizedTab(
           title: 'Conductor Trip Status',
@@ -221,7 +205,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         ),
         AuthorizedTab(
           title: 'Master GPS Bus Tracking',
-          screen: LiveTrackingScreen(busId: widget.busId),
+          screen: const AdminFleetTrackingScreen(),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.map_outlined),
             activeIcon: Icon(Icons.map),
@@ -231,15 +215,37 @@ class _MainNavigationShellState extends State<MainNavigationShell>
           activeIcon: Icons.map,
         ),
         AuthorizedTab(
-          title: 'Route Planning',
-          screen: const RoutePlanningScreen(),
+          title: 'Bus Operations & Routes',
+          screen: const AdminBusOperationsScreen(),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.alt_route_outlined),
             activeIcon: Icon(Icons.alt_route),
-            label: 'Routes',
+            label: 'Ops',
           ),
           icon: Icons.alt_route_outlined,
           activeIcon: Icons.alt_route,
+        ),
+        AuthorizedTab(
+          title: 'Drivers & Conductors',
+          screen: const AdminOperationsScreen(),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.groups_outlined),
+            activeIcon: Icon(Icons.groups),
+            label: 'Staff',
+          ),
+          icon: Icons.groups_outlined,
+          activeIcon: Icons.groups,
+        ),
+        AuthorizedTab(
+          title: 'All Students',
+          screen: const AdminStudentsOverviewScreen(),
+          navItem: const BottomNavigationBarItem(
+            icon: Icon(Icons.school_outlined),
+            activeIcon: Icon(Icons.school),
+            label: 'Students',
+          ),
+          icon: Icons.school_outlined,
+          activeIcon: Icons.school,
         ),
         AuthorizedTab(
           title: 'Admin System Profile',
@@ -251,17 +257,6 @@ class _MainNavigationShellState extends State<MainNavigationShell>
           ),
           icon: Icons.person_outline,
           activeIcon: Icons.person,
-        ),
-        AuthorizedTab(
-          title: 'Admin Notifications',
-          screen: const NotificationsScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_none),
-            activeIcon: Icon(Icons.notifications),
-            label: 'Alerts',
-          ),
-          icon: Icons.notifications_none,
-          activeIcon: Icons.notifications,
         ),
       ];
     }
@@ -291,6 +286,17 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         activeIcon: Icons.map,
       ),
       AuthorizedTab(
+        title: 'My Children',
+        screen: const ParentPeopleScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.family_restroom_outlined),
+          activeIcon: Icon(Icons.family_restroom),
+          label: 'My Children',
+        ),
+        icon: Icons.family_restroom_outlined,
+        activeIcon: Icons.family_restroom,
+      ),
+      AuthorizedTab(
         title: 'Parent Profile',
         screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
         navItem: const BottomNavigationBarItem(
@@ -302,15 +308,15 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         activeIcon: Icons.person,
       ),
       AuthorizedTab(
-        title: 'Parent Notifications',
-        screen: const NotificationsScreen(),
+        title: 'Assigned Staff',
+        screen: const ParentAssignedStaffScreen(),
         navItem: const BottomNavigationBarItem(
-          icon: Icon(Icons.notifications_none),
-          activeIcon: Icon(Icons.notifications),
-          label: 'Alerts',
+          icon: Icon(Icons.groups_outlined),
+          activeIcon: Icon(Icons.groups),
+          label: 'Staff',
         ),
-        icon: Icons.notifications_none,
-        activeIcon: Icons.notifications,
+        icon: Icons.groups_outlined,
+        activeIcon: Icons.groups,
       ),
     ];
   }
@@ -514,13 +520,6 @@ class _DesktopSidebarState extends State<_DesktopSidebar>
       ),
       child: Column(
         children: [
-          // Sidebar Header
-          _buildSidebarHeader(scheme),
-          Divider(color: scheme.outlineVariant.withValues(alpha: 0.3)),
-
-          // Role Badge
-          _buildRoleBadge(scheme),
-
           // Navigation Items
           Expanded(
             child: ListView.separated(
@@ -543,54 +542,6 @@ class _DesktopSidebarState extends State<_DesktopSidebar>
 
           // Footer
           _buildSidebarFooter(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebarHeader(ColorScheme scheme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 14),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              gradient: AppTheme.brandGradient,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.safetyBlue.withValues(alpha: 0.3),
-                  blurRadius: 16,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.directions_bus_rounded,
-              color: Colors.white,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Smart Bus',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: scheme.onSurface,
-                ),
-              ),
-              Text(
-                'Fleet Management',
-                style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
-              ),
-            ],
-          ),
         ],
       ),
     );

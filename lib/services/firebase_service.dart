@@ -1,8 +1,10 @@
 // lib/services/firebase_service.dart
 
 import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+
 import '../models/bus_fleet.dart';
 import '../models/bus_location.dart';
 import '../models/student.dart';
@@ -247,6 +249,7 @@ class FirebaseService {
           path: path,
           operation: OfflineWriteOperation.set,
           value: stop,
+          userId: currentUserUid,
         );
       }
       rethrow;
@@ -262,6 +265,7 @@ class FirebaseService {
         await _writeQueue.enqueue(
           path: path,
           operation: OfflineWriteOperation.remove,
+          userId: currentUserUid,
         );
       }
       rethrow;
@@ -275,10 +279,26 @@ class FirebaseService {
       if (rawData == null) {
         return null;
       }
+
       if (rawData is Map) {
         return BusLocation.fromMap(rawData);
       }
       return null;
+    }).asBroadcastStream();
+  }
+
+  /// Streams every available live bus telemetry record for Admin fleet views.
+  Stream<Map<String, BusLocation>> streamAllBusLocations() {
+    return _root.child('buses').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return <String, BusLocation>{};
+      final locations = <String, BusLocation>{};
+      raw.forEach((key, value) {
+        if (value is Map) {
+          locations[key.toString()] = BusLocation.fromMap(value);
+        }
+      });
+      return locations;
     }).asBroadcastStream();
   }
 
@@ -315,6 +335,32 @@ class FirebaseService {
         return list;
       }
       return <Student>[];
+    });
+  }
+
+  /// Streams every student roster for Admin-wide student management views.
+  Stream<List<Student>> streamAllStudents() {
+    return _root.child('studentRosters').onValue.map<List<Student>>((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return <Student>[];
+
+      final students = <Student>[];
+      raw.forEach((busId, roster) {
+        if (roster is! Map) return;
+        roster.forEach((studentId, value) {
+          if (value is Map) {
+            students.add(
+              Student.fromMap(
+                value,
+                id: studentId.toString(),
+                busId: busId.toString(),
+              ),
+            );
+          }
+        });
+      });
+      students.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      return students;
     });
   }
 
@@ -419,6 +465,48 @@ class FirebaseService {
     return controller.stream;
   }
 
+  Future<void> updateStudentParentDetails(
+    String busId,
+    String studentId,
+    Map<String, dynamic> parentFields,
+  ) async {
+    final path = 'studentRosters/$busId/$studentId';
+    final updates = <String, dynamic>{};
+
+    for (final entry in parentFields.entries) {
+      final key = entry.key;
+      final rawValue = entry.value;
+      if (rawValue == null) {
+        updates[key] = null;
+        continue;
+      }
+      if (rawValue is String) {
+        final value = rawValue.trim();
+        updates[key] = value.isEmpty ? null : value;
+      } else {
+        updates[key] = rawValue;
+      }
+    }
+
+    if (updates.isEmpty) return;
+
+    try {
+      await _root.child(path).update(updates);
+    } catch (error) {
+      if (_shouldQueueWrite(error)) {
+        await _writeQueue.enqueue(
+          path: path,
+          operation: OfflineWriteOperation.update,
+          value: updates,
+          userId: currentUserUid,
+          busId: busId,
+          studentId: studentId,
+        );
+      }
+      rethrow;
+    }
+  }
+
   /// Updates a student's boarding status.
   Future<void> updateStudentStatus(
     String busId,
@@ -443,6 +531,9 @@ class FirebaseService {
           path: path,
           operation: OfflineWriteOperation.update,
           value: updates,
+          userId: currentUserUid,
+          busId: busId,
+          studentId: studentId,
         );
       }
       print('FirebaseService: Error updating student status: $error');
@@ -473,6 +564,8 @@ class FirebaseService {
             path: path,
             operation: OfflineWriteOperation.update,
             value: updates,
+            userId: currentUserUid,
+            busId: busId,
           );
         }
         print('FirebaseService: Error marking all student statuses: $error');
@@ -506,15 +599,26 @@ class FirebaseService {
     required Student student,
   }) async {
     try {
-      await _root
-          .child('studentRosters/$busId/${student.id}')
-          .set(student.toMap());
+      final studentRef = _root.child('studentRosters/$busId/${student.id}');
+      final previousSnapshot = await studentRef.get();
+      final previousParentUid = previousSnapshot.value is Map
+          ? (previousSnapshot.value as Map)['parentUid']?.toString().trim()
+          : null;
+      final nextParentUid = student.parentUid?.trim();
+      final updates = <String, dynamic>{
+        'studentRosters/$busId/${student.id}': student.toMap(),
+      };
 
-      if (student.parentUid != null && student.parentUid!.trim().isNotEmpty) {
-        await _root
-            .child('parentChildIndex/${student.parentUid}/$busId/${student.id}')
-            .set(true);
+      if (previousParentUid != null &&
+          previousParentUid.isNotEmpty &&
+          previousParentUid != nextParentUid) {
+        updates['parentChildIndex/$previousParentUid/$busId/${student.id}'] =
+            null;
       }
+      if (nextParentUid != null && nextParentUid.isNotEmpty) {
+        updates['parentChildIndex/$nextParentUid/$busId/${student.id}'] = true;
+      }
+      await _root.update(updates);
     } catch (error) {
       print('FirebaseService: Error upserting student: $error');
       rethrow;
@@ -723,6 +827,16 @@ class FirebaseService {
           print('FirebaseService: Error streaming fleet: $error');
           return <BusFleet>[];
         });
+  }
+
+  /// Streams one fleet record. Parents must use this scoped read because
+  /// Firebase rules allow them to read only a bus assigned to their child.
+  Stream<BusFleet?> streamFleetBus(String busId) {
+    return _root.child('busesFleet/$busId').onValue.map<BusFleet?>((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return null;
+      return BusFleet.fromMap(raw, busId: busId);
+    });
   }
 
   /// Updates just the given fields of one bus under /busesFleet/{busId}.

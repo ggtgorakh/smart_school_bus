@@ -134,7 +134,8 @@ class AppNotification {
       timestamp: map['timestamp'] is num
           ? DateTime.fromMillisecondsSinceEpoch(map['timestamp'].toInt())
           : DateTime.tryParse(map['timestamp']?.toString() ?? '') ?? DateTime.now(),
-      isRead: map['isRead'] ?? false,
+      isRead: map['isRead'] == true ||
+          map['isRead']?.toString().toLowerCase() == 'true',
       busId: map['busId']?.toString(),
       studentId: map['studentId']?.toString(),
       metadata: map['metadata'] is Map

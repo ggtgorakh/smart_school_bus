@@ -152,8 +152,26 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                         return _NotificationCard(
                           notification: notification,
                           isLast: isLast,
-                          onTap: () => _service.markAsRead(notification.id),
-                          onDismiss: () => _service.deleteNotification(notification.id),
+                          onTap: () async {
+                            try {
+                              await _service.markAsRead(notification.id);
+                            } catch (error) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Could not update notification: $error')),
+                              );
+                            }
+                          },
+                          onDismiss: () async {
+                            try {
+                              await _service.deleteNotification(notification.id);
+                            } catch (error) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Could not delete notification: $error')),
+                              );
+                            }
+                          },
                           icon: _iconFor(notification.kind),
                           color: _colorFor(notification.kind),
                           kindLabel: _labelFor(notification.kind),

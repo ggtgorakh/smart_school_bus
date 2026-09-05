@@ -51,6 +51,30 @@
           },
           "stopName": {
             ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId) || (root.child('users').child(auth.uid).child('role').val() === 'Conductor' && root.child('users').child(auth.uid).child('busId').val() === $busId))"
+          },
+          "homeAddress": {
+            ".write": "auth != null && data.child('parentUid').val() === auth.uid",
+            ".validate": "newData.val() == null || newData.isString()"
+          },
+          "pickupStop": {
+            ".write": "auth != null && data.child('parentUid').val() === auth.uid",
+            ".validate": "newData.val() == null || newData.isString()"
+          },
+          "dropOffStop": {
+            ".write": "auth != null && data.child('parentUid').val() === auth.uid",
+            ".validate": "newData.val() == null || newData.isString()"
+          },
+          "emergencyContact": {
+            ".write": "auth != null && data.child('parentUid').val() === auth.uid",
+            ".validate": "newData.val() == null || newData.isString()"
+          },
+          "authorizedPickupPerson": {
+            ".write": "auth != null && data.child('parentUid').val() === auth.uid",
+            ".validate": "newData.val() == null || newData.isString()"
+          },
+          "transportationInstructions": {
+            ".write": "auth != null && data.child('parentUid').val() === auth.uid",
+            ".validate": "newData.val() == null || newData.isString()"
           }
         }
       }
@@ -116,7 +140,7 @@
         ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId) || root.child('parentChildIndex').child(auth.uid).child($busId).exists())",
         "$tripId": {
           ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || (root.child('users').child(auth.uid).child('role').val() === 'Driver' && root.child('users').child(auth.uid).child('busId').val() === $busId && newData.child('driverUid').val() === auth.uid) || (root.child('users').child(auth.uid).child('role').val() === 'Conductor' && root.child('users').child(auth.uid).child('busId').val() === $busId && newData.child('conductorUid').val() === auth.uid))",
-          ".validate": "newData.hasChildren(['tripId', 'busId', 'routeId', 'driverUid', 'status']) && newData.child('tripId').val() === $tripId && newData.child('busId').val() === $busId && newData.child('routeId').isString() && newData.child('driverUid').isString() && newData.child('status').val().matches(/^(scheduled|preparing|active|paused|completed|cancelled)$/) && (!newData.child('startTime').exists() || newData.child('startTime').isNumber()) && (!newData.child('endTime').exists() || newData.child('endTime').isNumber())"
+          ".validate": "newData.hasChildren(['tripId', 'busId', 'routeId', 'driverUid', 'status']) && newData.child('tripId').val() === $tripId && newData.child('busId').val() === $busId && newData.child('routeId').isString() && newData.child('driverUid').isString() && newData.child('status').val().matches(/^(scheduled|preparing|active|paused|completed|cancelled)$/) && (!newData.child('startTime').exists() || newData.child('startTime').isNumber()) && (!newData.child('endTime').exists() || newData.child('endTime').isNumber()) && (!data.exists() || data.child('status').val() === newData.child('status').val() || (data.child('status').val() === 'scheduled' && (newData.child('status').val() === 'preparing' || newData.child('status').val() === 'cancelled')) || (data.child('status').val() === 'preparing' && (newData.child('status').val() === 'active' || newData.child('status').val() === 'cancelled')) || (data.child('status').val() === 'active' && (newData.child('status').val() === 'paused' || newData.child('status').val() === 'completed' || newData.child('status').val() === 'cancelled')) || (data.child('status').val() === 'paused' && (newData.child('status').val() === 'active' || newData.child('status').val() === 'completed' || newData.child('status').val() === 'cancelled')))"
         }
       }
     },

@@ -113,7 +113,8 @@ class RouteMapPainter extends CustomPainter {
     // Stop markers
     // -----------------------------
 
-    final completedStopPaint = Paint()..color = isDark ? const Color(0xFF64748B) : const Color(0xFFB9C4DC);
+    final completedStopPaint = Paint()
+      ..color = isDark ? const Color(0xFF64748B) : const Color(0xFFB9C4DC);
 
     final nextStopPaint = Paint()..color = AppColors.alertOrange;
 
@@ -167,16 +168,18 @@ class LiveMapCanvas extends StatefulWidget {
   // the ETA card instead of stacking cleanly above/below it.
   final Widget? topBanner;
   final Widget? trailingAction;
+  final bool showInfoOverlay;
 
   const LiveMapCanvas({
     super.key,
     this.busStatus = 'On Route',
     this.etaTime = '8:14 AM',
-    this.busNumber = 'Bus 42',
+    this.busNumber = 'Bus',
     this.progress = 0.5,
     this.speedKmph = 35.0,
     this.topBanner,
     this.trailingAction,
+    this.showInfoOverlay = true,
   });
 
   @override
@@ -235,134 +238,147 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
         }
 
         return Container(
-          color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF0F1928) : const Color(0xFFE7ECF6),
+          color: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF0F1928)
+              : const Color(0xFFE7ECF6),
           child: Stack(
             children: [
               // MAP BACKGROUND
               Positioned.fill(
                 child: RepaintBoundary(
-                  child: CustomPaint(painter: RouteMapPainter(isDark: Theme.of(context).brightness == Brightness.dark)),
-                ),
-              ),
-
-              // TOP OVERLAY: stale banner (if any) → ETA card → trailing
-              // action, all stacked in a single Column so their heights
-              // never collide — no more magic pixel offsets to keep in sync.
-              Positioned(
-                top: 16,
-                left: 16,
-                right: 16,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (widget.topBanner != null) ...[
-                      widget.topBanner!,
-                      const SizedBox(height: 10),
-                    ],
-                    Center(
-                  child: Container(
-                    constraints: const BoxConstraints(maxWidth: 380),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 14,
-                    ),
-                    decoration: AppTheme.panelDecoration(context, borderRadius: 14),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // ETA
-                        Flexible(
-                          child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'ESTIMATED ARRIVAL',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelMedium
-                                  ?.copyWith(
-                                    fontSize: 10.5,
-                                    letterSpacing: 0.6,
-                                  ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              widget.etaTime,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTheme.tabularTime(
-                                fontSize: 24,
-                                color: AppColors.alertOrangeDark,
-                              ),
-                            ),
-                          ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-
-                        // Bus information
-                        Flexible(
-                          child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${widget.busNumber} • ${widget.speedKmph.toStringAsFixed(0)} km/h',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelMedium
-                                  ?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.mintSoft,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.check_circle_rounded,
-                                    size: 13,
-                                    color: AppColors.successGreen,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    widget.busStatus,
-                                    style: const TextStyle(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.successGreen,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                          ),
-                        ),
-                      ],
+                  child: CustomPaint(
+                    painter: RouteMapPainter(
+                      isDark: Theme.of(context).brightness == Brightness.dark,
                     ),
                   ),
                 ),
-                    if (widget.trailingAction != null) ...[
-                      const SizedBox(height: 10),
-                      widget.trailingAction!,
-                    ],
-                  ],
-                ),
               ),
+
+              if (widget.showInfoOverlay)
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  right: 16,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.topBanner != null) ...[
+                        widget.topBanner!,
+                        const SizedBox(height: 10),
+                      ],
+                      Center(
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 380),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 14,
+                          ),
+                          decoration: AppTheme.panelDecoration(
+                            context,
+                            borderRadius: 14,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // ETA
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'ESTIMATED ARRIVAL',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
+                                          ?.copyWith(
+                                            fontSize: 10.5,
+                                            letterSpacing: 0.6,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      widget.etaTime,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTheme.tabularTime(
+                                        fontSize: 24,
+                                        color: AppColors.alertOrangeDark,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+
+                              // Bus information
+                              Flexible(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${widget.busNumber} • ${widget.speedKmph.toStringAsFixed(0)} km/h',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
+                                          ?.copyWith(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 3,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.mintSoft,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(
+                                            Icons.check_circle_rounded,
+                                            size: 13,
+                                            color: AppColors.successGreen,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            widget.busStatus,
+                                            style: const TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppColors.successGreen,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (widget.trailingAction != null) ...[
+                        const SizedBox(height: 10),
+                        widget.trailingAction!,
+                      ],
+                    ],
+                  ),
+                ),
 
               // DYNAMIC BUS MARKER
               Positioned(
@@ -386,7 +402,9 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.safetyBlue.withOpacity(0.35),
+                                color: AppColors.safetyBlue.withValues(
+                                  alpha: 0.35,
+                                ),
                                 blurRadius: 8,
                                 offset: const Offset(0, 3),
                               ),
@@ -424,7 +442,9 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                             height: 50,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: AppColors.safetyBlue.withOpacity(0.20),
+                              color: AppColors.safetyBlue.withValues(
+                                alpha: 0.20,
+                              ),
                             ),
                             child: Center(
                               child: Container(

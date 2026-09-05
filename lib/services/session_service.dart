@@ -120,6 +120,16 @@ class SessionService {
     } catch (error) {
       print('SessionService: Error saving last email: $error');
     }
+
+  }
+
+  Future<void> clearSavedLoginEmail() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kLastEmail);
+    } catch (error) {
+      print('SessionService: Error clearing saved email: $error');
+    }
   }
 
   /// Retrieves the remember me setting.

@@ -66,6 +66,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
+    _restoreLoginPreferences();
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -89,6 +90,18 @@ class _LoginScreenState extends State<LoginScreen>
     );
 
     _entranceController.forward();
+  }
+
+  Future<void> _restoreLoginPreferences() async {
+    final rememberMe = await SessionService.instance.getRememberMe();
+    final lastEmail = await SessionService.instance.getLastEmail();
+    if (!mounted) return;
+    setState(() {
+      _rememberMe = rememberMe;
+      if (rememberMe && lastEmail != null) {
+        _emailController.text = lastEmail;
+      }
+    });
   }
 
   @override
@@ -135,6 +148,12 @@ class _LoginScreenState extends State<LoginScreen>
       }
 
       await SessionService.instance.saveRole(role);
+      await SessionService.instance.saveRememberMe(_rememberMe);
+      if (_rememberMe) {
+        await SessionService.instance.saveLastEmail(email);
+      } else {
+        await SessionService.instance.clearSavedLoginEmail();
+      }
       if (mounted) widget.onLoginSuccess?.call(role);
     } on FirebaseAuthException catch (e) {
       String message;
@@ -621,30 +640,6 @@ class _LoginScreenState extends State<LoginScreen>
                 color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
-            TextButton(
-              onPressed: _isLoading
-                  ? null
-                  : () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ForgotPasswordScreen(
-                          initialEmail: _emailController.text.trim(),
-                        ),
-                      ),
-                    ),
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.zero,
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Text(
-                'Forgot password?',
-                style: TextStyle(
-                  color: AppColors.alertOrangeDark,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
           ],
         ),
         const SizedBox(height: 6),
@@ -724,7 +719,16 @@ class _LoginScreenState extends State<LoginScreen>
               height: 20,
               child: Checkbox(
                 value: _rememberMe,
-                onChanged: (val) => setState(() => _rememberMe = val ?? false),
+                onChanged: _isLoading
+                    ? null
+                    : (val) async {
+                        final value = val ?? false;
+                        setState(() => _rememberMe = value);
+                        await SessionService.instance.saveRememberMe(value);
+                        if (!value) {
+                          await SessionService.instance.clearSavedLoginEmail();
+                        }
+                      },
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(4),
                 ),

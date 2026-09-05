@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import 'firebase_options.dart';
 import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
@@ -94,14 +95,11 @@ class _RoleResolutionShellState extends State<RoleResolutionShell> {
   Future<void> _resolveRole() async {
     final cachedValues = await Future.wait([
       SessionService.instance.getCachedRole(),
-      SessionService.instance.getCachedBusId(),
     ]);
     final cachedRole = cachedValues[0] as String?;
-    final cachedBusId = cachedValues[1] as String?;
     if (cachedRole != null && mounted) {
       setState(() {
         _role = cachedRole;
-        _busId = cachedBusId;
         _isLoading = false;
       });
     }
@@ -126,10 +124,9 @@ class _RoleResolutionShellState extends State<RoleResolutionShell> {
   }
 
   Future<void> _handleSignOut() async {
+    await NotificationService.instance.clearAll();
     await AuthService.instance.signOut();
     await SessionService.instance.clearSession();
-    // Clear notifications on sign out
-    NotificationService.instance.clearAll();
   }
 
   @override
@@ -139,7 +136,7 @@ class _RoleResolutionShellState extends State<RoleResolutionShell> {
     }
     return MainNavigationShell(
       userRole: _role ?? 'Parent',
-      busId: _busId ?? 'bus_01',
+      busId: _busId ?? '',
       onSignOut: _handleSignOut,
     );
   }

@@ -1,29 +1,522 @@
-Work on my existing Flutter + Firebase Smart School Bus Management System. First inspect the entire existing project and understand the current implementation before making changes. Implement only the missing software functionality for Admin, Driver, Conductor and Parent. Do not rewrite the project and do not break existing functionality, UI, authentication, Firebase integration, navigation, notifications, attendance, fleet management, route management, live tracking or role based access. Reuse the existing architecture, services, models, widgets, FirebaseService, AuthService and security rules wherever possible. This is a software-only implementation. Do not implement or add anything that depends on physical hardware such as ESP32, GPS modules, RFID or NFC readers, GSM or 4G modules, physical sensors, hardware telemetry, hardware commands, hardware registration, firmware management, hardware heartbeat, hardware diagnostics or physical-device communication.
+Update the existing Smart School Bus Tracking & Student Safety System Flutter project.
 
-The following functionality is already implemented and must not be recreated or unnecessarily modified. Admin already has Notifications access and the existing fleet management, users, people directory, student management, roster import, route planning and live tracking functionality. Driver already has student attendance or check-in access and Notifications access and can use the assigned-bus attendance workflow. Conductor already has Notifications access, attendance scanning, mark-all-boarded functionality, parent notifications, live map and profile functionality. Parent already has Notifications access, child-aware live tracking and multiple-child selection. Parent tracking already uses the actual child's assigned busId and must not depend on bus_01. Linked child records already retain their correct busId. Sign-out already avoids attempting to delete Firebase notifications after authentication has ended. Preserve all of these existing implementations. Do not duplicate them and do not replace them with another implementation unless you find an actual bug that must be fixed.
+IMPORTANT:
+- Do NOT rewrite the application from scratch.
+- Preserve the existing architecture, Firebase integration, authentication, role-based access, navigation, theme, models, and working features.
+- Inspect the existing codebase first and understand the current Parent, Admin, Driver, Conductor, Student, Bus, Route, and Assignment models/services before making changes.
+- Follow the existing project conventions and naming patterns.
+- Do not introduce fake/mock data.
+- Do not add QR/RFID/scanner functionality.
+- Do not add unnecessary AI or hardware features.
+- Make the implementation production-oriented and consistent with the existing Firebase data structure.
 
-For Admin, inspect the current implementation and complete only the missing administrative functionality. Admin must be able to properly manage students, parents, drivers, conductors, buses and routes and maintain valid relationships between them. Verify that Admin can create, edit, view, deactivate and appropriately delete students, assign students to buses, link and unlink students with parents, manage parent accounts, create and manage driver and conductor accounts, assign drivers and conductors to buses, create and manage buses, create and manage routes and route stops, reorder route stops, assign routes to buses, view all buses, view student counts, view attendance information, view boarding status, manage notifications, import student rosters, validate imported data, detect duplicate students and display import errors before committing data. Verify that Admin can view useful trip history, attendance summaries, route information and notification history where supported by the existing architecture. If any functionality already works, keep it and only fix incomplete or broken parts. Admin-only operations must be protected by Firebase security rules and not only by hiding UI controls.
+==================================================
+OBJECTIVE
+==================================================
 
-For Driver, inspect the current implementation and complete the missing software functionality required to operate an assigned school bus trip. Driver must only see the assigned bus, assigned route and relevant students. Driver must be able to view assigned bus information, assigned route, route stops, current stop, next stop, route progress, trip status and relevant student information. Implement or complete a proper trip lifecycle where the Driver can start a trip, view an active trip, pause or resume the trip where appropriate and end the trip. Each trip should contain tripId, busId, routeId, driverUid, startTime, endTime and status. Driver should be able to see the software-recorded bus and trip status using existing Firebase data. Do not create fake GPS, fake telemetry or fake live location data. Driver should receive relevant notifications and alerts related to the assigned bus or trip. Driver must not be able to create or delete buses, change bus ownership, change driver or conductor assignments, modify student-parent relationships, change user roles, modify routes belonging to other buses or perform Admin-only operations. Verify that these restrictions are enforced by Firebase security rules.
+Improve the PARENT role by restructuring child information and assigned staff information.
 
-For Conductor, preserve the already implemented attendance scanning, mark-all-boarded functionality, parent notifications, live map, profile and Notifications access. Complete only the remaining software-only attendance functionality. Conductor must be able to view students assigned to the current bus and route, search and filter students, open student details, manually mark students as boarded, not boarded, pending or flagged and correct previously recorded attendance. Attendance should contain studentId, busId, tripId, actorUid, status or eventType, timestamp and source. Prevent duplicate attendance records for the same student and trip where appropriate. Maintain expected, boarded, pending, not-boarded and flagged counts in real time. Separate current student boarding status from historical attendance events so previous attendance actions can be audited. The Conductor must be able to correct an incorrect attendance record and the correction should contain the correcting user, correction time and correction reason where appropriate. Preserve the existing offline attendance queue and improve it only if necessary. Queued attendance operations should contain enough information such as userId, busId, tripId, studentId, eventId, timestamp and source so that an operation cannot accidentally be replayed against another account or another bus. The Conductor should be able to see a final attendance summary before completing the trip and should receive warnings for unresolved attendance. Preserve the existing parent notification workflow and only improve it if it is incomplete or unreliable.
+The Parent should be able to:
 
-For Parent, preserve the already implemented Notifications access, child-aware live tracking, multiple-child selection, correct child busId handling and removal of the bus_01 dependency. Do not recreate these features. Complete only the remaining Parent functionality. Parents must only be able to view their own linked children. For each child, show the child's name, assigned bus, assigned route, route stops, current trip status, boarding status, next stop, route progress and ETA when valid software data exists. Do not create fake GPS or fake live information. If valid location information already exists in Firebase, display it with the appropriate timestamp. If no location data exists, show a clear unavailable state instead of fake information. Parents should receive relevant attendance, trip, route and system notifications and should be able to view notification history and mark notifications as read. Prevent duplicate notifications where appropriate. Parents must not be able to modify attendance, assign buses, change routes, modify student information, change parent relationships or perform Driver, Conductor or Admin operations. Verify that Firebase security rules restrict Parent access to their own linked children and the permitted information associated with those children.
+1. Select/view their children.
+2. Open a dedicated Child Information section containing the child's complete relevant profile.
+3. Open a separate Assigned Staff section showing the DRIVER and CONDUCTOR currently assigned to that child's bus/trip.
+4. Open a separate Bus & Route section showing the child's current transportation assignment.
+5. Edit only parent-managed information.
+6. Clearly distinguish read-only school-controlled information from parent-editable information.
+7. Ensure Driver and Conductor only receive the minimum child information required for safe transportation.
+8. Ensure private parent information is NOT exposed to Driver/Conductor.
+9. Ensure Admin has complete visibility and management capability.
 
-Complete the overall trip-management workflow without introducing hardware dependencies. Admin should configure buses and routes, Driver should operate the assigned trip, Conductor should manage attendance for that trip and Parent should receive the relevant child status and notifications. Implement or complete proper trip states such as scheduled, preparing, active, paused, completed and cancelled where appropriate. Prevent multiple conflicting active trips for the same bus. Store trip start time, end time, driver, conductor, bus and route information. Ensure trips always remain associated with the correct bus and route.
+==================================================
+PARENT NAVIGATION
+==================================================
 
-Improve the attendance data model where necessary so that current student status and historical attendance events are separate. A suitable structure is attendanceEvents/{eventId} containing eventId, studentId, busId, tripId, actorUid, status or eventType, source, timestamp and correction information where required. The current student boarding state can remain available for fast UI display, while attendance history provides an auditable record. Prevent duplicate event creation using unique event IDs and appropriate Firebase validation. Do not unnecessarily replace the existing attendance system if it can be safely extended.
+Replace the current generic "Children & Assigned Staff" experience with a cleaner child-specific structure.
 
-Review the existing notification system only for missing or broken functionality. Preserve Notifications access for all four roles. Notifications should contain recipient information, notification type, title, message, timestamp, read state and an event key where required for deduplication. Parents should receive child-related notifications, Drivers should receive relevant driver and trip notifications, Conductors should receive attendance and trip notifications and Admins should receive administrative or system notifications. Do not reintroduce notification deletion during or immediately after sign-out.
+Parent navigation should be approximately:
 
-Review and improve Firebase security rules for all existing and newly implemented software functionality. Maintain a default-deny approach. Admin should have administrative access. Drivers should only access their assigned bus and trip data. Conductors should only access attendance and trip data for their assigned bus. Parents should only access their linked children and the permitted bus and route information associated with those children. Do not rely only on Flutter UI restrictions. Authorization must be enforced through Firebase security rules. Validate protected fields and prevent unauthorized users from changing roles, ownership, assignments and relationships.
+Parent
+│
+├── Home
+├── My Children
+│     │
+│     ├── Child Selection
+│     │
+│     └── Selected Child
+│           ├── Child Info
+│           ├── Assigned Staff
+│           └── Bus & Route
+│
+├── Live Bus
+├── Attendance
+├── Notifications
+├── Emergency
+└── Profile
 
-Review the existing offline functionality for attendance and appropriate user operations. Handle no internet connection, Firebase unavailable errors, synchronization failures, permission errors, invalid data, duplicate operations, empty states, loading states and timeouts gracefully. Never silently lose an operation. Clearly show whether an operation succeeded, failed or is waiting for synchronization. Make sure queued operations retain the correct user, bus, trip, student and event context and cannot be incorrectly replayed after logout and login.
+Do not duplicate existing navigation items if they already exist.
+Modify the current implementation instead of creating duplicate screens.
 
-Search the complete project for mock or placeholder application data that is being used as real production data. Pay particular attention to hardcoded route examples, placeholder route names, fixed route IDs, fake ETA values, static trip states, default bus assumptions and other sample values. Replace them with Firebase-driven data where appropriate or clearly isolate them as development or test data. Do not reintroduce the bus_01 dependency for Parent tracking. Do not add fake data simply to make a feature appear functional.
+==================================================
+1. MY CHILDREN
+==================================================
 
-Improve maintainability without performing a complete rewrite. Keep the existing screens and architecture where possible, but move repeated business logic out of extremely large screen files into appropriate services, repositories, controllers, view models or helper classes when beneficial. Avoid unnecessary duplication of Firebase queries and role checks. Keep models strongly typed and handle loading, empty, null and error states safely.
+Create/improve the Parent "My Children" screen.
 
-Expand testing beyond the existing basic login smoke test. Add unit tests for attendance state handling, notification deduplication, role validation, route calculations where applicable, trip-state transitions, offline queue behavior, duplicate prevention and data validation. Add widget tests for Login, Admin management, Driver trip workflow, Conductor attendance, Parent child dashboard and Notifications. Add integration-level tests for important workflows such as Admin setup to Driver trip to Conductor attendance to Firebase update to Parent notification, as well as offline attendance synchronization. Do not create tests for physical hardware.
+If a parent has multiple children:
+- Display each child as a separate card.
+- Show basic information:
+  - Child name
+  - Class
+  - Section
+  - Student ID where appropriate
+  - Assigned bus
+  - Current transportation/trip status where available
+- Provide a clear "View Details" action.
 
-Before making changes, inspect the existing code and determine exactly what is already implemented and what is missing. Do not duplicate existing functionality. After implementation, provide a concise report listing the files changed, functionality implemented for each role, Firebase database changes, security-rule changes, tests added, bugs fixed, remaining incomplete functionality and any functionality that requires future backend or real-world data. Keep the implementation focused on missing software functionality only.
+The screen must only display children actually associated with the authenticated parent.
+
+Do NOT show other students.
+
+==================================================
+2. CHILD INFORMATION
+==================================================
+
+Create a dedicated "Child Info" section/screen.
+
+The screen should contain approximately 10–12+ meaningful fields, divided into appropriate categories.
+
+A. SCHOOL-CONTROLLED / READ-ONLY INFORMATION
+
+These should normally be read-only for the Parent:
+
+- Full Name
+- Student ID / Roll Number
+- Date of Birth
+- Class
+- Section
+- School
+- Other school-generated identifiers that already exist in the project
+
+These values should come from the existing student/admin-managed data.
+
+Parent must NOT be able to arbitrarily modify these fields.
+
+B. PARENT-MANAGED INFORMATION
+
+Allow the authenticated Parent to submit/update appropriate information such as:
+
+- Home Address
+- Pickup Stop
+- Drop-off Stop
+- Emergency Contact
+- Authorized Pickup Person
+- Transportation/Special Instructions
+- Other appropriate parent-provided information already supported by the application's data model
+
+Do not expose unnecessary private parent information to Driver or Conductor.
+
+==================================================
+3. PARENT EDIT PERMISSIONS
+==================================================
+
+Clearly distinguish:
+
+READ ONLY:
+- School-controlled/student identity information.
+
+EDITABLE:
+- Parent-maintained contact/transportation information.
+
+For editable information:
+- Provide Edit buttons.
+- Validate input.
+- Save changes to Firebase using the existing service/repository architecture.
+- Show loading state while saving.
+- Show success/error feedback.
+- Do not allow unauthenticated users to modify data.
+
+IMPORTANT:
+
+For operationally sensitive fields such as:
+- Pickup Stop
+- Drop-off Stop
+- Transportation assignment
+- Safety-related information
+
+Do NOT blindly change the official operational assignment if the existing architecture supports admin approval.
+
+Prefer:
+
+Parent submits change
+        ↓
+Pending / Change Request
+        ↓
+Admin reviews
+        ↓
+Admin approves
+        ↓
+Official assignment/data changes
+
+If the existing project does not have an approval workflow, implement the safest compatible approach without breaking the existing architecture.
+
+Do not create a complicated approval system unless necessary.
+
+==================================================
+4. ASSIGNED STAFF
+==================================================
+
+Create a separate "Assigned Staff" section for each selected child.
+
+IMPORTANT:
+
+The screen must show staff assigned to THAT CHILD'S CURRENT BUS/TRIP.
+
+Do NOT simply show all drivers and conductors in the school.
+
+Determine the relationship using the existing:
+
+Child → Bus Assignment → Route/Trip → Driver + Conductor
+
+data structure.
+
+Display the currently assigned:
+
+A. DRIVER
+- Name
+- Employee ID if already available
+- Profile photo if already supported
+- Assigned bus
+- Current duty/trip status where available
+- Relevant professional information only
+
+B. CONDUCTOR
+- Name
+- Employee ID if already available
+- Profile photo if already supported
+- Assigned bus
+- Current duty/trip status where available
+- Relevant professional information only
+
+Do NOT expose private staff information such as:
+- Home address
+- Government IDs
+- Private documents
+- Personal/private information
+- Any sensitive data not required by the Parent
+
+If contact functionality already exists, use the existing safe school-approved contact mechanism.
+
+Do not invent personal phone numbers or private contact information.
+
+==================================================
+5. BUS & ROUTE
+==================================================
+
+Create a separate "Bus & Route" section for the selected child.
+
+Show relevant transportation information such as:
+
+- Bus Number
+- Route Name/Number
+- Pickup Stop
+- Drop-off Stop
+- Current Trip Status
+- Current Bus Location if available
+- Next Stop if available
+- ETA if already implemented
+- Driver
+- Conductor
+
+Do not duplicate the complete Live Bus screen.
+
+This section should primarily explain the child's current transportation assignment.
+
+==================================================
+6. DRIVER VISIBILITY
+==================================================
+
+Implement strict role-based visibility.
+
+Driver should only see the minimum information required to safely transport the student.
+
+Suggested Driver-visible information:
+
+- Student Name
+- Student photo only if already supported and permitted
+- Class/Section if operationally useful
+- Pickup Stop
+- Drop-off Stop
+- Boarding Status
+- Relevant safety/transportation instructions
+- Authorized pickup information where operationally required
+- Important emergency/safety notes where appropriate
+
+Driver should NOT see:
+
+- Parent's complete profile
+- Parent private notes
+- Parent's private contact/profile information unless explicitly required and already approved
+- Financial information
+- Unrelated personal information
+- Private medical information that is not relevant to transportation safety
+
+==================================================
+7. CONDUCTOR VISIBILITY
+==================================================
+
+Conductor should have a similar minimum-information model.
+
+Conductor can see:
+
+- Student Name
+- Student photo if supported/permitted
+- Class/Section where useful
+- Pickup Stop
+- Drop-off Stop
+- Boarding Status
+- Important transportation/safety instructions
+- Authorized pickup information where required
+- Important safety information necessary for the trip
+
+Conductor should NOT see unrelated private parent information.
+
+==================================================
+8. ADMIN VISIBILITY
+==================================================
+
+Admin should have the complete operational view.
+
+Admin should be able to:
+
+- View complete student information
+- View parent-managed information
+- View assigned driver/conductor
+- View bus assignment
+- View route assignment
+- Review parent-submitted changes where applicable
+- Manage/approve sensitive transportation changes
+- View relevant attendance/trip history
+- Manage assignments
+
+Respect the existing Admin architecture instead of creating a duplicate management system.
+
+==================================================
+9. DATA MODEL
+==================================================
+
+Before changing the database structure:
+
+1. Inspect the existing Student model.
+2. Inspect Parent model.
+3. Inspect Driver model.
+4. Inspect Conductor model.
+5. Inspect Bus model.
+6. Inspect Route model.
+7. Inspect assignment relationships.
+8. Inspect FirebaseService/repositories.
+9. Inspect Firebase security rules.
+
+Reuse existing fields wherever possible.
+
+Do NOT create duplicate fields such as:
+
+studentName
+childName
+name
+
+when an existing canonical field already exists.
+
+If a new field is genuinely required, add it consistently to:
+- Model
+- Firebase read/write logic
+- UI
+- Validation
+- Security rules where required
+
+==================================================
+10. FIREBASE SECURITY
+==================================================
+
+Do not rely only on UI visibility.
+
+Firebase security must enforce the role boundaries.
+
+Parent:
+- Can read their own children's information.
+- Can update only permitted parent-managed fields.
+- Cannot modify school-controlled fields.
+- Cannot read another parent's child.
+- Cannot read unrelated students.
+- Cannot modify driver/conductor records.
+
+Driver:
+- Can read only students assigned to their current bus/trip as permitted.
+- Cannot access unrelated student records.
+
+Conductor:
+- Can read only students assigned to their current bus/trip as permitted.
+- Can update attendance only according to the existing attendance permissions.
+
+Admin:
+- Retain existing administrative permissions.
+
+Review the existing database.rules.json before modifying it.
+
+Do not weaken existing security rules.
+
+==================================================
+11. UI/UX REQUIREMENTS
+==================================================
+
+The Parent experience should be clean and easy to understand.
+
+Use clear sections/cards:
+
+My Children
+↓
+Select Child
+↓
+┌──────────────────────────────┐
+│ Child Info                   │
+│ Complete child information   │
+└──────────────────────────────┘
+
+┌──────────────────────────────┐
+│ Assigned Staff               │
+│ Driver + Conductor           │
+└──────────────────────────────┘
+
+┌──────────────────────────────┐
+│ Bus & Route                  │
+│ Bus + Route + Stops + Status │
+└──────────────────────────────┘
+
+Follow the existing application theme and reusable widgets.
+
+Do not introduce a completely different visual design.
+
+Handle:
+- Loading
+- Empty state
+- Error state
+- No assigned bus
+- No assigned driver
+- No assigned conductor
+- Multiple children
+- Offline state if applicable
+
+==================================================
+12. IMPORTANT EDGE CASES
+==================================================
+
+Handle these correctly:
+
+1. Parent has no children.
+2. Parent has multiple children.
+3. Child has no bus assignment.
+4. Child has a bus but no driver assigned.
+5. Child has a bus but no conductor assigned.
+6. Driver changes between trips.
+7. Conductor changes between trips.
+8. Child changes bus/route.
+9. Parent submits an editable information change.
+10. Firebase data is unavailable.
+11. User logs out.
+12. Parent attempts to access another student's ID directly.
+
+Never fall back to a hardcoded bus such as:
+bus_01
+
+Assignments must come from authenticated/user-specific data.
+
+==================================================
+13. DO NOT BREAK EXISTING FEATURES
+==================================================
+
+Preserve:
+
+- Authentication
+- Role-based login
+- Parent dashboard
+- Driver workflow
+- Conductor workflow
+- Manual attendance
+- Trip lifecycle
+- Live GPS architecture
+- Notifications
+- Firebase integration
+- Existing Admin features
+- Existing security model
+- Existing navigation unless changes are required for this feature
+
+Do not reintroduce:
+- QR scanner
+- Badge scanner
+- Scan animation
+- RFID
+- NFC
+- Fake GPS
+- Fake student/staff data
+
+==================================================
+14. IMPLEMENTATION PROCESS
+==================================================
+
+Before editing:
+
+1. Inspect the existing codebase.
+2. Identify relevant Parent screens.
+3. Identify existing Student/Parent/Driver/Conductor models.
+4. Identify Bus/Route/Trip assignment relationships.
+5. Identify Firebase paths.
+6. Identify Firebase security rules.
+7. Identify reusable UI components.
+
+Then implement the changes.
+
+After implementation:
+
+1. Run Flutter analyzer.
+2. Fix all compilation errors.
+3. Fix relevant warnings.
+4. Verify imports after any file renaming.
+5. Verify navigation.
+6. Verify Firebase reads/writes.
+7. Verify role-based access.
+8. Verify Parent cannot access another child's information.
+9. Verify Driver/Conductor visibility.
+10. Verify Admin visibility.
+11. Ensure no hardcoded bus/student IDs remain.
+12. Check that the removed scanner system has not been reintroduced.
+
+==================================================
+FINAL RESULT
+==================================================
+
+The final Parent experience should communicate:
+
+"My Children"
+        ↓
+Select Child
+        ↓
+┌──────────────┬────────────────┬──────────────┐
+│ Child Info   │ Assigned Staff │ Bus & Route  │
+└──────────────┴────────────────┴──────────────┘
+
+Child Info:
+Complete child profile with read-only + parent-editable fields.
+
+Assigned Staff:
+Only the Driver + Conductor currently assigned to that child's transportation.
+
+Bus & Route:
+Current bus, route, stops, trip status and relevant live information.
+
+Privacy:
+Parent → Full information about their own child.
+Admin → Full operational information.
+Driver → Minimum information required for safe transportation.
+Conductor → Minimum information required for safe transportation.
+
+The implementation must be clean, secure, role-aware, Firebase-compatible, and consistent with the existing project architecture.

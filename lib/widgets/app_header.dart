@@ -228,12 +228,6 @@ class _AppHeaderState extends State<AppHeader>
       );
     }
 
-    // Avatar (Desktop only)
-    if (!isMobile) {
-      actions.add(const SizedBox(width: 8));
-      actions.add(_buildAvatar());
-    }
-
     return actions;
   }
 
@@ -278,54 +272,6 @@ class _AppHeaderState extends State<AppHeader>
           ),
         ),
       ],
-    );
-  }
-
-  // ============================================================
-  // AVATAR
-  // ============================================================
-
-  Widget _buildAvatar() {
-    return Container(
-      width: 34,
-      height: 34,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: AppTheme.brandGradient,
-        border: Border.all(
-          color: Theme.of(context).colorScheme.surface,
-          width: 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.safetyBlue.withValues(alpha: 0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ClipOval(
-        child: widget.avatarUrl != null && widget.avatarUrl!.isNotEmpty
-            ? Image.network(
-                widget.avatarUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _buildAvatarPlaceholder(),
-              )
-            : _buildAvatarPlaceholder(),
-      ),
-    );
-  }
-
-  Widget _buildAvatarPlaceholder() {
-    return Container(
-      color: Colors.transparent,
-      child: const Center(
-        child: Icon(
-          Icons.person_rounded,
-          color: Colors.white,
-          size: 18,
-        ),
-      ),
     );
   }
 

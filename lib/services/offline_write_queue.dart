@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum OfflineWriteOperation { set, update, remove }
@@ -104,7 +106,7 @@ class OfflineWriteQueue {
       await flush();
     } catch (error) {
       // A queue storage failure must not prevent the app from starting.
-      print('OfflineWriteQueue: Error initializing: $error');
+      debugPrint('OfflineWriteQueue: Error initializing: $error');
     }
   }
 
@@ -142,6 +144,15 @@ class OfflineWriteQueue {
     try {
       while (_writes.isNotEmpty) {
         final write = _writes.first;
+        final currentUid = FirebaseAuth.instance.currentUser?.uid;
+        if (write.userId != null && write.userId != currentUid) {
+          _writes.removeAt(0);
+          await _persist();
+          debugPrint(
+            'OfflineWriteQueue: Dropped a write from a previous session.',
+          );
+          continue;
+        }
         try {
           final reference = FirebaseDatabase.instance.ref(write.path);
           switch (write.operation) {
@@ -157,7 +168,7 @@ class OfflineWriteQueue {
           _writes.removeAt(0);
           await _persist();
         } catch (error) {
-          print('OfflineWriteQueue: Retry deferred: $error');
+          debugPrint('OfflineWriteQueue: Retry deferred: $error');
           break;
         }
       }

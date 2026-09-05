@@ -20,6 +20,7 @@ class NotificationService {
       ValueNotifier<List<AppNotification>>([]);
   StreamSubscription<DatabaseEvent>? _notificationsSubscription;
   StreamSubscription<User?>? _authSubscription;
+  final Set<String> _pendingReadIds = {};
 
   // Current user's UID
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
@@ -96,6 +97,9 @@ class NotificationService {
                     final notification = AppNotification.fromMap(
                       Map<String, dynamic>.from(value),
                     );
+                    if (_pendingReadIds.contains(notification.id)) {
+                      notification.isRead = true;
+                    }
                     updated.add(notification);
                   } catch (e) {
                     debugPrint('Error parsing notification: $e');
@@ -233,12 +237,16 @@ class NotificationService {
     }
 
     // Update local state immediately for UI responsiveness
+    _pendingReadIds.add(id);
     notifications.value = notifications.value.map((n) {
       if (n.id == id) n.isRead = true;
       return n;
     }).toList();
 
-    if (target == null) return;
+    if (target == null) {
+      _pendingReadIds.remove(id);
+      return;
+    }
 
     // Persist to Firebase — write the complete, now-updated record so the
     // write is self-sufficient regardless of whether it previously synced.
@@ -247,7 +255,9 @@ class NotificationService {
           .child(_notificationsPath)
           .child(id)
           .set(target.copyWith(isRead: true).toMap());
+      _pendingReadIds.remove(id);
     } on FirebaseException catch (error, stackTrace) {
+      _pendingReadIds.remove(id);
       debugPrint('Error marking notification as read: $error');
       Error.throwWithStackTrace(error, stackTrace);
     }
@@ -256,6 +266,9 @@ class NotificationService {
   /// Mark all notifications as read (persists to Firebase)
   Future<void> markAllAsRead() async {
     _requireUid();
+
+    final ids = notifications.value.map((notification) => notification.id).toSet();
+    _pendingReadIds.addAll(ids);
 
     // Update local state
     notifications.value = notifications.value.map((n) {
@@ -272,7 +285,9 @@ class NotificationService {
         updates[n.id] = n.copyWith(isRead: true).toMap();
       }
       await _db.child(_notificationsPath).update(updates);
+      _pendingReadIds.removeAll(ids);
     } on FirebaseException catch (error, stackTrace) {
+      _pendingReadIds.removeAll(ids);
       debugPrint('Error marking all notifications as read: $error');
       Error.throwWithStackTrace(error, stackTrace);
     }

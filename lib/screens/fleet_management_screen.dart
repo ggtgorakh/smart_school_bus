@@ -13,7 +13,7 @@ import 'admin/create_user_screen.dart';
 import 'admin/manage_students_screen.dart';
 import 'admin/import_roster_screen.dart';
 import 'admin/admin_operations_screen.dart';
-import 'live_tracking_screen.dart';
+import 'admin_fleet_tracking_screen.dart';
 
 class FleetManagementScreen extends StatefulWidget {
   const FleetManagementScreen({super.key});
@@ -343,6 +343,13 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
     final maintenanceBuses = _fleetList
         .where((b) => b.status == FleetStatus.maintenance)
         .length;
+    final averageFuel = _fleetList.isEmpty
+        ? 0
+        : (_fleetList
+                      .map((bus) => bus.fuelPercent)
+                      .reduce((a, b) => a + b) /
+                  _fleetList.length)
+              .round();
 
     return GridView.count(
       shrinkWrap: true,
@@ -396,15 +403,15 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
         ),
         KpiCard(
           title: 'Fuel Efficiency',
-          value: '92%',
+          value: '$averageFuel%',
           icon: Icons.local_gas_station_rounded,
           iconBgColor: AppColors.mintSoft,
           iconColor: Colors.white,
-          badgeText: 'Optimized',
+          badgeText: _fleetList.isEmpty ? 'No data' : 'Live average',
           badgeBgColor: AppColors.successGreen.withValues(alpha: 0.12),
           badgeTextColor: AppColors.successGreen,
           gradient: AppTheme.successGradient,
-          progress: 0.92,
+          progress: averageFuel / 100,
         ),
       ],
     );
@@ -1159,7 +1166,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                       Navigator.of(ctx).pop();
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => LiveTrackingScreen(busId: bus.busId),
+                          builder: (_) => const AdminFleetTrackingScreen(),
                         ),
                       );
                     },

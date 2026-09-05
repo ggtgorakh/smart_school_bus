@@ -1,15 +1,17 @@
 // lib/screens/dashboard_screen.dart
 
 import 'package:flutter/material.dart';
+
 import '../theme/app_theme.dart';
 import '../widgets/kpi_card.dart';
 import '../services/firebase_service.dart';
 import '../models/bus_fleet.dart';
 import '../models/bus_location.dart';
+import '../models/student.dart';
 import '../models/app_notification.dart';
 import '../services/notification_service.dart';
 import 'admin/create_user_screen.dart';
-import 'attendance_scanner_screen.dart';
+import 'manual_attendance_screen.dart';
 import 'boarding_status_screen.dart';
 import 'fleet_management_screen.dart';
 import 'live_tracking_screen.dart';
@@ -221,7 +223,15 @@ class _DashboardScreenState extends State<DashboardScreen>
       return StreamBuilder<List<BusFleet>>(
         stream: FirebaseService.instance.streamFleet(),
         builder: (context, snapshot) {
-          return _buildKpiGridContent(fleet: snapshot.data);
+          return StreamBuilder<List<Student>>(
+            stream: FirebaseService.instance.streamAllStudents(),
+            builder: (context, studentSnapshot) {
+              return _buildKpiGridContent(
+                fleet: snapshot.data,
+                students: studentSnapshot.data,
+              );
+            },
+          );
         },
       );
     }
@@ -236,17 +246,35 @@ class _DashboardScreenState extends State<DashboardScreen>
     return _buildKpiGridContent();
   }
 
-  Widget _buildKpiGridContent({List<BusFleet>? fleet, BusLocation? location}) {
+  Widget _buildKpiGridContent({
+    List<BusFleet>? fleet,
+    List<Student>? students,
+    BusLocation? location,
+  }) {
     final isMobile = context.isMobile;
     final role = widget.userRole;
 
     List<Map<String, dynamic>> kpis = [];
 
     if (role == 'Admin') {
+      final buses = fleet ?? const <BusFleet>[];
+      final roster = students ?? const <Student>[];
+      final activeBuses = buses
+          .where((bus) => bus.status == FleetStatus.onRoute)
+          .length;
+      final boardedStudents = roster
+          .where((student) => student.status == StudentStatus.boarded)
+          .length;
+      final maintenanceBuses = buses
+          .where((bus) => bus.status == FleetStatus.maintenance)
+          .length;
+      final routeCompletion = buses.isEmpty
+          ? 0.0
+          : activeBuses / buses.length;
       kpis = [
         {
           'title': 'Active Buses',
-          'value': '38',
+          'value': '$activeBuses',
           'icon': Icons.directions_bus_rounded,
           'badgeText': 'On Time',
           'badgeBgColor': AppColors.successGreen.withValues(alpha: 0.12),
@@ -260,7 +288,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         },
         {
           'title': 'Students Boarded',
-          'value': '1,240',
+          'value': '$boardedStudents',
           'icon': Icons.group_rounded,
           'badgeText': '+12 Today',
           'badgeBgColor': AppColors.successGreen.withValues(alpha: 0.12),
@@ -274,7 +302,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         },
         {
           'title': 'Route Completion',
-          'value': '76%',
+          'value': '${(routeCompletion * 100).round()}%',
           'icon': Icons.route_rounded,
           'badgeText': 'Morning Run',
           'badgeBgColor': AppColors.purpleSoft,
@@ -282,21 +310,18 @@ class _DashboardScreenState extends State<DashboardScreen>
           'gradient': AppTheme.purpleGradient,
           'iconBgColor': AppColors.purpleSoft,
           'iconColor': Colors.white,
-          'progress': 0.76,
+          'progress': routeCompletion,
         },
         {
           'title': 'In Maintenance',
-          'value': '4',
+          'value': '$maintenanceBuses',
           'icon': Icons.build_rounded,
-          'badgeText': '2 Critical',
+          'badgeText': maintenanceBuses > 0 ? 'Needs review' : 'All Good',
           'badgeBgColor': AppColors.alertOrange.withValues(alpha: 0.12),
           'badgeTextColor': AppColors.alertOrange,
           'gradient': AppTheme.dangerGradient,
           'iconBgColor': AppColors.errorContainer,
           'iconColor': Colors.white,
-          'showTrend': true,
-          'trendValue': 12.5,
-          'isTrendUp': false,
         },
       ];
     } else if (role == 'Driver') {
@@ -598,12 +623,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     } else if (role == 'Conductor') {
       actions = [
         {
-          'icon': Icons.qr_code_scanner_rounded,
-          'label': 'Scan Badge',
+          'icon': Icons.how_to_reg_rounded,
+          'label': 'Record Attendance',
           'color': AppColors.safetyBlue,
           'onTap': () => Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => AttendanceScannerScreen(busId: widget.busId),
+              builder: (_) => ManualAttendanceScreen(busId: widget.busId),
             ),
           ),
         },
@@ -636,9 +661,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       children: [
         Text(
           'Quick Actions',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         SizedBox(
@@ -679,9 +703,8 @@ class _DashboardScreenState extends State<DashboardScreen>
       children: [
         Text(
           'Recent Activity',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         Container(
@@ -690,9 +713,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: Theme.of(
-                context,
-              ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+              color: Theme.of(context).colorScheme.outlineVariant
+                  .withValues(alpha: 0.3),
             ),
             boxShadow: [
               BoxShadow(
@@ -837,9 +859,8 @@ class _QuickActionCard extends StatelessWidget {
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: Theme.of(
-                context,
-              ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+              color: Theme.of(context).colorScheme.outlineVariant
+                  .withValues(alpha: 0.3),
             ),
           ),
           child: Column(
