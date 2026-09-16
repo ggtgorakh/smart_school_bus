@@ -21,7 +21,7 @@ migrate_working_dir/
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
-#.vscode/
+.vscode/
 
 # Flutter/Dart/Pub related
 **/doc/api/
@@ -47,3 +47,51 @@ fool.zip
 
 # Ignore all ZIP files
 *.zip
+
+# ---------------------------------------------------------
+# Android � cache and machine-specific files (2024-11-20)
+# ---------------------------------------------------------
+android/.gradle/
+android/.kotlin/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+
+# ---------------------------------------------------------
+# iOS � CocoaPods and build artifacts
+# ---------------------------------------------------------
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Flutter/App.framework
+ios/Flutter/ephemeral/
+ios/Runner.xcworkspace/xcuserdata/
+ios/Runner.xcodeproj/xcuserdata/
+ios/Runner.xcodeproj/project.xcworkspace/xcuserdata/
+
+# ---------------------------------------------------------
+# macOS � Flutter build ephemera
+# ---------------------------------------------------------
+macos/Flutter/ephemeral/
+
+# ---------------------------------------------------------
+# Windows � Flutter build ephemera
+# ---------------------------------------------------------
+windows/flutter/ephemeral/
+
+# ---------------------------------------------------------
+# Linux � Flutter build ephemera
+# ---------------------------------------------------------
+linux/flutter/ephemeral/
+
+# ---------------------------------------------------------
+# Stray scratch files (deliberately ignored, not just deleted)
+# ---------------------------------------------------------
+.txt
+writing-block.md
+final-audit-prompt.md
