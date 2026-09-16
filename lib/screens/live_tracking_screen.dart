@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
+import '../models/attendance_event.dart';
 import '../models/bus_fleet.dart';
 import '../models/bus_location.dart';
 import '../services/firebase_service.dart';
@@ -16,16 +17,18 @@ class LiveTrackingScreen extends StatefulWidget {
   final bool canCallDriver;
   final String studentName;
   final String studentGradeAndSeat;
+  /// Optional — when provided, the screen streams the child's latest
+  /// protocol event and shows a banner above the map. When null, no
+  /// banner is shown (used by the Driver / Conductor variants).
+  final String? studentId;
 
-  // busId has no default: every caller must pass the real assigned bus
-  // explicitly, so a forgotten argument fails to compile instead of
-  // silently showing/tracking the wrong bus.
   const LiveTrackingScreen({
     super.key,
     required this.busId,
     this.canCallDriver = true,
     this.studentName = '',
     this.studentGradeAndSeat = '',
+    this.studentId,
   });
 
   @override
@@ -47,8 +50,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
   bool _isBottomSheetExpanded = false;
   BusFleet? _fleetBus;
 
-  /// Route stops for the current bus's route, loaded once from
-  /// /routes/{routeId}/stops. Empty until the fleet record resolves.
   List<Map<String, dynamic>> _routeStops = const [];
 
   late AnimationController _animationController;
@@ -77,15 +78,12 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
 
     _locationStream = FirebaseService.instance.streamBusLocation(widget.busId);
 
-    // Load fleet record; if it has a routeId, load that route's stops.
     FirebaseService.instance.fetchFleetBusOnce(widget.busId).then((bus) {
       if (!mounted) return;
       setState(() => _fleetBus = bus);
 
       final routeId = bus?.routeId;
       if (routeId != null && routeId.isNotEmpty) {
-        // Listen once to the route's stops. The stop list rarely changes
-        // mid-trip, so a single `.first` snapshot is sufficient.
         FirebaseService.instance
             .streamRouteStops(routeId)
             .first
@@ -238,12 +236,147 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
                   () => _isBottomSheetExpanded = !_isBottomSheetExpanded,
                 ),
                 routeStops: _routeStops,
+                protocolBanner: _buildProtocolBanner(context),
               ),
             );
           },
         ),
       ),
     );
+  }
+
+  /// Renders the protocol banner above the map when a studentId is set
+  /// and there is an active event. Returns a zero-size widget otherwise.
+  Widget _buildProtocolBanner(BuildContext context) {
+    final studentId = widget.studentId;
+    if (studentId == null || studentId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return StreamBuilder<AttendanceEvent?>(
+      stream: FirebaseService.instance.streamLatestEventForStudent(
+        busId: widget.busId,
+        studentId: studentId,
+      ),
+      builder: (context, snapshot) {
+        final event = snapshot.data;
+        if (event == null) return const SizedBox.shrink();
+
+        final meta = _bannerMeta(event.status);
+        if (meta == null) return const SizedBox.shrink();
+
+        return Container(
+          margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: meta.color.withValues(alpha: 0.95),
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: [
+              BoxShadow(
+                color: meta.color.withValues(alpha: 0.35),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.25),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(meta.icon, color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      meta.label,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      meta.subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  _BannerMeta? _bannerMeta(AttendanceEventStatus status) {
+    switch (status) {
+      case AttendanceEventStatus.coming:
+        return const _BannerMeta(
+          label: 'Bus is coming',
+          subtitle: 'Approaching your child\'s stop',
+          icon: Icons.directions_bus_rounded,
+          color: AppColors.safetyBlue,
+        );
+      case AttendanceEventStatus.atStop:
+        return const _BannerMeta(
+          label: 'Child is at the stop',
+          subtitle: 'Waiting for the bus to arrive',
+          icon: Icons.person_pin_circle_rounded,
+          color: AppColors.alertOrange,
+        );
+      case AttendanceEventStatus.reached:
+        return const _BannerMeta(
+          label: 'Bus has arrived',
+          subtitle: 'Boarding in progress',
+          icon: Icons.location_on_rounded,
+          color: AppColors.safetyBlue,
+        );
+      case AttendanceEventStatus.picked:
+      case AttendanceEventStatus.boarded:
+        return const _BannerMeta(
+          label: 'Picked up',
+          subtitle: 'Your child is on the bus',
+          icon: Icons.check_circle_rounded,
+          color: AppColors.successGreen,
+        );
+      case AttendanceEventStatus.leaved:
+        return const _BannerMeta(
+          label: 'Bus departed',
+          subtitle: 'On the way to school',
+          icon: Icons.arrow_forward_rounded,
+          color: AppColors.successGreen,
+        );
+      case AttendanceEventStatus.notBoarded:
+        return const _BannerMeta(
+          label: 'Not boarded',
+          subtitle: 'Child was not on the bus',
+          icon: Icons.cancel_rounded,
+          color: AppColors.errorRed,
+        );
+      case AttendanceEventStatus.flagged:
+        return const _BannerMeta(
+          label: 'Flagged for attention',
+          subtitle: 'Please contact the school',
+          icon: Icons.flag_rounded,
+          color: AppColors.errorRed,
+        );
+      case AttendanceEventStatus.pending:
+        return null;
+    }
   }
 
   Future<void> _callDriver() async {
@@ -459,6 +592,7 @@ class _LiveTrackingContent extends StatelessWidget {
   final bool isExpanded;
   final VoidCallback onExpandToggle;
   final List<Map<String, dynamic>> routeStops;
+  final Widget protocolBanner;
 
   const _LiveTrackingContent({
     required this.location,
@@ -467,6 +601,7 @@ class _LiveTrackingContent extends StatelessWidget {
     required this.isExpanded,
     required this.onExpandToggle,
     required this.routeStops,
+    required this.protocolBanner,
   });
 
   @override
@@ -479,7 +614,6 @@ class _LiveTrackingContent extends StatelessWidget {
 
     return Stack(
       children: [
-        // Real map background.
         Positioned.fill(
           child: LiveMapCanvas(
             lat: location.lat,
@@ -495,7 +629,17 @@ class _LiveTrackingContent extends StatelessWidget {
           ),
         ),
 
-        // Bottom sheet
+        // ── NEW: protocol banner floats at the top of the map ──
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SafeArea(
+            bottom: false,
+            child: protocolBanner,
+          ),
+        ),
+
         Positioned(
           left: isMobile ? 10 : null,
           right: isMobile ? 10 : 24,
@@ -808,4 +952,17 @@ class _LiveTrackingContent extends StatelessWidget {
     if (seconds < 60) return '$seconds sec ago';
     return '${seconds ~/ 60} min ago';
   }
+}
+
+class _BannerMeta {
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  const _BannerMeta({
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+  });
 }

@@ -26,12 +26,9 @@ class FirebaseService {
   String? get currentUserUid => FirebaseAuth.instance.currentUser?.uid;
 
   // ============================================================
-  // ─── BLOCK 8: SCHOOL CONFIG ────────────────────────────────
+  // SCHOOL CONFIG
   // ============================================================
 
-  /// Live stream of the school configuration. If the config node is
-  /// missing, emits the in-code defaults. If it partially exists, missing
-  /// fields fall back per-key.
   Stream<SchoolConfig> streamSchoolConfig() {
     return _root.child('config/school').onValue.map((event) {
       final raw = event.snapshot.value;
@@ -40,7 +37,6 @@ class FirebaseService {
     });
   }
 
-  /// One-off read of the school config. Used at startup.
   Future<SchoolConfig> fetchSchoolConfigOnce() async {
     try {
       final snap = await _root.child('config/school').get();
@@ -52,7 +48,6 @@ class FirebaseService {
     return SchoolConfig.defaults;
   }
 
-  /// Admin-only: replace the school config in Firebase.
   Future<void> pushSchoolConfig(SchoolConfig config) async {
     await _root.child('config/school').update(config.toMap());
   }
@@ -254,8 +249,8 @@ class FirebaseService {
       'status': status == AttendanceEventStatus.boarded
           ? StudentStatus.boarded.name
           : status == AttendanceEventStatus.flagged
-          ? StudentStatus.alert.name
-          : StudentStatus.pending.name,
+              ? StudentStatus.alert.name
+              : StudentStatus.pending.name,
       'boardedAt': status == AttendanceEventStatus.boarded
           ? event.timestamp.millisecondsSinceEpoch
           : null,
@@ -289,6 +284,82 @@ class FirebaseService {
     }
     return event;
   }
+    /// Returns the most recent event for a given student on a given bus.
+  ///
+  /// Used by the parent-facing protocol UI to know which state to render
+  /// (coming / reached / picked / leaved / atStop / boarded / ...).
+  /// Returns null if the student has no events yet.
+  Stream<AttendanceEvent?> streamLatestEventForStudent({
+    required String busId,
+    required String studentId,
+  }) {
+    return _root.child('attendanceEvents/$busId').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return null;
+      AttendanceEvent? latest;
+      raw.forEach((key, value) {
+        if (value is Map &&
+            value['studentId']?.toString() == studentId) {
+          final ev = AttendanceEvent.fromMap(
+            value,
+            eventId: key.toString(),
+          );
+          if (latest == null || ev.timestamp.isAfter(latest!.timestamp)) {
+            latest = ev;
+          }
+        }
+      });
+      return latest;
+    });
+  }
+
+  /// Returns the full ordered event history for a student on a bus
+  /// (newest first). Used by the timeline UI.
+  Stream<List<AttendanceEvent>> streamEventHistoryForStudent({
+    required String busId,
+    required String studentId,
+  }) {
+    return _root.child('attendanceEvents/$busId').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return <AttendanceEvent>[];
+      final events = <AttendanceEvent>[];
+      raw.forEach((key, value) {
+        if (value is Map &&
+            value['studentId']?.toString() == studentId) {
+          events.add(
+            AttendanceEvent.fromMap(value, eventId: key.toString()),
+          );
+        }
+      });
+      events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return events;
+    });
+  }
+
+  /// Returns the latest event per student on a bus. Used by the conductor
+  /// roster to badge each row with the current protocol state without
+  /// subscribing to per-student streams.
+  Stream<Map<String, AttendanceEvent>> streamLatestEventsByStudent(
+    String busId,
+  ) {
+    return _root.child('attendanceEvents/$busId').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return <String, AttendanceEvent>{};
+      final latest = <String, AttendanceEvent>{};
+      raw.forEach((key, value) {
+        if (value is! Map) return;
+        final studentId = value['studentId']?.toString();
+        if (studentId == null || studentId.isEmpty) return;
+        final ev = AttendanceEvent.fromMap(value, eventId: key.toString());
+        final existing = latest[studentId];
+        if (existing == null || ev.timestamp.isAfter(existing.timestamp)) {
+          latest[studentId] = ev;
+        }
+      });
+      return latest;
+    });
+  }
+
 
   bool _shouldQueueWrite(Object error) {
     if (error is! FirebaseException) return true;
@@ -326,12 +397,6 @@ class FirebaseService {
     );
   }
 
-  /// ─── BLOCK 8 ───────────────────────────────────────────────
-  /// Streams every route along with its ordered stops.
-  ///
-  /// Emits `[{id, name, ..., stops: [{id, lat, lng, name, order}, ...]}]`.
-  /// Intended for the Admin dashboard's map overlay, where all routes'
-  /// stops are rendered at once.
   Stream<List<Map<String, dynamic>>> streamAllRoutesWithStops() {
     return _root.child('routes').onValue.map((event) {
       final raw = event.snapshot.value;
@@ -536,6 +601,11 @@ class FirebaseService {
     }).asBroadcastStream();
   }
 
+  /// Streams every bus telemetry node that exists in `/buses`.
+  ///
+  /// This is the RAW stream — it does NOT filter against `busesFleet`.
+  /// Use [streamActiveFleetLocations] for the Admin map, which only
+  /// wants buses that are actually assigned to a driver.
   Stream<Map<String, BusLocation>> streamAllBusLocations() {
     return _root.child('buses').onValue.map((event) {
       final raw = event.snapshot.value;
@@ -548,6 +618,89 @@ class FirebaseService {
       });
       return locations;
     }).asBroadcastStream();
+  }
+
+  /// Streams bus locations ONLY for buses that are registered in
+  /// `/busesFleet` AND have a non-null `driverUid`.
+  ///
+  /// Used by the Admin map. Buses in the fleet with no assigned driver
+  /// are hidden — this is the "assigned → show" rule.
+  ///
+  /// Implementation note: this combines two RTDB listeners into one
+  /// stream. The first listens to `/busesFleet` (small — max 10 records)
+  /// to know which buses are assigned. The second listens to `/buses`
+  /// (larger — one record per active bus) for the raw telemetry. When
+  /// either emits, we re-emit the intersection.
+  Stream<Map<String, BusLocation>> streamActiveFleetLocations() {
+    late StreamController<Map<String, BusLocation>> controller;
+    StreamSubscription<DatabaseEvent>? fleetSub;
+    StreamSubscription<DatabaseEvent>? busesSub;
+
+    // Local cache so we don't rebuild from scratch on every emission.
+    Set<String> assignedBusIds = <String>{};
+    Map<String, BusLocation> allLocations = <String, BusLocation>{};
+
+    void emit() {
+      if (controller.isClosed) return;
+      final filtered = <String, BusLocation>{};
+      for (final busId in assignedBusIds) {
+        final loc = allLocations[busId];
+        if (loc != null) filtered[busId] = loc;
+      }
+      controller.add(filtered);
+    }
+
+    controller = StreamController<Map<String, BusLocation>>.broadcast(
+      onListen: () {
+        fleetSub = _root.child('busesFleet').onValue.listen(
+          (event) {
+            final raw = event.snapshot.value;
+            final next = <String>{};
+            if (raw is Map) {
+              raw.forEach((key, value) {
+                if (value is Map) {
+                  final driverUid = value['driverUid'];
+                  if (driverUid is String && driverUid.trim().isNotEmpty) {
+                    next.add(key.toString());
+                  }
+                }
+              });
+            }
+            assignedBusIds = next;
+            emit();
+          },
+          onError: (e) {
+            debugPrint('streamActiveFleetLocations: fleet error: $e');
+            if (!controller.isClosed) controller.add(const {});
+          },
+        );
+        busesSub = _root.child('buses').onValue.listen(
+          (event) {
+            final raw = event.snapshot.value;
+            final next = <String, BusLocation>{};
+            if (raw is Map) {
+              raw.forEach((key, value) {
+                if (value is Map) {
+                  next[key.toString()] = BusLocation.fromMap(value);
+                }
+              });
+            }
+            allLocations = next;
+            emit();
+          },
+          onError: (e) {
+            debugPrint('streamActiveFleetLocations: buses error: $e');
+            if (!controller.isClosed) controller.add(const {});
+          },
+        );
+      },
+      onCancel: () {
+        fleetSub?.cancel();
+        busesSub?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   Stream<List<Student>> streamStudents(String busId) {
@@ -1124,6 +1277,34 @@ class FirebaseService {
       }
     } catch (error) {
       debugPrint('FirebaseService: Error ensuring fleet exists: $error');
+    }
+  }
+
+  /// True iff [busId] exists as a key under `/busesFleet`.
+  ///
+  /// Used by [LocationService.startTracking] as a hard guard: a driver
+  /// cannot start streaming to a bus that was never registered.
+  Future<bool> isBusRegisteredInFleet(String busId) async {
+    try {
+      final snap = await _root.child('busesFleet/$busId').get();
+      return snap.exists;
+    } catch (e) {
+      debugPrint('FirebaseService: isBusRegisteredInFleet error: $e');
+      return false;
+    }
+  }
+
+  /// True iff [uid] is the assigned driver of [busId] in `/busesFleet`.
+  ///
+  /// Used by [LocationService.startTracking] as a second guard: even if
+  /// the bus exists, only its assigned driver may stream to it.
+  Future<bool> isDriverAssignedToBus(String uid, String busId) async {
+    try {
+      final snap = await _root.child('busesFleet/$busId/driverUid').get();
+      return snap.exists && snap.value?.toString() == uid;
+    } catch (e) {
+      debugPrint('FirebaseService: isDriverAssignedToBus error: $e');
+      return false;
     }
   }
 

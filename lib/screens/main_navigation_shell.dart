@@ -12,6 +12,7 @@ import 'fleet_management_screen.dart';
 import 'profile_screen.dart';
 import 'manual_attendance_screen.dart';
 import 'parent_tracking_screen.dart';
+import 'parent_people_screen.dart';
 import 'trip_workflow_screen.dart';
 import 'admin/admin_dashboard_screen.dart';
 import 'admin/admin_operations_screen.dart';
@@ -19,8 +20,6 @@ import 'admin/admin_bus_operations_screen.dart';
 import 'admin/admin_students_overview_screen.dart';
 import 'admin/admin_alerts_screen.dart';
 import 'admin_fleet_tracking_screen.dart';
-import 'parent_people_screen.dart';
-import 'parent_assigned_staff_screen.dart';
 
 class AuthorizedTab {
   final String title;
@@ -99,6 +98,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
 
   // ============================================================
   // DRIVER — 4 tabs
+  // Order: Route, Trip, Students, Profile
   // ============================================================
   List<AuthorizedTab> _driverTabs() {
     return [
@@ -154,6 +154,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
 
   // ============================================================
   // CONDUCTOR — 4 tabs
+  // Order: Students, Map, Trip, Profile
   // ============================================================
   List<AuthorizedTab> _conductorTabs() {
     return [
@@ -208,78 +209,74 @@ class _MainNavigationShellState extends State<MainNavigationShell>
   }
 
   // ============================================================
-  // ADMIN — platform-dependent
+  // ADMIN
   //
-  // Laptop: Dashboard, Map, Alerts, Fleet, Ops, Staff, Students, Profile
-  //         (8 tabs — every operation available)
-  //
-  // Mobile: Dashboard, Map, Alerts, Profile
-  //         (4 tabs — read-only + emergency handling only)
+  // Laptop: 8 tabs — Dashboard, Fleet, Ops, Staff, Students,
+  //         Map, Alerts, Profile
+  // Mobile: 4 tabs — Dashboard, Alerts, Map, Profile
   // ============================================================
   List<AuthorizedTab> _adminTabs() {
     final laptop = isLaptopPlatform();
 
-    // Shared tabs that both platforms get, in the same order.
-    final shared = <AuthorizedTab>[
-      AuthorizedTab(
-        title: 'Dashboard',
-        screen: const AdminDashboardScreen(),
-        navItem: const BottomNavigationBarItem(
-          icon: Icon(Icons.dashboard_outlined),
-          activeIcon: Icon(Icons.dashboard),
-          label: 'Home',
-        ),
-        icon: Icons.dashboard_outlined,
-        activeIcon: Icons.dashboard,
+    final dashboard = AuthorizedTab(
+      title: 'Dashboard',
+      screen: const AdminDashboardScreen(),
+      navItem: const BottomNavigationBarItem(
+        icon: Icon(Icons.dashboard_outlined),
+        activeIcon: Icon(Icons.dashboard),
+        label: 'Home',
       ),
-      AuthorizedTab(
-        title: 'Fleet Map',
-        screen: const AdminFleetTrackingScreen(),
-        navItem: const BottomNavigationBarItem(
-          icon: Icon(Icons.map_outlined),
-          activeIcon: Icon(Icons.map),
-          label: 'Map',
-        ),
-        icon: Icons.map_outlined,
-        activeIcon: Icons.map,
+      icon: Icons.dashboard_outlined,
+      activeIcon: Icons.dashboard,
+    );
+
+    final alerts = AuthorizedTab(
+      title: 'Alerts & Emergencies',
+      screen: const AdminAlertsScreen(),
+      navItem: const BottomNavigationBarItem(
+        icon: Icon(Icons.notifications_active_outlined),
+        activeIcon: Icon(Icons.notifications_active),
+        label: 'Alerts',
       ),
-      AuthorizedTab(
-        title: 'Alerts & Emergencies',
-        screen: const AdminAlertsScreen(),
-        navItem: const BottomNavigationBarItem(
-          icon: Icon(Icons.notifications_active_outlined),
-          activeIcon: Icon(Icons.notifications_active),
-          label: 'Alerts',
-        ),
-        icon: Icons.notifications_active_outlined,
-        activeIcon: Icons.notifications_active,
+      icon: Icons.notifications_active_outlined,
+      activeIcon: Icons.notifications_active,
+    );
+
+    final map = AuthorizedTab(
+      title: 'Fleet Map',
+      screen: const AdminFleetTrackingScreen(),
+      navItem: const BottomNavigationBarItem(
+        icon: Icon(Icons.map_outlined),
+        activeIcon: Icon(Icons.map),
+        label: 'Map',
       ),
-    ];
+      icon: Icons.map_outlined,
+      activeIcon: Icons.map,
+    );
+
+    final profile = AuthorizedTab(
+      title: 'Admin Profile',
+      screen: ProfileScreen(
+        activeRole: 'Admin',
+        onSignOut: widget.onSignOut,
+      ),
+      navItem: const BottomNavigationBarItem(
+        icon: Icon(Icons.person_outline),
+        activeIcon: Icon(Icons.person),
+        label: 'Profile',
+      ),
+      icon: Icons.person_outline,
+      activeIcon: Icons.person,
+    );
 
     if (!laptop) {
-      // Mobile: only read-only + emergency handling.
-      return [
-        ...shared,
-        AuthorizedTab(
-          title: 'Admin Profile',
-          screen: ProfileScreen(
-            activeRole: 'Admin',
-            onSignOut: widget.onSignOut,
-          ),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-          icon: Icons.person_outline,
-          activeIcon: Icons.person,
-        ),
-      ];
+      // Mobile: read-only + emergency handling only.
+      return [dashboard, alerts, map, profile];
     }
 
-    // Laptop: everything.
+    // Laptop: full operational set.
     return [
-      ...shared,
+      dashboard,
       AuthorizedTab(
         title: 'Fleet Operations',
         screen: const FleetManagementScreen(),
@@ -324,39 +321,23 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         icon: Icons.school_outlined,
         activeIcon: Icons.school,
       ),
-      AuthorizedTab(
-        title: 'Admin Profile',
-        screen: ProfileScreen(
-          activeRole: 'Admin',
-          onSignOut: widget.onSignOut,
-        ),
-        navItem: const BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-        icon: Icons.person_outline,
-        activeIcon: Icons.person,
-      ),
+      map,
+      alerts,
+      profile,
     ];
   }
 
   // ============================================================
-  // PARENT — 5 tabs
+  // PARENT — 4 tabs
+  // Order: Map, Status, Children, Profile
+  //
+  // Previously 5 tabs (Status, Map, Children, Staff, Profile).
+  // "Staff" has been folded into "Children" — both answer the same
+  // question, "who is connected to my child?". Reaching 4 tabs keeps
+  // the bar legible on narrow phones.
   // ============================================================
   List<AuthorizedTab> _parentTabs() {
     return [
-      AuthorizedTab(
-        title: 'Child Boarding Status',
-        screen: const BoardingStatusScreen(),
-        navItem: const BottomNavigationBarItem(
-          icon: Icon(Icons.info_outlined),
-          activeIcon: Icon(Icons.info),
-          label: 'Status',
-        ),
-        icon: Icons.info_outlined,
-        activeIcon: Icons.info,
-      ),
       AuthorizedTab(
         title: 'Live Bus Tracking',
         screen: const ParentTrackingScreen(),
@@ -369,26 +350,26 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         activeIcon: Icons.map,
       ),
       AuthorizedTab(
+        title: 'Child Boarding Status',
+        screen: const BoardingStatusScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.info_outlined),
+          activeIcon: Icon(Icons.info),
+          label: 'Status',
+        ),
+        icon: Icons.info_outlined,
+        activeIcon: Icons.info,
+      ),
+      AuthorizedTab(
         title: 'My Children',
         screen: const ParentPeopleScreen(),
         navItem: const BottomNavigationBarItem(
           icon: Icon(Icons.family_restroom_outlined),
           activeIcon: Icon(Icons.family_restroom),
-          label: 'My Children',
+          label: 'Children',
         ),
         icon: Icons.family_restroom_outlined,
         activeIcon: Icons.family_restroom,
-      ),
-      AuthorizedTab(
-        title: 'Assigned Staff',
-        screen: const ParentAssignedStaffScreen(),
-        navItem: const BottomNavigationBarItem(
-          icon: Icon(Icons.groups_outlined),
-          activeIcon: Icon(Icons.groups),
-          label: 'Staff',
-        ),
-        icon: Icons.groups_outlined,
-        activeIcon: Icons.groups,
       ),
       AuthorizedTab(
         title: 'Parent Profile',
@@ -421,7 +402,17 @@ class _MainNavigationShellState extends State<MainNavigationShell>
     final isDesktop = context.isDesktop;
     final scheme = Theme.of(context).colorScheme;
 
+    // Keyboard-up detection: when the keyboard is on screen we hide the
+    // bottom nav so the form has the full viewport. This is the standard
+    // pattern (WhatsApp, Gmail, Slack all do this) and it eliminates the
+    // class of bugs where the nav competes with a form for vertical
+    // space. resizeToAvoidBottomInset is disabled on the outer Scaffold
+    // so the shell itself doesn't try to resize — inner screens manage
+    // their own insets.
+    final keyboardUp = MediaQuery.viewInsetsOf(context).bottom > 0;
+
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: const AppHeader(title: 'Smart School Bus'),
       body: FadeTransition(
         opacity: _fadeAnimation,
@@ -454,7 +445,7 @@ class _MainNavigationShellState extends State<MainNavigationShell>
           ],
         ),
       ),
-      bottomNavigationBar: isDesktop
+      bottomNavigationBar: (isDesktop || keyboardUp)
           ? null
           : _buildMobileBottomNav(tabs, safeIndex, scheme),
     );
@@ -750,8 +741,8 @@ class _SidebarNavItemState extends State<_SidebarNavItem>
                     color: widget.isSelected
                         ? scheme.primary
                         : _isHovered
-                        ? scheme.onSurface
-                        : scheme.onSurfaceVariant,
+                            ? scheme.onSurface
+                            : scheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -768,8 +759,8 @@ class _SidebarNavItemState extends State<_SidebarNavItem>
                       color: widget.isSelected
                           ? scheme.primary
                           : _isHovered
-                          ? scheme.onSurface
-                          : scheme.onSurfaceVariant,
+                              ? scheme.onSurface
+                              : scheme.onSurfaceVariant,
                     ),
                   ),
                 ),

@@ -1,11 +1,27 @@
 // lib/widgets/live_map_canvas.dart
 
-
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../theme/app_theme.dart';
+
+/// One entry in the "extra buses" overlay. Used by Admin's multi-bus map.
+class ExtraBusMarker {
+  final String busId;
+  final double lat;
+  final double lng;
+  final String statusLabel;
+  final bool isStale;
+
+  const ExtraBusMarker({
+    required this.busId,
+    required this.lat,
+    required this.lng,
+    required this.statusLabel,
+    this.isStale = false,
+  });
+}
 
 /// A real geographic map showing a bus's live location, optional route
 /// stops, and optional overlays.
@@ -57,19 +73,28 @@ class LiveMapCanvas extends StatefulWidget {
   /// Whether to render the top info overlay (ETA + bus number + status).
   final bool showInfoOverlay;
 
-  /// Optional banner shown above the info overlay. Preserved from the
-  /// previous widget so existing callers don't break.
+  /// Optional banner shown above the info overlay.
   final Widget? topBanner;
 
   /// Optional widget shown below the info overlay.
   final Widget? trailingAction;
 
   /// Whether to show the "recenter" FAB that animates the camera back to
-  /// the bus. Useful when the user pans away.
+  /// the bus.
   final bool showRecenterButton;
 
   /// Initial zoom level. Defaults to 15 (street level).
   final double initialZoom;
+
+  /// Optional additional buses to render alongside the primary bus.
+  /// Used by the Admin dashboard to show every on-route bus at once.
+  /// Each entry gets a compact marker; taps are not wired here — the
+  /// parent decides what to do via [onExtraBusTap].
+  final List<ExtraBusMarker> additionalBuses;
+
+  /// Optional callback when an additional bus marker is tapped. If null,
+  /// extra bus markers are not tappable.
+  final void Function(ExtraBusMarker bus)? onExtraBusTap;
 
   const LiveMapCanvas({
     super.key,
@@ -87,6 +112,8 @@ class LiveMapCanvas extends StatefulWidget {
     this.trailingAction,
     this.showRecenterButton = true,
     this.initialZoom = 15,
+    this.additionalBuses = const [],
+    this.onExtraBusTap,
   });
 
   @override
@@ -99,8 +126,6 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
 
-  /// Track whether the user has manually panned/zoomed away from the bus.
-  /// When true, the recenter FAB becomes prominent.
   bool _userMovedAway = false;
   bool _mapReady = false;
 
@@ -108,17 +133,34 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
     final lat = widget.lat;
     final lng = widget.lng;
     if (lat == null || lng == null) return null;
-    if (lat == 0.0 && lng == 0.0) return null; // treat (0,0) as "no fix"
+    if (lat == 0.0 && lng == 0.0) return null;
     return LatLng(lat, lng);
   }
 
-  /// Compute a sensible initial center and zoom based on available data:
-  ///   1. Bus position, if available.
-  ///   2. Else, midpoint of stop positions.
-  ///   3. Else, a global fallback.
+  List<LatLng> get _extraBusPoints {
+    final points = <LatLng>[];
+    for (final b in widget.additionalBuses) {
+      if (b.lat == 0.0 && b.lng == 0.0) continue;
+      points.add(LatLng(b.lat, b.lng));
+    }
+    return points;
+  }
+
   LatLng get _initialCenter {
     final bus = _busLatLng;
     if (bus != null) return bus;
+
+    // If we have multiple buses and no primary, use their average.
+    if (widget.additionalBuses.length > 1) {
+      double sumLat = 0, sumLng = 0;
+      int count = 0;
+      for (final b in widget.additionalBuses) {
+        sumLat += b.lat;
+        sumLng += b.lng;
+        count++;
+      }
+      if (count > 0) return LatLng(sumLat / count, sumLng / count);
+    }
 
     if (widget.stops.isNotEmpty) {
       double sumLat = 0, sumLng = 0;
@@ -132,13 +174,9 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
           count++;
         }
       }
-      if (count > 0) {
-        return LatLng(sumLat / count, sumLng / count);
-      }
+      if (count > 0) return LatLng(sumLat / count, sumLng / count);
     }
-    // Fallback: somewhere neutral. Won't be visible if the map has no
-    // markers, but prevents a crash.
-    return const LatLng(20.5937, 78.9629); // India centroid
+    return const LatLng(20.5937, 78.9629);
   }
 
   @override
@@ -157,12 +195,12 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
   void didUpdateWidget(covariant LiveMapCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // If the bus position changed and the user hasn't panned away, keep
-    // the camera centered on it. This gives the "follow me" behavior for
-    // parents who don't interact with the map.
     final oldLatLng = _coordsOf(oldWidget);
     final newLatLng = _busLatLng;
-    if (newLatLng != null && newLatLng != oldLatLng && !_userMovedAway && _mapReady) {
+    if (newLatLng != null &&
+        newLatLng != oldLatLng &&
+        !_userMovedAway &&
+        _mapReady) {
       _mapController.move(newLatLng, _mapController.camera.zoom);
     }
   }
@@ -192,7 +230,7 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
   Widget build(BuildContext context) {
     final bus = _busLatLng;
 
-    // Stop markers: build list from `stops`.
+    // Stop markers.
     final stopMarkers = <Marker>[];
     for (var i = 0; i < widget.stops.length; i++) {
       final s = widget.stops[i];
@@ -214,7 +252,7 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
       );
     }
 
-    // Bus marker (only if we have a fix).
+    // Primary bus marker.
     final busMarkers = <Marker>[];
     if (bus != null) {
       busMarkers.add(
@@ -236,6 +274,26 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
       );
     }
 
+    // Additional bus markers (compact).
+    final extraMarkers = <Marker>[];
+    for (final b in widget.additionalBuses) {
+      if (b.lat == 0.0 && b.lng == 0.0) continue;
+      final marker = Marker(
+        point: LatLng(b.lat, b.lng),
+        width: 56,
+        height: 56,
+        alignment: Alignment.center,
+        child: _ExtraBusMarker(
+          busId: b.busId,
+          isStale: b.isStale,
+          onTap: widget.onExtraBusTap == null
+              ? null
+              : () => widget.onExtraBusTap!(b),
+        ),
+      );
+      extraMarkers.add(marker);
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
         return Stack(
@@ -250,9 +308,6 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                     minZoom: 3,
                     maxZoom: 18,
                     interactionOptions: const InteractionOptions(
-                      // Enable pan + pinch, but disable the built-in
-                      // rotate gestures — they cause accidental rotation
-                      // on small screens and are not needed here.
                       flags: InteractiveFlag.drag |
                           InteractiveFlag.pinchZoom |
                           InteractiveFlag.doubleTapZoom |
@@ -260,11 +315,9 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                     ),
                     onMapReady: () {
                       _mapReady = true;
-                      // First fit: if we have a bus and stops, frame them.
                       _fitToMarkersIfPossible();
                     },
                     onPositionChanged: (camera, hasGesture) {
-                      // Detect user-initiated pan/zoom (hasGesture == true).
                       if (hasGesture && !_userMovedAway) {
                         setState(() => _userMovedAway = true);
                       }
@@ -272,18 +325,12 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                   ),
                   children: [
                     TileLayer(
-                      // OpenStreetMap standard tiles. See class docstring
-                      // for the production-provider note.
                       urlTemplate:
                           'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.schoolbussafe.schoolbusSafe',
-                      // Cache tiles in-memory so re-centering is snappy.
+                      userAgentPackageName: 'com.schoolbussafe.schoolBusSafe',
                       tileProvider: NetworkTileProvider(),
                       maxNativeZoom: 19,
                     ),
-                    // Optional: draw a faint polyline through the stops in
-                    // order. This gives a sense of route without needing
-                    // real road-network data.
                     if (widget.stops.length >= 2)
                       PolylineLayer(
                         polylines: [
@@ -296,9 +343,10 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                       ),
                     if (stopMarkers.isNotEmpty)
                       MarkerLayer(markers: stopMarkers),
+                    if (extraMarkers.isNotEmpty)
+                      MarkerLayer(markers: extraMarkers),
                     if (busMarkers.isNotEmpty)
                       MarkerLayer(markers: busMarkers),
-                    // Attribution is required by the OSM tile usage policy.
                     RichAttributionWidget(
                       attributions: [
                         TextSourceAttribution(
@@ -312,7 +360,6 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
               ),
             ),
 
-            // Top info overlay (optional).
             if (widget.showInfoOverlay)
               Positioned(
                 top: 12,
@@ -340,10 +387,9 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                 ),
               ),
 
-            // "No location" placeholder — displayed when we have no bus
-            // fix, so the screen shows something meaningful rather than an
-            // arbitrary map of India.
-            if (bus == null && stopMarkers.isEmpty)
+            if (bus == null &&
+                stopMarkers.isEmpty &&
+                extraMarkers.isEmpty)
               Positioned.fill(
                 child: IgnorePointer(
                   child: Container(
@@ -366,7 +412,9 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                         children: [
                           Icon(
                             Icons.location_off_rounded,
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
                             size: 26,
                           ),
                           const SizedBox(height: 6),
@@ -384,8 +432,6 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
                 ),
               ),
 
-            // Recenter button — only shown when the user has panned away
-            // from the bus.
             if (widget.showRecenterButton && bus != null && _userMovedAway)
               Positioned(
                 right: 12,
@@ -417,12 +463,11 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
     return points;
   }
 
-  /// On first load, zoom the map to fit both the bus and all stops (with
-  /// padding). If we only have one of the two, just center on it.
   void _fitToMarkersIfPossible() {
     final points = <LatLng>[];
     final bus = _busLatLng;
     if (bus != null) points.add(bus);
+    points.addAll(_extraBusPoints);
     points.addAll(_routePoints());
 
     if (points.length >= 2) {
@@ -438,7 +483,7 @@ class _LiveMapCanvasState extends State<LiveMapCanvas>
 }
 
 // ============================================================
-// BUS MARKER
+// BUS MARKER (primary)
 // ============================================================
 
 class _BusMarker extends StatelessWidget {
@@ -455,7 +500,6 @@ class _BusMarker extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Status pill
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
@@ -493,7 +537,6 @@ class _BusMarker extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        // Pulsing bus icon
         Transform.scale(
           scale: pulseScale,
           child: Container(
@@ -534,6 +577,66 @@ class _BusMarker extends StatelessWidget {
 }
 
 // ============================================================
+// EXTRA BUS MARKER (compact, secondary)
+// ============================================================
+
+class _ExtraBusMarker extends StatelessWidget {
+  final String busId;
+  final bool isStale;
+  final VoidCallback? onTap;
+
+  const _ExtraBusMarker({
+    required this.busId,
+    required this.isStale,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isStale ? AppColors.alertOrange : AppColors.successGreen;
+
+    final marker = Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.15),
+      ),
+      child: Center(
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2.5),
+            boxShadow: [
+              BoxShadow(
+                color: color.withValues(alpha: 0.4),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: const Icon(
+            Icons.directions_bus_rounded,
+            color: Colors.white,
+            size: 16,
+          ),
+        ),
+      ),
+    );
+
+    return Tooltip(
+      message: busId.toUpperCase(),
+      child: onTap == null
+          ? marker
+          : GestureDetector(onTap: onTap, child: marker),
+    );
+  }
+}
+
+// ============================================================
 // STOP MARKER
 // ============================================================
 
@@ -548,8 +651,7 @@ class _StopMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        isCurrent ? AppColors.alertOrange : AppColors.outline;
+    final color = isCurrent ? AppColors.alertOrange : AppColors.outline;
     return Tooltip(
       message: label,
       child: Container(
@@ -646,10 +748,7 @@ class _InfoOverlay extends StatelessWidget {
                       '$busNumber • ${speedKmph.toStringAsFixed(0)} km/h',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context)
-                          .textTheme
-                          .labelMedium
-                          ?.copyWith(
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
                             color: Theme.of(context)
                                 .colorScheme
                                 .onSurfaceVariant,

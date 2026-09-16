@@ -1,8 +1,4 @@
 // lib/screens/admin/admin_dashboard_screen.dart
-//
-// Landing screen for the Admin role. On laptop it shows KPIs, a real map
-// with all active buses, a bus list with status, and recent activity. On
-// mobile it shows the same content in a stacked, read-only layout.
 
 import 'package:flutter/material.dart';
 
@@ -35,7 +31,9 @@ class AdminDashboardScreen extends StatelessWidget {
             builder: (context, studentSnap) {
               final students = studentSnap.data ?? const <Student>[];
               return StreamBuilder<Map<String, BusLocation>>(
-                stream: FirebaseService.instance.streamAllBusLocations(),
+                // Active fleet only — matches the Fleet Map tab and
+                // hides unassigned / ghost buses.
+                stream: FirebaseService.instance.streamActiveFleetLocations(),
                 builder: (context, locSnap) {
                   final locations =
                       locSnap.data ?? const <String, BusLocation>{};
@@ -62,6 +60,8 @@ class AdminDashboardScreen extends StatelessWidget {
     Map<String, BusLocation> locations,
     bool laptop,
   ) {
+    final stats = _computeStats(fleet, students, locations);
+
     return SingleChildScrollView(
       padding: EdgeInsets.all(laptop ? 24 : 16),
       child: Column(
@@ -72,8 +72,6 @@ class AdminDashboardScreen extends StatelessWidget {
           _kpiRow(context, fleet, students, locations),
           const SizedBox(height: 16),
           if (laptop) ...[
-            // Laptop: side-by-side, fixed heights so IntrinsicHeight is
-            // not required and Expanded has a bound.
             SizedBox(
               height: 520,
               child: Row(
@@ -81,7 +79,7 @@ class AdminDashboardScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     flex: 3,
-                    child: _mapCard(context, locations),
+                    child: _mapCard(context, fleet, stats),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -89,7 +87,7 @@ class AdminDashboardScreen extends StatelessWidget {
                     child: Column(
                       children: [
                         Expanded(
-                          child: _busListCard(context, fleet, locations),
+                          child: _busListCard(context, fleet, stats),
                         ),
                         const SizedBox(height: 12),
                         Expanded(child: _activityCard(context)),
@@ -100,16 +98,14 @@ class AdminDashboardScreen extends StatelessWidget {
               ),
             ),
           ] else ...[
-            // Mobile: stack with explicit heights so nothing tries to
-            // expand into infinite vertical space.
             SizedBox(
               height: 320,
-              child: _mapCard(context, locations),
+              child: _mapCard(context, fleet, stats),
             ),
             const SizedBox(height: 12),
             SizedBox(
               height: 420,
-              child: _busListCard(context, fleet, locations),
+              child: _busListCard(context, fleet, stats),
             ),
             const SizedBox(height: 12),
             SizedBox(
@@ -120,6 +116,42 @@ class AdminDashboardScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Map<String, _BusStats> _computeStats(
+    List<BusFleet> fleet,
+    List<Student> students,
+    Map<String, BusLocation> locations,
+  ) {
+    final byBus = <String, List<Student>>{};
+    for (final s in students) {
+      final busId = s.busId;
+      if (busId == null || busId.isEmpty) continue;
+      byBus.putIfAbsent(busId, () => []).add(s);
+    }
+
+    final result = <String, _BusStats>{};
+    for (final bus in fleet) {
+      final roster = byBus[bus.busId] ?? const <Student>[];
+      final boarded = roster
+          .where((s) => s.status == StudentStatus.boarded)
+          .length;
+      final alert = roster
+          .where((s) => s.status == StudentStatus.alert)
+          .length;
+      final pending = roster
+          .where((s) => s.status == StudentStatus.pending)
+          .length;
+      result[bus.busId] = _BusStats(
+        busId: bus.busId,
+        total: roster.length,
+        boarded: boarded,
+        pending: pending,
+        alert: alert,
+        location: locations[bus.busId],
+      );
+    }
+    return result;
   }
 
   Widget _header(BuildContext context) {
@@ -167,18 +199,20 @@ class AdminDashboardScreen extends StatelessWidget {
     List<Student> students,
     Map<String, BusLocation> locations,
   ) {
-    final activeBuses =
-        fleet.where((b) => b.status == FleetStatus.onRoute).length;
+    // "Active" means assigned AND streaming (has a location record).
+    final activeBuses = locations.length;
+    final assigned =
+        fleet.where((b) => b.driverName != 'Unassigned').length;
     final boarded =
         students.where((s) => s.status == StudentStatus.boarded).length;
-    final alerts = locations.values.where((l) => l.isStale()).length;
+    final stale = locations.values.where((l) => l.isStale()).length;
 
     final isMobile = !isLaptopPlatform();
 
     final cards = [
       _Kpi(
         label: 'Active Buses',
-        value: '$activeBuses/${fleet.length}',
+        value: '$activeBuses/$assigned',
         icon: Icons.directions_bus_rounded,
         color: AppColors.successGreen,
       ),
@@ -190,9 +224,9 @@ class AdminDashboardScreen extends StatelessWidget {
       ),
       _Kpi(
         label: 'Stale Trackers',
-        value: '$alerts',
+        value: '$stale',
         icon: Icons.warning_amber_rounded,
-        color: alerts > 0 ? AppColors.alertOrange : AppColors.outline,
+        color: stale > 0 ? AppColors.alertOrange : AppColors.outline,
       ),
       _Kpi(
         label: 'Reporting',
@@ -221,15 +255,37 @@ class AdminDashboardScreen extends StatelessWidget {
 
   Widget _mapCard(
     BuildContext context,
-    Map<String, BusLocation> locations,
+    List<BusFleet> fleet,
+    Map<String, _BusStats> stats,
   ) {
-    BusLocation? selected;
-    String selectedId = '';
-    if (locations.isNotEmpty) {
-      final sorted = locations.entries.toList()
-        ..sort((a, b) => a.key.compareTo(b.key));
-      selectedId = sorted.first.key;
-      selected = sorted.first.value;
+    String primaryBusId = '';
+    BusLocation? primaryLocation;
+
+    final reporting = <MapEntry<String, BusLocation>>[];
+    for (final entry in stats.entries) {
+      final loc = entry.value.location;
+      if (loc != null) reporting.add(MapEntry(entry.key, loc));
+    }
+    reporting.sort((a, b) => a.key.compareTo(b.key));
+
+    if (reporting.isNotEmpty) {
+      primaryBusId = reporting.first.key;
+      primaryLocation = reporting.first.value;
+    }
+
+    final extraBuses = <ExtraBusMarker>[];
+    for (final entry in reporting) {
+      if (entry.key == primaryBusId) continue;
+      final loc = entry.value;
+      extraBuses.add(
+        ExtraBusMarker(
+          busId: entry.key,
+          lat: loc.lat,
+          lng: loc.lng,
+          statusLabel: loc.statusLabel,
+          isStale: loc.isStale(),
+        ),
+      );
     }
 
     return Card(
@@ -250,7 +306,7 @@ class AdminDashboardScreen extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${locations.length} reporting',
+                  '${reporting.length} reporting',
                   style: TextStyle(
                     fontSize: 12,
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -259,26 +315,30 @@ class AdminDashboardScreen extends StatelessWidget {
               ],
             ),
           ),
-          // The map must have a bounded height or FlutterMap will throw.
-          // Expanded is fine *here* because it's inside a Column whose
-          // parent (this Card) is itself inside a SizedBox with an
-          // explicit height from _buildContent.
           Expanded(
             child: ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(bottom: Radius.circular(12)),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(12),
+              ),
               child: LiveMapCanvas(
-                lat: selected?.lat,
-                lng: selected?.lng,
-                busStatus: selected?.statusLabel ?? 'No buses',
-                etaTime: selected?.etaLabel ?? '--',
-                busNumber:
-                    selectedId.isEmpty ? '--' : selectedId.toUpperCase(),
-                speedKmph: selected?.speedKmph ?? 0,
+                lat: primaryLocation?.lat,
+                lng: primaryLocation?.lng,
+                busStatus: primaryLocation?.statusLabel ?? 'No buses',
+                etaTime: primaryLocation?.etaLabel ?? '--',
+                busNumber: primaryBusId.isEmpty
+                    ? '--'
+                    : primaryBusId.toUpperCase(),
+                speedKmph: primaryLocation?.speedKmph ?? 0,
                 stops: const [],
                 currentStopIndex: -1,
                 showInfoOverlay: false,
                 showRecenterButton: false,
+                additionalBuses: extraBuses,
+                onExtraBusTap: (bus) => _showBusDetailsSheet(
+                  context,
+                  bus.busId,
+                  stats[bus.busId],
+                ),
               ),
             ),
           ),
@@ -290,7 +350,7 @@ class AdminDashboardScreen extends StatelessWidget {
   Widget _busListCard(
     BuildContext context,
     List<BusFleet> fleet,
-    Map<String, BusLocation> locations,
+    Map<String, _BusStats> stats,
   ) {
     return Card(
       child: Column(
@@ -333,22 +393,57 @@ class AdminDashboardScreen extends StatelessWidget {
                     separatorBuilder: (_, _) => const Divider(height: 1),
                     itemBuilder: (context, i) {
                       final bus = fleet[i];
-                      final loc = locations[bus.busId];
+                      final stat = stats[bus.busId];
+                      final loc = stat?.location;
                       final color = switch (bus.status) {
                         FleetStatus.onRoute => AppColors.successGreen,
                         FleetStatus.delayed => AppColors.alertOrange,
                         FleetStatus.maintenance => AppColors.errorRed,
                         FleetStatus.idle => AppColors.outline,
                       };
+                      final boarded = stat?.boarded ?? 0;
+                      final total = stat?.total ?? 0;
+                      final isAssigned =
+                          bus.driverName != 'Unassigned';
                       return ListTile(
                         dense: true,
                         leading: Icon(Icons.circle, size: 12, color: color),
-                        title: Text(
-                          bus.busId.toUpperCase(),
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        title: Row(
+                          children: [
+                            Text(
+                              bus.busId.toUpperCase(),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (!isAssigned) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 1,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.outline
+                                      .withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'IDLE',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.outline,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         subtitle: Text(
-                          '${bus.routeName} • ${bus.statusLabel}',
+                          isAssigned
+                              ? '$total students • $boarded boarded'
+                              : 'Unassigned',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -361,12 +456,142 @@ class AdminDashboardScreen extends StatelessWidget {
                                 '${loc.speedKmph.toStringAsFixed(0)} km/h',
                                 style: const TextStyle(fontSize: 12),
                               ),
+                        onTap: () => _showBusDetailsSheet(
+                          context,
+                          bus.busId,
+                          stat,
+                        ),
                       );
                     },
                   ),
           ),
         ],
       ),
+    );
+  }
+
+  void _showBusDetailsSheet(
+    BuildContext context,
+    String busId,
+    _BusStats? stat,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final scheme = Theme.of(sheetContext).colorScheme;
+        final total = stat?.total ?? 0;
+        final boarded = stat?.boarded ?? 0;
+        final pending = stat?.pending ?? 0;
+        final alert = stat?.alert ?? 0;
+        final loc = stat?.location;
+
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        gradient: AppTheme.brandGradient,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.directions_bus_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            busId.toUpperCase(),
+                            style: Theme.of(sheetContext)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          Text(
+                            loc == null
+                                ? 'Not reporting'
+                                : '${loc.statusLabel} • ${loc.speedKmph.toStringAsFixed(0)} km/h',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                _StatRow(
+                  label: 'Total assigned',
+                  value: '$total',
+                  icon: Icons.group_rounded,
+                  color: AppColors.safetyBlue,
+                ),
+                const SizedBox(height: 10),
+                _StatRow(
+                  label: 'Boarded',
+                  value: '$boarded',
+                  icon: Icons.check_circle_rounded,
+                  color: AppColors.successGreen,
+                ),
+                const SizedBox(height: 10),
+                _StatRow(
+                  label: 'Pending',
+                  value: '$pending',
+                  icon: Icons.hourglass_top_rounded,
+                  color: AppColors.alertOrange,
+                ),
+                const SizedBox(height: 10),
+                _StatRow(
+                  label: 'Flagged',
+                  value: '$alert',
+                  icon: Icons.error_outline_rounded,
+                  color: AppColors.errorRed,
+                ),
+                if (total > 0) ...[
+                  const SizedBox(height: 20),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: total == 0 ? 0 : boarded / total,
+                      minHeight: 8,
+                      backgroundColor: scheme.surfaceContainerHigh,
+                      valueColor: const AlwaysStoppedAnimation(
+                        AppColors.successGreen,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    total == 0
+                        ? 'No students assigned'
+                        : '$boarded of $total boarded '
+                            '(${((boarded / total) * 100).toStringAsFixed(0)}%)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -451,6 +676,74 @@ class AdminDashboardScreen extends StatelessWidget {
       case NotificationKind.info:
         return Icons.info_outline_rounded;
     }
+  }
+}
+
+// ============================================================
+// INTERNAL HELPERS
+// ============================================================
+
+class _BusStats {
+  final String busId;
+  final int total;
+  final int boarded;
+  final int pending;
+  final int alert;
+  final BusLocation? location;
+
+  const _BusStats({
+    required this.busId,
+    required this.total,
+    required this.boarded,
+    required this.pending,
+    required this.alert,
+    required this.location,
+  });
+}
+
+class _StatRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _StatRow({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+      ],
+    );
   }
 }
 

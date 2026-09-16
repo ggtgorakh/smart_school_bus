@@ -476,7 +476,6 @@ class _ParentAttendanceHistoryScreenState
         return source;
     }
   }
-
   _StatusMeta _statusMeta(AttendanceEventStatus status) {
     switch (status) {
       case AttendanceEventStatus.boarded:
@@ -503,10 +502,45 @@ class _ParentAttendanceHistoryScreenState
           color: AppColors.alertOrangeDark,
           icon: Icons.hourglass_top_rounded,
         );
+
+      // ─── Unit 4A protocol states ─────────────────────────────
+      // These four-plus-atStop states drive the parent-facing
+      // coming → reached → picked → leaved lifecycle. Each gets its
+      // own color and icon so the timeline reads at a glance.
+      case AttendanceEventStatus.coming:
+        return _StatusMeta(
+          label: 'Bus coming',
+          color: AppColors.safetyBlue,
+          icon: Icons.directions_bus_rounded,
+        );
+      case AttendanceEventStatus.reached:
+        return _StatusMeta(
+          label: 'Bus arrived',
+          color: AppColors.safetyBlue,
+          icon: Icons.location_on_rounded,
+        );
+      case AttendanceEventStatus.picked:
+        return _StatusMeta(
+          label: 'Picked up',
+          color: AppColors.successGreen,
+          icon: Icons.directions_walk_rounded,
+        );
+      case AttendanceEventStatus.leaved:
+        return _StatusMeta(
+          label: 'Bus departed',
+          color: AppColors.outline,
+          icon: Icons.arrow_forward_rounded,
+        );
+      case AttendanceEventStatus.atStop:
+        return _StatusMeta(
+          label: 'At stop',
+          color: AppColors.alertOrange,
+          icon: Icons.person_pin_circle_rounded,
+        );
+
+    }
     }
   }
-}
-
 class _StatusMeta {
   final String label;
   final Color color;

@@ -120,6 +120,11 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   // ============================================================
   // EDIT PROFILE SHEET
+  //
+  // The sheet is bounded (ConstrainedBox) and scrollable
+  // (SingleChildScrollView) so the on-screen keyboard cannot cause a
+  // RenderFlex overflow. The viewInsets padding is applied outside the
+  // scroll view; the scroll view's own padding is visual margin.
   // ============================================================
 
   void _openEditNameSheet(
@@ -138,8 +143,8 @@ class _ProfileScreenState extends State<ProfileScreen>
       text: role == 'Driver'
           ? licenseNumber
           : role == 'Admin'
-          ? schoolId
-          : emergencyContact,
+              ? schoolId
+              : emergencyContact,
     );
     final formKey = GlobalKey<FormState>();
 
@@ -227,225 +232,233 @@ class _ProfileScreenState extends State<ProfileScreen>
               }
             }
 
+            final mediaQuery = MediaQuery.of(sheetContext);
+            final sheetMaxHeight = mediaQuery.size.height * 0.92;
+
             return Padding(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+                bottom: mediaQuery.viewInsets.bottom,
               ),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(sheetContext).colorScheme.surface,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(24),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: sheetMaxHeight),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(sheetContext).colorScheme.surface,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
                   ),
-                ),
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: AppColors.outlineVariant,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: AppColors.safetyBlue.withValues(
-                                alpha: 0.1,
+                          Center(
+                            child: Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: AppColors.outlineVariant,
+                                borderRadius: BorderRadius.circular(2),
                               ),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.edit_rounded,
-                              color: AppColors.safetyBlue,
-                              size: 22,
                             ),
                           ),
-                          const SizedBox(width: 14),
-                          const Text(
-                            'Edit Profile',
+                          const SizedBox(height: 18),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: AppColors.safetyBlue.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.edit_rounded,
+                                  color: AppColors.safetyBlue,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              const Text(
+                                'Edit Profile',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 20,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Keep your name and contact number up to date for safe dispatch communication.',
                             style: TextStyle(
+                              fontSize: 13,
+                              color: Theme.of(sheetContext)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Full Name',
+                            style: TextStyle(
+                              fontSize: 13,
                               fontWeight: FontWeight.bold,
-                              fontSize: 20,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: controller,
+                            enabled: !isSaving,
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(
+                                Icons.person_outline_rounded,
+                                color: AppColors.outline,
+                                size: 20,
+                              ),
+                              filled: true,
+                              fillColor: Theme.of(sheetContext)
+                                  .colorScheme
+                                  .surfaceContainerLow,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.safetyBlue,
+                                  width: 2,
+                                ),
+                              ),
+                            ),
+                            validator: (val) =>
+                                (val == null || val.trim().isEmpty)
+                                    ? 'Name is required'
+                                    : null,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Phone Number',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: phoneController,
+                            enabled: !isSaving,
+                            keyboardType: TextInputType.phone,
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(
+                                Icons.phone_outlined,
+                                color: AppColors.outline,
+                                size: 20,
+                              ),
+                              filled: true,
+                              fillColor: Theme.of(sheetContext)
+                                  .colorScheme
+                                  .surfaceContainerLow,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          if (role != 'Conductor') ...[
+                            Text(
+                              role == 'Driver'
+                                  ? 'License Number'
+                                  : role == 'Admin'
+                                      ? 'School ID'
+                                      : 'Emergency Contact',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            TextFormField(
+                              controller: roleFieldController,
+                              enabled: !isSaving,
+                              keyboardType: role == 'Parent'
+                                  ? TextInputType.phone
+                                  : TextInputType.text,
+                              decoration: InputDecoration(
+                                prefixIcon: Icon(
+                                  role == 'Driver'
+                                      ? Icons.badge_outlined
+                                      : role == 'Admin'
+                                          ? Icons.school_outlined
+                                          : Icons.contact_phone_outlined,
+                                ),
+                                filled: true,
+                                fillColor: Theme.of(sheetContext)
+                                    .colorScheme
+                                    .surfaceContainerLow,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide.none,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          TextButton.icon(
+                            onPressed: isSaving ? null : sendPasswordReset,
+                            icon: const Icon(Icons.lock_reset_outlined),
+                            label: const Text('Send password reset email'),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              onPressed: isSaving ? null : saveProfile,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.safetyBlue,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 2,
+                              ),
+                              child: isSaving
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Save Changes',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                      ),
+                                    ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Keep your name and contact number up to date for safe dispatch communication.',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Theme.of(sheetContext)
-                              .colorScheme
-                              .onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'Full Name',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: controller,
-                        enabled: !isSaving,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(
-                            Icons.person_outline_rounded,
-                            color: AppColors.outline,
-                            size: 20,
-                          ),
-                          filled: true,
-                          fillColor: Theme.of(sheetContext)
-                              .colorScheme
-                              .surfaceContainerLow,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(
-                              color: AppColors.safetyBlue,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        validator: (val) =>
-                            (val == null || val.trim().isEmpty)
-                                ? 'Name is required'
-                                : null,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Phone Number',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: phoneController,
-                        enabled: !isSaving,
-                        keyboardType: TextInputType.phone,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(
-                            Icons.phone_outlined,
-                            color: AppColors.outline,
-                            size: 20,
-                          ),
-                          filled: true,
-                          fillColor: Theme.of(sheetContext)
-                              .colorScheme
-                              .surfaceContainerLow,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      if (role != 'Conductor') ...[
-                        Text(
-                          role == 'Driver'
-                              ? 'License Number'
-                              : role == 'Admin'
-                              ? 'School ID'
-                              : 'Emergency Contact',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        TextFormField(
-                          controller: roleFieldController,
-                          enabled: !isSaving,
-                          keyboardType: role == 'Parent'
-                              ? TextInputType.phone
-                              : TextInputType.text,
-                          decoration: InputDecoration(
-                            prefixIcon: Icon(
-                              role == 'Driver'
-                                  ? Icons.badge_outlined
-                                  : role == 'Admin'
-                                  ? Icons.school_outlined
-                                  : Icons.contact_phone_outlined,
-                            ),
-                            filled: true,
-                            fillColor: Theme.of(sheetContext)
-                                .colorScheme
-                                .surfaceContainerLow,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      TextButton.icon(
-                        onPressed: isSaving ? null : sendPasswordReset,
-                        icon: const Icon(Icons.lock_reset_outlined),
-                        label: const Text('Send password reset email'),
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: isSaving ? null : saveProfile,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.safetyBlue,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 2,
-                          ),
-                          child: isSaving
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Text(
-                                  'Save Changes',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1220,24 +1233,31 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   // ============================================================
-  // ADMIN CARD
+  // ADMIN CARD — theme-aware
   // ============================================================
 
   Widget _buildAdminCard(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Light: keep the purple brand identity. Dark: fall back to the
+    // theme primary so the card reads as a surface, not a glowing panel.
+    final accent = isDark ? scheme.primary : Colors.purple;
+    final cardColor =
+        isDark ? scheme.surfaceContainerHigh : AppColors.purpleSoft;
+    final titleColor = isDark ? scheme.onSurface : Colors.purple.shade800;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.purpleSoft,
-            AppColors.purpleSoft.withValues(alpha: 0.5),
-          ],
-        ),
+        color: cardColor,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.purple.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: accent.withValues(alpha: isDark ? 0.3 : 0.2),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.purple.withValues(alpha: 0.1),
+            color: accent.withValues(alpha: isDark ? 0.05 : 0.1),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1251,21 +1271,23 @@ class _ProfileScreenState extends State<ProfileScreen>
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.3),
+                  color: accent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.admin_panel_settings_rounded,
-                  color: Colors.purple,
+                  color: accent,
                   size: 20,
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                'Admin Management',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.purple.shade800,
+              Expanded(
+                child: Text(
+                  'Admin Management',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: titleColor,
+                      ),
                 ),
               ),
             ],
@@ -1296,12 +1318,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                 'Create Driver, Conductor, Parent, or Admin credentials',
                 style: TextStyle(
                   fontSize: 11.5,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
-              trailing: const Icon(
+              trailing: Icon(
                 Icons.chevron_right_rounded,
-                color: AppColors.outline,
+                color: scheme.outline,
               ),
               onTap: () {
                 Navigator.of(context).push(
@@ -1338,12 +1360,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                 'Edit drivers, conductors, and assigned buses',
                 style: TextStyle(
                   fontSize: 11.5,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
-              trailing: const Icon(
+              trailing: Icon(
                 Icons.chevron_right_rounded,
-                color: AppColors.outline,
+                color: scheme.outline,
               ),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(

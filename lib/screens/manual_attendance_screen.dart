@@ -26,6 +26,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
   String _filterStatus = 'all';
   String _searchQuery = '';
   late final Stream<List<Student>> _studentsStream;
+  late final Stream<Map<String, AttendanceEvent>> _latestEventsStream;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -34,6 +35,8 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
   void initState() {
     super.initState();
     _studentsStream = FirebaseService.instance.streamStudents(widget.busId);
+    _latestEventsStream =
+        FirebaseService.instance.streamLatestEventsByStudent(widget.busId);
 
     _animationController = AnimationController(
       vsync: this,
@@ -78,9 +81,14 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
   }) async {
     final newStatus = switch (eventStatus) {
       AttendanceEventStatus.boarded => StudentStatus.boarded,
+      AttendanceEventStatus.picked => StudentStatus.boarded,
       AttendanceEventStatus.flagged => StudentStatus.alert,
       AttendanceEventStatus.pending ||
-      AttendanceEventStatus.notBoarded =>
+      AttendanceEventStatus.notBoarded ||
+      AttendanceEventStatus.coming ||
+      AttendanceEventStatus.reached ||
+      AttendanceEventStatus.leaved ||
+      AttendanceEventStatus.atStop =>
         StudentStatus.pending,
     };
 
@@ -181,6 +189,8 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
           children: [
             for (final entry in const [
               (AttendanceEventStatus.boarded, 'Boarded', Icons.check_circle),
+              (AttendanceEventStatus.picked, 'Picked up', Icons.directions_walk),
+              (AttendanceEventStatus.reached, 'Bus arrived', Icons.location_on),
               (AttendanceEventStatus.notBoarded, 'Not boarded', Icons.cancel),
               (AttendanceEventStatus.pending, 'Pending', Icons.hourglass_top),
               (AttendanceEventStatus.flagged, 'Flagged', Icons.flag),
@@ -298,7 +308,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      // SOS FAB — Conductor-only screen, so always visible.
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'sos_fab_attendance',
         onPressed: _openSOS,
@@ -342,7 +351,18 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
                       students.length,
                     ),
                     Expanded(
-                      child: _buildStudentList(filteredStudents, students),
+                      child: StreamBuilder<Map<String, AttendanceEvent>>(
+                        stream: _latestEventsStream,
+                        builder: (context, eventsSnap) {
+                          final latest =
+                              eventsSnap.data ?? const <String, AttendanceEvent>{};
+                          return _buildStudentList(
+                            filteredStudents,
+                            students,
+                            latest,
+                          );
+                        },
+                      ),
                     ),
                     if (pendingCount > 0)
                       _buildConfirmButton(pendingCount, students),
@@ -589,6 +609,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
   Widget _buildStudentList(
     List<Student> filteredStudents,
     List<Student> allStudents,
+    Map<String, AttendanceEvent> latestEvents,
   ) {
     if (filteredStudents.isEmpty) {
       return Center(
@@ -617,14 +638,17 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
       padding: const EdgeInsets.all(16),
       itemCount: filteredStudents.length,
       itemBuilder: (context, index) {
+        final student = filteredStudents[index];
+        final event = latestEvents[student.id];
         return Padding(
           padding: EdgeInsets.only(
             bottom: index < filteredStudents.length - 1 ? 10 : 0,
           ),
           child: _StudentCard(
-            student: filteredStudents[index],
-            onToggle: () => _toggleStudentStatus(filteredStudents[index]),
-            onManage: () => _showAttendanceActions(filteredStudents[index]),
+            student: student,
+            latestEvent: event,
+            onToggle: () => _toggleStudentStatus(student),
+            onManage: () => _showAttendanceActions(student),
             index: index,
           ),
         );
@@ -691,12 +715,14 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
 
 class _StudentCard extends StatelessWidget {
   final Student student;
+  final AttendanceEvent? latestEvent;
   final VoidCallback onToggle;
   final VoidCallback onManage;
   final int index;
 
   const _StudentCard({
     required this.student,
+    required this.latestEvent,
     required this.onToggle,
     required this.onManage,
     required this.index,
@@ -763,9 +789,15 @@ class _StudentCard extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
+                    // ── NEW: protocol chip ─────────────────────
+                    if (latestEvent != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: _ProtocolChip(status: latestEvent!.status),
+                      ),
                     if (isBoarded && timeStr.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 2),
+                        padding: const EdgeInsets.only(top: 4),
                         child: Row(
                           children: [
                             const Icon(
@@ -902,4 +934,96 @@ class _StudentCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Small chip on a student row that reflects the child's current
+/// protocol state from the event log.
+class _ProtocolChip extends StatelessWidget {
+  final AttendanceEventStatus status;
+
+  const _ProtocolChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = _metaFor(status);
+    if (meta == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: meta.color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: meta.color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(meta.icon, size: 11, color: meta.color),
+          const SizedBox(width: 4),
+          Text(
+            meta.label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: meta.color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _ChipMeta? _metaFor(AttendanceEventStatus s) {
+    switch (s) {
+      case AttendanceEventStatus.coming:
+        return const _ChipMeta(
+          label: 'Bus coming',
+          icon: Icons.directions_bus_rounded,
+          color: AppColors.safetyBlue,
+        );
+      case AttendanceEventStatus.reached:
+        return const _ChipMeta(
+          label: 'Bus arrived',
+          icon: Icons.location_on_rounded,
+          color: AppColors.safetyBlue,
+        );
+      case AttendanceEventStatus.picked:
+        return const _ChipMeta(
+          label: 'Picked up',
+          icon: Icons.directions_walk_rounded,
+          color: AppColors.successGreen,
+        );
+      case AttendanceEventStatus.leaved:
+        return const _ChipMeta(
+          label: 'Departed',
+          icon: Icons.arrow_forward_rounded,
+          color: AppColors.outline,
+        );
+      case AttendanceEventStatus.atStop:
+        return const _ChipMeta(
+          label: 'At stop',
+          icon: Icons.person_pin_circle_rounded,
+          color: AppColors.alertOrange,
+        );
+      // The remaining statuses already have full visual treatment
+      // elsewhere (avatar ring, boarded-time text, etc.), so we don't
+      // duplicate them here.
+      case AttendanceEventStatus.boarded:
+      case AttendanceEventStatus.pending:
+      case AttendanceEventStatus.notBoarded:
+      case AttendanceEventStatus.flagged:
+        return null;
+    }
+  }
+}
+
+class _ChipMeta {
+  final String label;
+  final IconData icon;
+  final Color color;
+  const _ChipMeta({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
 }

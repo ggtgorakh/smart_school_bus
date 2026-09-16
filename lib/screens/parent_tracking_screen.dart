@@ -94,6 +94,9 @@ class _ParentTrackingScreenState extends State<ParentTrackingScreen> {
                       studentName: selected.name,
                       studentGradeAndSeat:
                           '${selected.grade} • ${selected.seat}',
+                      // Passing the studentId enables the protocol
+                      // banner above the map in LiveTrackingScreen.
+                      studentId: selected.id,
                     ),
             ),
           ],

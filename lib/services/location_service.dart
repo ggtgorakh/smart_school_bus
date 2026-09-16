@@ -12,6 +12,10 @@
 // the workaround — anonymous auth plus a relaxed RTDB rule — was worse
 // than the problem. geolocator's built-in foreground service is the
 // correct approach.
+//
+// As of Unit 4A, this file also starts and stops the StopProximityService
+// alongside the position stream, so auto `coming` / `reached` / `leaved`
+// events are emitted for the driver's assigned stops as the trip runs.
 
 import 'dart:async';
 import 'dart:io' show Platform;
@@ -23,6 +27,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../models/bus_fleet.dart';
 import 'firebase_service.dart';
+import 'stop_proximity_service.dart';
 
 class LocationService {
   LocationService._();
@@ -69,8 +74,15 @@ class LocationService {
     }
   }
 
-  /// Starts sharing the phone's location for [busId]. Safe to call
-  /// multiple times — re-entrant calls for the same bus are a no-op.
+  /// Starts sharing the phone's location for [busId].
+  ///
+  /// Guards:
+  ///   1. There must be a signed-in Firebase user.
+  ///   2. [busId] must be a registered fleet member.
+  ///   3. The signed-in user must be the assigned driver of [busId].
+  ///
+  /// If any guard fails, tracking does not start and the method returns
+  /// without throwing.
   Future<void> startTracking(String busId) async {
     if (_isTracking && _currentBusId == busId) return;
 
@@ -84,6 +96,28 @@ class LocationService {
       debugPrint(
         'LocationService.startTracking: refusing to start without a '
         'signed-in user (RTDB rules require a Driver session).',
+      );
+      return;
+    }
+
+    // Guard 1: bus must be a registered fleet member.
+    final registered =
+        await FirebaseService.instance.isBusRegisteredInFleet(busId);
+    if (!registered) {
+      debugPrint(
+        'LocationService.startTracking: refused — "$busId" is not a '
+        'registered fleet member. Refusing to create a ghost bus.',
+      );
+      return;
+    }
+
+    // Guard 2: the signed-in user must be the assigned driver of this bus.
+    final assigned = await FirebaseService.instance
+        .isDriverAssignedToBus(user.uid, busId);
+    if (!assigned) {
+      debugPrint(
+        'LocationService.startTracking: refused — ${user.uid} is not '
+        'the assigned driver of "$busId".',
       );
       return;
     }
@@ -149,6 +183,27 @@ class LocationService {
         debugPrint('LocationService: position stream error: $e');
       },
     );
+
+    // Start the auto-transition engine. It needs the driver's trip.
+    try {
+      final trip = await FirebaseService.instance
+          .streamActiveTrip(busId)
+          .first;
+      if (trip != null && trip.routeId.isNotEmpty) {
+        await StopProximityService.instance.start(
+          busId: busId,
+          tripId: trip.tripId,
+          routeId: trip.routeId,
+        );
+      } else {
+        debugPrint(
+          'LocationService: no active trip for $busId — '
+          'StopProximityService not started.',
+        );
+      }
+    } catch (e) {
+      debugPrint('LocationService: stop proximity start failed: $e');
+    }
   }
 
   Future<void> _push(Position p) async {
@@ -177,6 +232,13 @@ class LocationService {
 
     final targetBusId = busId ?? _currentBusId;
     _currentBusId = null;
+
+    // Stop the auto-transition engine too.
+    try {
+      await StopProximityService.instance.stop();
+    } catch (e) {
+      debugPrint('LocationService: stop proximity stop failed: $e');
+    }
 
     if (targetBusId != null && targetBusId.isNotEmpty) {
       try {

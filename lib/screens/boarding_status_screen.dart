@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/student.dart';
+import '../models/attendance_event.dart';
 import '../services/firebase_service.dart';
 import 'parent_attendance_history_screen.dart';
 
@@ -178,13 +179,18 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
                         const SizedBox(height: 16),
                       ],
 
+                      // ── NEW: live protocol card ─────────────────
+                      if (student.busId != null &&
+                          student.busId!.isNotEmpty)
+                        _buildLiveProtocolCard(context, student),
+                      const SizedBox(height: 16),
+
                       _buildStatusCard(context, student),
                       const SizedBox(height: 16),
 
                       _buildStudentDetails(context, student),
                       const SizedBox(height: 12),
 
-                      // Attendance history shortcut
                       SizedBox(
                         width: double.infinity,
                         child: OutlinedButton.icon(
@@ -225,6 +231,130 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
         ),
       ),
     );
+  }
+
+  // ============================================================
+  // LIVE PROTOCOL CARD (Unit 4B)
+  // ============================================================
+
+  Widget _buildLiveProtocolCard(BuildContext context, Student student) {
+    final busId = student.busId!;
+    return StreamBuilder<AttendanceEvent?>(
+      stream: FirebaseService.instance.streamLatestEventForStudent(
+        busId: busId,
+        studentId: student.id,
+      ),
+      builder: (context, snapshot) {
+        final event = snapshot.data;
+        final meta = event == null ? null : _protocolMeta(event.status);
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: AppTheme.brandGradient,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.safetyBlue.withValues(alpha: 0.25),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  meta?.icon ?? Icons.schedule_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      meta?.label ?? 'Waiting for update',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      meta == null
+                          ? 'Tracking will start once the trip begins'
+                          : '${student.stopName} • ${_formatTime(event!.timestamp)}',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.85),
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Maps an AttendanceEventStatus to a compact display form. Used only
+  /// by the protocol card; a fuller version lives in the history screen.
+  _ProtocolMeta? _protocolMeta(AttendanceEventStatus status) {
+    switch (status) {
+      case AttendanceEventStatus.coming:
+        return const _ProtocolMeta(
+          label: 'Bus is coming',
+          icon: Icons.directions_bus_rounded,
+        );
+      case AttendanceEventStatus.atStop:
+        return const _ProtocolMeta(
+          label: 'Child is at the stop',
+          icon: Icons.person_pin_circle_rounded,
+        );
+      case AttendanceEventStatus.reached:
+        return const _ProtocolMeta(
+          label: 'Bus has arrived',
+          icon: Icons.location_on_rounded,
+        );
+      case AttendanceEventStatus.picked:
+        return const _ProtocolMeta(
+          label: 'Picked up',
+          icon: Icons.directions_walk_rounded,
+        );
+      case AttendanceEventStatus.boarded:
+        return const _ProtocolMeta(
+          label: 'Boarded',
+          icon: Icons.check_circle_rounded,
+        );
+      case AttendanceEventStatus.leaved:
+        return const _ProtocolMeta(
+          label: 'Bus departed',
+          icon: Icons.arrow_forward_rounded,
+        );
+      case AttendanceEventStatus.notBoarded:
+        return const _ProtocolMeta(
+          label: 'Not boarded',
+          icon: Icons.cancel_rounded,
+        );
+      case AttendanceEventStatus.flagged:
+        return const _ProtocolMeta(
+          label: 'Flagged for attention',
+          icon: Icons.flag_rounded,
+        );
+      case AttendanceEventStatus.pending:
+        return null;
+    }
   }
 
   // ============================================================
@@ -933,4 +1063,10 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
       ),
     );
   }
+}
+
+class _ProtocolMeta {
+  final String label;
+  final IconData icon;
+  const _ProtocolMeta({required this.label, required this.icon});
 }

@@ -1,4 +1,16 @@
-enum AttendanceEventStatus { boarded, pending, notBoarded, flagged }
+enum AttendanceEventStatus {
+  boarded,
+  pending,
+  notBoarded,
+  flagged,
+  // New states for the four-step parent-facing protocol.
+  coming,  // bus approaching the child's stop (auto)
+  reached, // bus arrived at stop (auto)
+  picked,  // child boarded (conductor manual)
+  leaved,  // bus departed the stop (auto)
+  // Parent signal: "my child is at the stop, ready to board"
+  atStop,
+}
 
 AttendanceEventStatus attendanceEventStatusFromString(String? value) {
   switch (value?.toLowerCase()) {
@@ -9,9 +21,47 @@ AttendanceEventStatus attendanceEventStatusFromString(String? value) {
       return AttendanceEventStatus.notBoarded;
     case 'flagged':
       return AttendanceEventStatus.flagged;
+    case 'coming':
+      return AttendanceEventStatus.coming;
+    case 'reached':
+      return AttendanceEventStatus.reached;
+    case 'picked':
+      return AttendanceEventStatus.picked;
+    case 'leaved':
+      return AttendanceEventStatus.leaved;
+    case 'atstop':
+    case 'at_stop':
+      return AttendanceEventStatus.atStop;
     case 'pending':
     default:
       return AttendanceEventStatus.pending;
+  }
+}
+
+/// Human-readable label for a status value. Used by UI to avoid a
+/// switch-case cascade at every call site.
+extension AttendanceEventStatusLabel on AttendanceEventStatus {
+  String get label {
+    switch (this) {
+      case AttendanceEventStatus.boarded:
+        return 'Boarded';
+      case AttendanceEventStatus.pending:
+        return 'Pending';
+      case AttendanceEventStatus.notBoarded:
+        return 'Not Boarded';
+      case AttendanceEventStatus.flagged:
+        return 'Flagged';
+      case AttendanceEventStatus.coming:
+        return 'Bus coming';
+      case AttendanceEventStatus.reached:
+        return 'Bus arrived';
+      case AttendanceEventStatus.picked:
+        return 'Picked up';
+      case AttendanceEventStatus.leaved:
+        return 'Bus departed';
+      case AttendanceEventStatus.atStop:
+        return 'At stop';
+    }
   }
 }
 

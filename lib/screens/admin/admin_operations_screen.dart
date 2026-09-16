@@ -1,3 +1,5 @@
+// lib/screens/admin/admin_operations_screen.dart
+
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import '../../models/bus_fleet.dart';
@@ -29,7 +31,9 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
       value.forEach((uid, raw) {
         if (raw is Map) {
           final user = _ManagedUser.fromMap(uid.toString(), raw);
-          if (user.role != 'Admin') users.add(user);
+          if (user.role == 'Driver' || user.role == 'Conductor') {
+            users.add(user);
+          }
         }
       });
       users.sort(
@@ -64,7 +68,9 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
               tooltip: 'Add account',
               icon: const Icon(Icons.person_add_alt_1_rounded),
               onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AdminCreateUserScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const AdminCreateUserScreen(),
+                ),
               ),
             ),
         ],
@@ -97,6 +103,15 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // ============================================
+                        // FLEET ASSIGNMENTS CARD
+                        // ============================================
+                        _buildFleetAssignmentsCard(context, fleet),
+                        const SizedBox(height: 28),
+
+                        // ============================================
+                        // OPERATIONS DIRECTORY
+                        // ============================================
                         Text(
                           'Operations directory',
                           style: Theme.of(context)
@@ -107,7 +122,7 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
                         const SizedBox(height: 6),
                         Text(
                           _laptop
-                              ? 'Manage the small operational team and keep every bus assignment visible. Student rosters remain in the separate Students section.'
+                              ? 'Manage drivers, conductors, and their bus assignments. Parent and student records are handled in the Students section.'
                               : 'Read-only view of drivers, conductors, and their bus assignments. Edits must be made from a laptop.',
                           style: TextStyle(
                             color: Theme.of(context)
@@ -144,7 +159,7 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
                         if (visible.isEmpty)
                           _EmptyOperationsState(filter: _filter)
                         else
-                          _buildUserTable(context, visible, fleet, isDesktop),
+                          _buildUserList(context, visible, fleet, isDesktop),
                       ],
                     ),
                   ),
@@ -153,6 +168,100 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
             },
           );
         },
+      ),
+    );
+  }
+
+  /// A compact summary of all buses in the fleet, showing which are
+  /// assigned and which are idle.
+  Widget _buildFleetAssignmentsCard(
+    BuildContext context,
+    List<BusFleet> fleet,
+  ) {
+    if (fleet.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final assignedCount =
+        fleet.where((b) => b.driverName != 'Unassigned').length;
+    final idleCount = fleet.length - assignedCount;
+
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.safetyBlue.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.directions_bus_rounded,
+                    color: AppColors.safetyBlue,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Fleet Assignments',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$assignedCount assigned • $idleCount idle',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Grid: 5 columns on wide, fewer as width shrinks.
+                final columns = constraints.maxWidth >= 1100
+                    ? 5
+                    : constraints.maxWidth >= 800
+                        ? 4
+                        : constraints.maxWidth >= 550
+                            ? 3
+                            : 2;
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: fleet.map((bus) {
+                    final width =
+                        (constraints.maxWidth - (columns - 1) * 10) / columns;
+                    return SizedBox(
+                      width: width,
+                      child: _BusTile(bus: bus),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -176,13 +285,45 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(value: 'All', label: Text('All')),
-            ButtonSegment(value: 'Driver', label: Text('Drivers')),
-            ButtonSegment(value: 'Conductor', label: Text('Conductors')),
+            ButtonSegment(value: 'Driver', label: Text('Driver')),
+            ButtonSegment(value: 'Conductor', label: Text('Conductor')),
           ],
           selected: {_filter},
-          onSelectionChanged: (value) => setState(() => _filter = value.first),
+          onSelectionChanged: (value) =>
+              setState(() => _filter = value.first),
+          showSelectedIcon: false,
         ),
       ],
+    );
+  }
+
+  Widget _buildUserList(
+    BuildContext context,
+    List<_ManagedUser> users,
+    List<BusFleet> fleet,
+    bool isDesktop,
+  ) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useTable = isDesktop && constraints.maxWidth >= 950;
+        if (!useTable) {
+          return Column(
+            children: [
+              for (final user in users)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _UserManagementCard(
+                    user: user,
+                    onEdit: _laptop
+                        ? () => _editUser(context, user, fleet)
+                        : null,
+                  ),
+                ),
+            ],
+          );
+        }
+        return _buildUserTable(context, users, fleet);
+      },
     );
   }
 
@@ -190,62 +331,95 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
     BuildContext context,
     List<_ManagedUser> users,
     List<BusFleet> fleet,
-    bool isDesktop,
   ) {
-    if (!isDesktop) {
-      return Column(
-        children: [
-          for (final user in users)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _UserManagementCard(
-                user: user,
-                onEdit: _laptop
-                    ? () => _editUser(context, user, fleet)
-                    : null,
-              ),
-            ),
-        ],
-      );
-    }
-
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: DataTable(
-        columnSpacing: 28,
-        columns: const [
-          DataColumn(label: Text('PERSON')),
-          DataColumn(label: Text('ROLE')),
-          DataColumn(label: Text('CONTACT')),
-          DataColumn(label: Text('BUS ASSIGNMENT')),
-          DataColumn(label: Text('ACTION')),
-        ],
-        rows: users
-            .map(
-              (user) => DataRow(
-                cells: [
-                  DataCell(
-                    Text(
-                      user.name,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  DataCell(_RoleBadge(role: user.role)),
-                  DataCell(Text('${user.email}\n${user.phone ?? 'No phone'}')),
-                  DataCell(Text(user.busId ?? 'Unassigned')),
-                  DataCell(
-                    FilledButton.tonalIcon(
-                      onPressed: _laptop
-                          ? () => _editUser(context, user, fleet)
-                          : null,
-                      icon: const Icon(Icons.edit_outlined, size: 16),
-                      label: const Text('Edit'),
-                    ),
-                  ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                columnSpacing: 16,
+                horizontalMargin: 16,
+                headingRowHeight: 44,
+                dataRowMinHeight: 52,
+                dataRowMaxHeight: 60,
+                columns: const [
+                  DataColumn(label: Text('PERSON')),
+                  DataColumn(label: Text('ROLE')),
+                  DataColumn(label: Text('CONTACT')),
+                  DataColumn(label: Text('BUS')),
+                  DataColumn(label: Text('ACTIONS')),
                 ],
+                rows: users
+                    .map(
+                      (user) => DataRow(
+                        cells: [
+                          DataCell(
+                            Text(
+                              user.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          DataCell(_RoleBadge(role: user.role)),
+                          DataCell(
+                            SizedBox(
+                              width: 200,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    user.email,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontSize: 13),
+                                  ),
+                                  Text(
+                                    user.phone ?? 'No phone',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            Text(
+                              user.busId?.toUpperCase() ?? 'Unassigned',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                          DataCell(
+                            FilledButton.tonalIcon(
+                              onPressed: _laptop
+                                  ? () => _editUser(context, user, fleet)
+                                  : null,
+                              icon: const Icon(
+                                Icons.edit_outlined,
+                                size: 16,
+                              ),
+                              label: const Text('Edit'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                    .toList(),
               ),
-            )
-            .toList(),
+            ),
+          );
+        },
       ),
     );
   }
@@ -268,55 +442,60 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
           title: Text('Edit ${user.role}'),
           content: SizedBox(
             width: 460,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  enabled: !saving,
-                  decoration: const InputDecoration(labelText: 'Full name'),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: phoneController,
-                  enabled: !saving,
-                  decoration: const InputDecoration(labelText: 'Phone'),
-                ),
-                if (user.role == 'Driver' || user.role == 'Conductor') ...[
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    enabled: !saving,
+                    decoration:
+                        const InputDecoration(labelText: 'Full name'),
+                  ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String?>(
-                    initialValue: selectedBus,
-                    decoration: const InputDecoration(
-                      labelText: 'Assigned bus',
-                    ),
-                    items: [
-                      const DropdownMenuItem<String?>(
-                        value: null,
-                        child: Text('Unassigned'),
+                  TextFormField(
+                    controller: phoneController,
+                    enabled: !saving,
+                    decoration: const InputDecoration(labelText: 'Phone'),
+                  ),
+                  if (user.role == 'Driver' ||
+                      user.role == 'Conductor') ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String?>(
+                      initialValue: selectedBus,
+                      decoration: const InputDecoration(
+                        labelText: 'Assigned bus',
                       ),
-                      ...fleet.map(
-                        (bus) => DropdownMenuItem<String?>(
-                          value: bus.busId,
-                          child: Text(bus.busId.toUpperCase()),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Unassigned'),
                         ),
-                      ),
-                    ],
-                    onChanged: saving
-                        ? null
-                        : (value) => setDialogState(() => selectedBus = value),
+                        ...fleet.map(
+                          (bus) => DropdownMenuItem<String?>(
+                            value: bus.busId,
+                            child: Text(bus.busId.toUpperCase()),
+                          ),
+                        ),
+                      ],
+                      onChanged: saving
+                          ? null
+                          : (value) =>
+                              setDialogState(() => selectedBus = value),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      user.role == 'Parent'
+                          ? 'Parent-child links are managed by roster import and remain unchanged here.'
+                          : 'Changing the bus updates both the user profile and the bus assignment record.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ),
                 ],
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    user.role == 'Parent'
-                        ? 'Parent-child links are managed by roster import and remain unchanged here.'
-                        : 'Changing the bus updates both the user profile and the bus assignment record.',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
           actions: [
@@ -336,7 +515,8 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
                           phone: phoneController.text,
                           busId: selectedBus,
                         );
-                        if (user.role == 'Driver' || user.role == 'Conductor') {
+                        if (user.role == 'Driver' ||
+                            user.role == 'Conductor') {
                           await _syncBusAssignment(
                             user: user,
                             newBusId: selectedBus,
@@ -344,13 +524,17 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
                             phone: phoneController.text.trim(),
                           );
                         }
-                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
                       } catch (error) {
                         setDialogState(() => saving = false);
                         if (dialogContext.mounted) {
                           ScaffoldMessenger.of(dialogContext).showSnackBar(
                             SnackBar(
-                              content: Text('Could not save changes: $error'),
+                              content: Text(
+                                'Could not save changes: $error',
+                              ),
                             ),
                           );
                         }
@@ -388,6 +572,98 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
       uid: user.uid,
       name: name,
       phone: phone,
+    );
+  }
+}
+
+class _BusTile extends StatelessWidget {
+  final BusFleet bus;
+
+  const _BusTile({required this.bus});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isAssigned = bus.driverName != 'Unassigned';
+    final accent = isAssigned ? AppColors.successGreen : AppColors.outline;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: accent.withValues(alpha: isAssigned ? 0.3 : 0.15),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.directions_bus_rounded,
+                size: 16,
+                color: accent,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  bus.busId.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  isAssigned ? 'ACTIVE' : 'IDLE',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                    color: accent,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            isAssigned ? bus.driverName : 'No driver assigned',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: isAssigned
+                  ? scheme.onSurface
+                  : scheme.onSurfaceVariant,
+              fontStyle:
+                  isAssigned ? FontStyle.normal : FontStyle.italic,
+            ),
+          ),
+          if (isAssigned && bus.routeName != 'No route assigned') ...[
+            const SizedBox(height: 2),
+            Text(
+              bus.routeName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -448,7 +724,8 @@ class _SummaryRow extends StatelessWidget {
                       child: Row(
                         children: [
                           CircleAvatar(
-                            backgroundColor: item.$4.withValues(alpha: 0.12),
+                            backgroundColor:
+                                item.$4.withValues(alpha: 0.12),
                             foregroundColor: item.$4,
                             child: Icon(item.$3),
                           ),
@@ -461,11 +738,14 @@ class _SummaryRow extends StatelessWidget {
                                 style: Theme.of(context)
                                     .textTheme
                                     .headlineSmall
-                                    ?.copyWith(fontWeight: FontWeight.w800),
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                    ),
                               ),
                               Text(
                                 item.$1,
-                                style: Theme.of(context).textTheme.bodySmall,
+                                style:
+                                    Theme.of(context).textTheme.bodySmall,
                               ),
                             ],
                           ),
@@ -492,20 +772,59 @@ class _UserManagementCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         leading: const CircleAvatar(child: Icon(Icons.person_outline)),
         title: Text(
           user.name,
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
-        subtitle: Text(
-          '${user.role} • ${user.email}\nBus: ${user.busId ?? 'Unassigned'}',
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _RoleBadge(role: user.role),
+                  const SizedBox(width: 8),
+                  if (user.busId != null && user.busId!.isNotEmpty)
+                    Text(
+                      user.busId!.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                user.email,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12.5),
+              ),
+              if (user.phone != null && user.phone!.isNotEmpty)
+                Text(
+                  user.phone!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
         ),
-        isThreeLine: true,
         trailing: onEdit == null
             ? null
             : IconButton(
                 onPressed: onEdit,
                 icon: const Icon(Icons.edit_outlined),
+                tooltip: 'Edit',
               ),
       ),
     );
@@ -522,13 +841,31 @@ class _RoleBadge extends StatelessWidget {
     final color = role == 'Driver'
         ? AppColors.alertOrange
         : role == 'Conductor'
-        ? AppColors.successGreen
-        : AppColors.safetyBlue;
-    return Chip(
-      label: Text(role),
-      avatar: Icon(Icons.person, size: 15, color: color),
-      side: BorderSide.none,
-      backgroundColor: color.withValues(alpha: 0.12),
+            ? AppColors.successGreen
+            : AppColors.safetyBlue;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.person, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            role,
+            softWrap: false,
+            overflow: TextOverflow.visible,
+            style: TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -546,7 +883,7 @@ class _EmptyOperationsState extends StatelessWidget {
         child: Center(
           child: Text(
             filter == 'All'
-                ? 'No operational accounts found.'
+                ? 'No drivers or conductors found.'
                 : 'No $filter accounts match this search.',
           ),
         ),

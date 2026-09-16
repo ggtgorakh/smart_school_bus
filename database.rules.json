@@ -118,6 +118,7 @@
     },
 
     "routes": {
+      ".read": true,
       "$routeId": {
         ".read": true,
         ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'Admin'",
@@ -153,12 +154,12 @@
 
     "attendanceEvents": {
       "$busId": {
-        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId))",
+        ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId) || root.child('parentChildIndex').child(auth.uid).child($busId).exists())",
         ".indexOn": ["studentId", "timestamp"],
         "$eventId": {
           ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId) || root.child('parentChildIndex').child(auth.uid).child($busId).child(data.child('studentId').val()).exists())",
-          ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() === 'Admin' || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId))",
-          ".validate": "newData.hasChildren(['eventId', 'studentId', 'busId', 'tripId', 'actorUid', 'status', 'source', 'timestamp']) && newData.child('eventId').val() === $eventId && newData.child('busId').val() === $busId && newData.child('studentId').isString() && newData.child('tripId').isString() && newData.child('actorUid').isString() && newData.child('status').val().matches(/^(boarded|pending|notBoarded|flagged)$/) && newData.child('source').isString() && newData.child('timestamp').isNumber() && (!newData.child('correctionOf').exists() || newData.child('correctionOf').isString()) && (!newData.child('correctionReason').exists() || newData.child('correctionReason').isString())"
+          ".write": "auth != null && ((root.child('users').child(auth.uid).child('role').val() === 'Admin') || ((root.child('users').child(auth.uid).child('role').val() === 'Driver' || root.child('users').child(auth.uid).child('role').val() === 'Conductor') && root.child('users').child(auth.uid).child('busId').val() === $busId) || (root.child('parentChildIndex').child(auth.uid).child($busId).child(newData.child('studentId').val()).exists() && newData.child('actorUid').val() === auth.uid && newData.child('source').val() === 'parent' && (newData.child('status').val() === 'coming' || newData.child('status').val() === 'atStop')))",
+          ".validate": "newData.hasChildren(['eventId', 'studentId', 'busId', 'tripId', 'actorUid', 'status', 'source', 'timestamp']) && newData.child('eventId').val() === $eventId && newData.child('busId').val() === $busId && newData.child('studentId').isString() && newData.child('tripId').isString() && newData.child('actorUid').isString() && newData.child('status').val().matches(/^(boarded|pending|notBoarded|flagged|coming|reached|picked|leaved|atStop)$/) && newData.child('source').isString() && newData.child('timestamp').isNumber() && (!newData.child('correctionOf').exists() || newData.child('correctionOf').isString()) && (!newData.child('correctionReason').exists() || newData.child('correctionReason').isString())"
         }
       }
     },
