@@ -73,7 +73,8 @@ The main Realtime Database paths are:
 - `/users/{uid}`: profile, exact-case role, contact details, and optional bus
   assignment. Profiles may also contain a `profileImage` base64 string for
   the user's optional profile photo; the client limits uploads to 1.5 MB.
-- `/buses/{busId}`: live ESP32 GPS and telemetry data.
+- `/buses/{busId}`: live telemetry data pushed directly via driver smartphone GPS
+  (migrated from legacy ESP32 hardware unit).
 - `/busesFleet/{busId}`: administrative fleet metadata and status.
 - `/studentRosters/{busId}/{studentId}`: student profiles and attendance.
 - `/parentChildIndex/{parentUid}/{busId}/{studentId}`: parent-child lookup.
@@ -88,9 +89,9 @@ operations compatible with its role and bus-assignment checks. Do not replace
 Firebase initialization with a mock in application code.
 
 Current trip and attendance workflows are software-only. Live location
-telemetry remains an external Firebase data source; the Flutter application
-does not emulate GPS or depend on physical hardware for trip and attendance
-state management.
+telemetry is captured directly via the driver's smartphone GPS background
+service (`LocationService`) on trip activation, completely replacing legacy
+external ESP32 + GPS + GSM hardware.
 
 ## Quick start
 

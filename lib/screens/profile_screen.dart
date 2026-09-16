@@ -8,11 +8,17 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config/school_config.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/firebase_service.dart';
 import 'admin/create_user_screen.dart';
 import 'admin/admin_operations_screen.dart';
+
+/// Maximum raw image size (before base64 encoding) accepted for a profile
+/// image. The RTDB rule caps the base64 string at 400,000 characters
+/// (~300 KB binary); we cap the binary at 300 KB here to match.
+const int _maxProfileImageBytes = 300 * 1024;
 
 class _ProfileData {
   final String name;
@@ -24,9 +30,6 @@ class _ProfileData {
   final String? licenseNumber;
   final String? schoolId;
   final String? emergencyContact;
-  final String? schoolName;
-  final String? schoolAddress;
-  final String? schoolContact;
 
   _ProfileData({
     required this.name,
@@ -38,9 +41,6 @@ class _ProfileData {
     required this.licenseNumber,
     required this.schoolId,
     required this.emergencyContact,
-    required this.schoolName,
-    required this.schoolAddress,
-    required this.schoolContact,
   });
 
   factory _ProfileData.fromMap(
@@ -61,9 +61,6 @@ class _ProfileData {
       licenseNumber: map['licenseNumber']?.toString(),
       schoolId: map['schoolId']?.toString(),
       emergencyContact: map['emergencyContact']?.toString(),
-      schoolName: map['schoolName']?.toString(),
-      schoolAddress: map['schoolAddress']?.toString(),
-      schoolContact: map['schoolContact']?.toString(),
     );
   }
 }
@@ -121,6 +118,10 @@ class _ProfileScreenState extends State<ProfileScreen>
     super.dispose();
   }
 
+  // ============================================================
+  // EDIT PROFILE SHEET
+  // ============================================================
+
   void _openEditNameSheet(
     String currentName,
     String? currentPhone,
@@ -146,17 +147,93 @@ class _ProfileScreenState extends State<ProfileScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
+      builder: (sheetContext) {
         return StatefulBuilder(
-          builder: (context, setSheetState) {
+          builder: (sheetContext, setSheetState) {
             bool isSaving = false;
+
+            Future<void> sendPasswordReset() async {
+              final email = FirebaseAuth.instance.currentUser?.email ?? '';
+              String? errorText;
+              try {
+                await AuthService.instance.sendPasswordResetEmail(email);
+              } catch (error) {
+                errorText = 'Could not send password reset email: $error';
+              }
+              if (!sheetContext.mounted) return;
+              ScaffoldMessenger.of(sheetContext).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    errorText ??
+                        'Password reset instructions sent to your email.',
+                  ),
+                ),
+              );
+            }
+
+            Future<void> saveProfile() async {
+              if (!formKey.currentState!.validate()) return;
+              setSheetState(() => isSaving = true);
+
+              String? errorText;
+              var shouldPop = false;
+              try {
+                await AuthService.instance.updateOwnName(
+                  uid,
+                  controller.text.trim(),
+                );
+                await AuthService.instance.updateOwnPhone(
+                  uid,
+                  phoneController.text,
+                );
+                await AuthService.instance.updateOwnProfileFields(
+                  uid,
+                  licenseNumber:
+                      role == 'Driver' ? roleFieldController.text : null,
+                  schoolId:
+                      role == 'Admin' ? roleFieldController.text : null,
+                  emergencyContact:
+                      role == 'Parent' ? roleFieldController.text : null,
+                );
+                if (role == 'Driver' &&
+                    busId != null &&
+                    busId.trim().isNotEmpty) {
+                  await FirebaseService.instance.syncDriverContactToFleet(
+                    uid: uid,
+                    busId: busId,
+                    name: controller.text,
+                    phone: phoneController.text,
+                  );
+                }
+                shouldPop = true;
+              } catch (e) {
+                errorText = 'Could not save: $e';
+              }
+
+              if (!sheetContext.mounted) return;
+              if (shouldPop) {
+                Navigator.of(sheetContext).pop();
+              } else {
+                setSheetState(() => isSaving = false);
+                if (errorText != null) {
+                  ScaffoldMessenger.of(sheetContext).showSnackBar(
+                    SnackBar(
+                      content: Text(errorText),
+                      backgroundColor: AppColors.errorRed,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
+            }
+
             return Padding(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
               ),
               child: Container(
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
+                  color: Theme.of(sheetContext).colorScheme.surface,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(24),
                   ),
@@ -168,7 +245,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Drag Handle
                       Center(
                         child: Container(
                           width: 40,
@@ -180,8 +256,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                         ),
                       ),
                       const SizedBox(height: 18),
-
-                      // Header
                       Row(
                         children: [
                           Container(
@@ -213,12 +287,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                         'Keep your name and contact number up to date for safe dispatch communication.',
                         style: TextStyle(
                           fontSize: 13,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: Theme.of(sheetContext)
+                              .colorScheme
+                              .onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(height: 20),
-
-                      // Name Field
                       const Text(
                         'Full Name',
                         style: TextStyle(
@@ -237,9 +311,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                             size: 20,
                           ),
                           filled: true,
-                          fillColor: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerLow,
+                          fillColor: Theme.of(sheetContext)
+                              .colorScheme
+                              .surfaceContainerLow,
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 14,
@@ -256,9 +330,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                             ),
                           ),
                         ),
-                        validator: (val) => (val == null || val.trim().isEmpty)
-                            ? 'Name is required'
-                            : null,
+                        validator: (val) =>
+                            (val == null || val.trim().isEmpty)
+                                ? 'Name is required'
+                                : null,
                       ),
                       const SizedBox(height: 16),
                       const Text(
@@ -280,9 +355,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                             size: 20,
                           ),
                           filled: true,
-                          fillColor: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerLow,
+                          fillColor: Theme.of(sheetContext)
+                              .colorScheme
+                              .surfaceContainerLow,
                           contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 14,
@@ -322,9 +397,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                                   : Icons.contact_phone_outlined,
                             ),
                             filled: true,
-                            fillColor: Theme.of(
-                              context,
-                            ).colorScheme.surfaceContainerLow,
+                            fillColor: Theme.of(sheetContext)
+                                .colorScheme
+                                .surfaceContainerLow,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,
@@ -334,104 +409,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                         const SizedBox(height: 16),
                       ],
                       TextButton.icon(
-                        onPressed: isSaving
-                            ? null
-                            : () async {
-                                try {
-                                  await AuthService.instance
-                                      .sendPasswordResetEmail(
-                                        FirebaseAuth
-                                                .instance
-                                                .currentUser
-                                                ?.email ??
-                                            '',
-                                      );
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Password reset instructions sent to your email.',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                } catch (error) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Could not send password reset email: $error',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                }
-                              },
+                        onPressed: isSaving ? null : sendPasswordReset,
                         icon: const Icon(Icons.lock_reset_outlined),
                         label: const Text('Send password reset email'),
                       ),
                       const SizedBox(height: 8),
-
-                      // Save Button
                       SizedBox(
                         width: double.infinity,
                         height: 50,
                         child: ElevatedButton(
-                          onPressed: isSaving
-                              ? null
-                              : () async {
-                                  if (!formKey.currentState!.validate()) return;
-                                  setSheetState(() => isSaving = true);
-                                  try {
-                                    await AuthService.instance.updateOwnName(
-                                      uid,
-                                      controller.text.trim(),
-                                    );
-                                    await AuthService.instance.updateOwnPhone(
-                                      uid,
-                                      phoneController.text,
-                                    );
-                                    await AuthService.instance
-                                        .updateOwnProfileFields(
-                                          uid,
-                                          licenseNumber: role == 'Driver'
-                                              ? roleFieldController.text
-                                              : null,
-                                          schoolId: role == 'Admin'
-                                              ? roleFieldController.text
-                                              : null,
-                                          emergencyContact: role == 'Parent'
-                                              ? roleFieldController.text
-                                              : null,
-                                        );
-                                    if (role == 'Driver' &&
-                                        busId != null &&
-                                        busId.trim().isNotEmpty) {
-                                      await FirebaseService.instance
-                                          .syncDriverContactToFleet(
-                                            uid: uid,
-                                            busId: busId,
-                                            name: controller.text,
-                                            phone: phoneController.text,
-                                          );
-                                    }
-                                    if (context.mounted)
-                                      Navigator.of(context).pop();
-                                  } catch (e) {
-                                    setSheetState(() => isSaving = false);
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text('Could not save: $e'),
-                                          backgroundColor: AppColors.errorRed,
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
-                                      );
-                                    }
-                                  }
-                                },
+                          onPressed: isSaving ? null : saveProfile,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.safetyBlue,
                             foregroundColor: Colors.white,
@@ -495,7 +482,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final isMobile = context.isMobile;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (user == null) {
       return Scaffold(
@@ -540,7 +526,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(
+                          const Icon(
                             Icons.error_outline_rounded,
                             size: 48,
                             color: AppColors.errorRed,
@@ -555,9 +541,9 @@ class _ProfileScreenState extends State<ProfileScreen>
                             "Firebase error: ${snapshot.error}",
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 20),
@@ -600,9 +586,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                         licenseNumber: null,
                         schoolId: null,
                         emergencyContact: null,
-                        schoolName: null,
-                        schoolAddress: null,
-                        schoolContact: null,
                       );
 
                 final authorizedScope = _authorizedScope(profile.role);
@@ -659,11 +642,18 @@ class _ProfileScreenState extends State<ProfileScreen>
                             )
                           : Column(
                               children: [
-                                _buildProfileHeader(context, profile, user.uid),
+                                _buildProfileHeader(
+                                  context,
+                                  profile,
+                                  user.uid,
+                                ),
                                 const SizedBox(height: 16),
                                 _buildStatsRow(context, profile),
                                 const SizedBox(height: 16),
-                                _buildPermissionsCard(context, authorizedScope),
+                                _buildPermissionsCard(
+                                  context,
+                                  authorizedScope,
+                                ),
                                 const SizedBox(height: 16),
                                 _buildRoleDetails(context, profile),
                                 if (profile.role == 'Admin') ...[
@@ -704,9 +694,10 @@ class _ProfileScreenState extends State<ProfileScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Theme.of(
-            context,
-          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color: Theme.of(context)
+              .colorScheme
+              .outlineVariant
+              .withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -718,7 +709,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       child: Column(
         children: [
-          // Avatar with Edit Button
           Stack(
             clipBehavior: Clip.none,
             children: [
@@ -795,8 +785,6 @@ class _ProfileScreenState extends State<ProfileScreen>
             ],
           ),
           const SizedBox(height: 16),
-
-          // Name
           Text(
             profile.name,
             style: Theme.of(
@@ -804,8 +792,6 @@ class _ProfileScreenState extends State<ProfileScreen>
             ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
-
-          // Email
           Text(
             profile.email,
             style: TextStyle(
@@ -824,8 +810,6 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
           ],
           const SizedBox(height: 12),
-
-          // Role Badge
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
@@ -890,7 +874,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             width: 100,
             height: 100,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _defaultProfileAvatar(),
+            errorBuilder: (_, _, _) => _defaultProfileAvatar(),
           ),
         );
       } on FormatException {
@@ -953,10 +937,11 @@ class _ProfileScreenState extends State<ProfileScreen>
 
     final bytes = await file.readAsBytes();
     if (!mounted) return;
-    if (bytes.length > 1500000) {
+    if (bytes.length > _maxProfileImageBytes) {
+      final kb = (bytes.length / 1024).toStringAsFixed(0);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Choose an image smaller than 1.5 MB.'),
+        SnackBar(
+          content: Text('Image is $kb KB. Choose one under 300 KB.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -1051,9 +1036,10 @@ class _ProfileScreenState extends State<ProfileScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Theme.of(
-            context,
-          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color: Theme.of(context)
+              .colorScheme
+              .outlineVariant
+              .withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -1138,9 +1124,10 @@ class _ProfileScreenState extends State<ProfileScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Theme.of(
-            context,
-          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color: Theme.of(context)
+              .colorScheme
+              .outlineVariant
+              .withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -1176,7 +1163,8 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: AppColors.successGreen.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
@@ -1201,7 +1189,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   Container(
                     width: 20,
                     height: 20,
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       color: AppColors.mintSoft,
                       shape: BoxShape.circle,
                     ),
@@ -1374,15 +1362,17 @@ class _ProfileScreenState extends State<ProfileScreen>
   // ============================================================
 
   Widget _buildEmergencyContacts(BuildContext context) {
+    final cfg = SchoolConfigController.instance.config;
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Theme.of(
-            context,
-          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color: Theme.of(context)
+              .colorScheme
+              .outlineVariant
+              .withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -1424,23 +1414,25 @@ class _ProfileScreenState extends State<ProfileScreen>
             iconBg: AppColors.errorRed.withValues(alpha: 0.1),
             iconColor: AppColors.errorRed,
             title: 'Emergency services',
-            subtitle: 'Call 112',
-            onTap: () => _callNumber('112'),
+            subtitle: 'Call ${cfg.emergencyNumber}',
+            onTap: () => _callNumber(cfg.emergencyNumber),
           ),
           _ContactTile(
             icon: Icons.local_hospital_outlined,
             iconBg: AppColors.alertOrange.withValues(alpha: 0.1),
             iconColor: AppColors.alertOrange,
             title: 'Medical emergency',
-            subtitle: 'Call 108',
-            onTap: () => _callNumber('108'),
+            subtitle: 'Call ${cfg.medicalEmergencyNumber}',
+            onTap: () => _callNumber(cfg.medicalEmergencyNumber),
           ),
           _ContactTile(
             icon: Icons.support_agent_rounded,
             iconBg: AppColors.safetyBlue.withValues(alpha: 0.1),
             iconColor: AppColors.safetyBlue,
             title: 'School transport desk',
-            subtitle: 'Contact the school office for route support',
+            subtitle:
+                '${cfg.transportCoordinatorName} • ${cfg.transportCoordinatorPhone}',
+            onTap: () => _callNumber(cfg.transportCoordinatorPhone),
           ),
           _ContactTile(
             icon: Icons.shield_outlined,
@@ -1456,13 +1448,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                     borderRadius: BorderRadius.circular(18),
                   ),
                   title: Row(
-                    children: [
-                      const Icon(
+                    children: const [
+                      Icon(
                         Icons.security_rounded,
                         color: AppColors.safetyBlue,
                       ),
-                      const SizedBox(width: 8),
-                      const Expanded(
+                      SizedBox(width: 8),
+                      Expanded(
                         child: Text(
                           'Safety & Transport Standards',
                           style: TextStyle(fontSize: 17),
@@ -1495,7 +1487,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _callNumber(String number) async {
-    final uri = Uri(scheme: 'tel', path: number);
+    final clean = number.trim();
+    if (clean.isEmpty) return;
+    final uri = Uri(scheme: 'tel', path: clean);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
         mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1576,6 +1570,8 @@ class _ProfileScreenState extends State<ProfileScreen>
       ],
     };
 
+    final cfg = SchoolConfigController.instance.config;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -1596,20 +1592,11 @@ class _ProfileScreenState extends State<ProfileScreen>
                 color: AppColors.safetyBlue,
               ),
               title: Text(
-                profile.schoolName?.trim().isNotEmpty == true
-                    ? profile.schoolName!
-                    : 'School transport service',
+                cfg.fullName,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
-                [profile.schoolAddress, profile.schoolContact]
-                        .where((value) => value?.trim().isNotEmpty == true)
-                        .join(' • ')
-                        .isEmpty
-                    ? 'Route, attendance, and safety operations'
-                    : [profile.schoolAddress, profile.schoolContact]
-                          .where((value) => value?.trim().isNotEmpty == true)
-                          .join(' • '),
+                '${cfg.address}\n${cfg.phone} • ${cfg.email}',
               ),
             ),
             for (final detail in details)

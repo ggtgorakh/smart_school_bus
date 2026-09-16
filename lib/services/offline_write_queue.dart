@@ -1,9 +1,11 @@
+// lib/services/offline_write_queue.dart
+
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
-import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum OfflineWriteOperation { set, update, remove }
@@ -61,11 +63,22 @@ class OfflineWrite {
 }
 
 /// Durable FIFO queue for Firebase writes that fail while the app is offline.
+///
+/// Writes that fail with a permanent error (permission-denied, invalid-data)
+/// are dropped so they don't poison the queue. Writes that fail with a
+/// transient error (network-error, unavailable, timeout) stay queued and
+/// are retried every 30 seconds or on the next `.info/connected = true`.
 class OfflineWriteQueue {
   OfflineWriteQueue._();
   static final OfflineWriteQueue instance = OfflineWriteQueue._();
 
   static const _storageKey = 'offline_firebase_writes';
+
+  /// Cap the persisted queue so a device that has been offline for a very
+  /// long time doesn't accumulate an unbounded SharedPreferences blob.
+  /// Oldest writes are dropped first.
+  static const int _maxQueueLength = 500;
+
   final List<OfflineWrite> _writes = [];
   StreamSubscription<DatabaseEvent>? _connectionSubscription;
   Timer? _retryTimer;
@@ -85,8 +98,10 @@ class OfflineWriteQueue {
         if (decoded is List) {
           _writes.addAll(
             decoded.whereType<Map>().map(
-              (item) => OfflineWrite.fromJson(Map<String, dynamic>.from(item)),
-            ),
+                  (item) => OfflineWrite.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                ),
           );
         }
       }
@@ -95,10 +110,10 @@ class OfflineWriteQueue {
           .ref('.info/connected')
           .onValue
           .listen((event) {
-            if (event.snapshot.value == true) {
-              unawaited(flush());
-            }
-          });
+        if (event.snapshot.value == true) {
+          unawaited(flush());
+        }
+      });
       _retryTimer = Timer.periodic(
         const Duration(seconds: 30),
         (_) => unawaited(flush()),
@@ -135,6 +150,10 @@ class OfflineWriteQueue {
         source: source,
       ),
     );
+    // Enforce the cap by dropping oldest entries first.
+    while (_writes.length > _maxQueueLength) {
+      _writes.removeAt(0);
+    }
     await _persist();
   }
 
@@ -167,6 +186,21 @@ class OfflineWriteQueue {
           }
           _writes.removeAt(0);
           await _persist();
+        } on FirebaseException catch (error) {
+          // Permanent failures — drop the write and move on. Otherwise the
+          // queue would be stuck on this entry forever.
+          if (_isPermanentError(error)) {
+            debugPrint(
+              'OfflineWriteQueue: Dropping permanently-failed write '
+              '(${error.code}) at ${write.path}',
+            );
+            _writes.removeAt(0);
+            await _persist();
+            continue;
+          }
+          // Transient failure — defer the rest of the queue.
+          debugPrint('OfflineWriteQueue: Retry deferred: $error');
+          break;
         } catch (error) {
           debugPrint('OfflineWriteQueue: Retry deferred: $error');
           break;
@@ -174,6 +208,21 @@ class OfflineWriteQueue {
       }
     } finally {
       _isFlushing = false;
+    }
+  }
+
+  /// Classifies a [FirebaseException] as permanent. A permanent error will
+  /// never succeed on retry, so the caller should drop the write instead of
+  /// blocking the queue.
+  bool _isPermanentError(FirebaseException error) {
+    switch (error.code) {
+      case 'permission-denied':
+      case 'invalid-argument':
+      case 'invalid-data':
+      case 'invalid-path':
+        return true;
+      default:
+        return false;
     }
   }
 

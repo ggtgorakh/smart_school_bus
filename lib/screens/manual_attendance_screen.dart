@@ -10,6 +10,7 @@ import '../models/app_notification.dart';
 import '../models/attendance_event.dart';
 import '../services/firebase_service.dart';
 import '../services/notification_service.dart';
+import 'emergency_sos_sheet.dart';
 
 class ManualAttendanceScreen extends StatefulWidget {
   final String busId;
@@ -79,10 +80,10 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
       AttendanceEventStatus.boarded => StudentStatus.boarded,
       AttendanceEventStatus.flagged => StudentStatus.alert,
       AttendanceEventStatus.pending ||
-      AttendanceEventStatus.notBoarded => StudentStatus.pending,
+      AttendanceEventStatus.notBoarded =>
+        StudentStatus.pending,
     };
 
-    // Get bus information for notification context
     final busSnapshot = await FirebaseDatabase.instance
         .ref('buses/${widget.busId}')
         .get();
@@ -111,7 +112,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
       );
     }
 
-    // Send notification to parent (if linked)
     if (student.parentUid != null && student.parentUid!.isNotEmpty) {
       await NotificationService.instance.notifyStudentBoarding(
         studentName: student.name,
@@ -124,7 +124,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
       );
     }
 
-    // Add notification for conductor/driver
     final action = newStatus == StudentStatus.boarded ? 'Boarded' : 'Unboarded';
     await NotificationService.instance.add(
       kind: newStatus == StudentStatus.boarded
@@ -225,7 +224,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
       StudentStatus.boarded,
     );
 
-    // Get bus number
     final busSnapshot = await FirebaseDatabase.instance
         .ref('buses/${widget.busId}')
         .get();
@@ -269,12 +267,10 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
   List<Student> _getFilteredStudents(List<Student> students) {
     var filtered = students;
 
-    // Apply status filter
     if (_filterStatus != 'all') {
       filtered = filtered.where((s) => s.status.name == _filterStatus).toList();
     }
 
-    // Apply search filter
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase().trim();
       filtered = filtered
@@ -290,12 +286,27 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
     return filtered;
   }
 
+  void _openSOS() {
+    EmergencySosSheet.show(
+      context,
+      busId: widget.busId,
+      actorRole: 'Conductor',
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isMobile = context.isMobile;
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      // SOS FAB — Conductor-only screen, so always visible.
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'sos_fab_attendance',
+        onPressed: _openSOS,
+        backgroundColor: AppColors.errorRed,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.sos_rounded),
+        label: const Text('SOS'),
+      ),
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: SlideTransition(
@@ -318,7 +329,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
               return SafeArea(
                 child: Column(
                   children: [
-                    // Header
                     _buildHeader(
                       context,
                       boardedCount,
@@ -326,20 +336,14 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
                       students.length,
                       progress,
                     ),
-
-                    // Search & Filter
                     _buildSearchAndFilter(
                       boardedCount,
                       pendingCount,
                       students.length,
                     ),
-
-                    // Student List
                     Expanded(
                       child: _buildStudentList(filteredStudents, students),
                     ),
-
-                    // Confirm Button
                     if (pendingCount > 0)
                       _buildConfirmButton(pendingCount, students),
                   ],
@@ -351,10 +355,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
       ),
     );
   }
-
-  // ============================================================
-  // HEADER
-  // ============================================================
 
   Widget _buildHeader(
     BuildContext context,
@@ -406,7 +406,7 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Stop 3: Oak St & Maple Ave',
+                      'Live Cloud Attendance',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -417,9 +417,12 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
                       ),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
-                      'Live Cloud Attendance Sync',
-                      style: TextStyle(color: Colors.white70, fontSize: 12.5),
+                    Text(
+                      'Bus ${widget.busId.toUpperCase()}',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12.5,
+                      ),
                     ),
                   ],
                 ),
@@ -488,31 +491,26 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
     );
   }
 
-  // ============================================================
-  // SEARCH & FILTER
-  // ============================================================
-
   Widget _buildSearchAndFilter(
     int boardedCount,
     int pendingCount,
     int totalCount,
   ) {
-    final isMobile = context.isMobile;
-
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
                 .withValues(alpha: 0.3),
           ),
         ),
       ),
       child: Column(
         children: [
-          // Search Bar
           Container(
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -548,7 +546,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
             ),
           ),
           const SizedBox(height: 10),
-          // Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -588,10 +585,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
       shape: StadiumBorder(),
     );
   }
-
-  // ============================================================
-  // STUDENT LIST
-  // ============================================================
 
   Widget _buildStudentList(
     List<Student> filteredStudents,
@@ -639,10 +632,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
     );
   }
 
-  // ============================================================
-  // CONFIRM BUTTON
-  // ============================================================
-
   Widget _buildConfirmButton(int pendingCount, List<Student> students) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -650,7 +639,9 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           top: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
                 .withValues(alpha: 0.3),
           ),
         ),
@@ -697,10 +688,6 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
     );
   }
 }
-
-// ============================================================
-// STUDENT CARD
-// ============================================================
 
 class _StudentCard extends StatelessWidget {
   final Student student;
@@ -841,7 +828,7 @@ class _StudentCard extends StatelessWidget {
                 ? Image.network(
                     student.photoUrl,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _buildAvatarPlaceholder(),
+                    errorBuilder: (_, _, _) => _buildAvatarPlaceholder(),
                   )
                 : _buildAvatarPlaceholder(),
           ),

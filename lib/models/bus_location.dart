@@ -1,26 +1,34 @@
 // lib/models/bus_location.dart
 
-/// Live telemetry for a single bus, as pushed by the ESP32
-/// (NEO-6M GPS + SIM800L GSM) to Firebase Realtime Database at:
-/// /buses/{busId}
+// Live telemetry for a single bus, pushed via driver smartphone GPS
+// (migrated from legacy ESP32 NEO-6M GPS + SIM800L GSM) to Firebase
+// Realtime Database at: /buses/{busId}
 
 enum BusRunStatus { onRoute, delayed, arrived, idle }
 
+/// Parses a status string stored in Firebase (/buses/{busId}/status) back
+/// into a BusRunStatus.
+///
+/// Unknown / missing values default to [BusRunStatus.idle] — never to
+/// `onRoute`. This mirrors the policy in `bus_fleet.dart` and prevents a
+/// bus with a malformed or missing status from silently rendering as
+/// "live and moving" to every parent in the app.
 BusRunStatus _statusFromString(String? raw) {
   switch (raw) {
     case 'delayed':
       return BusRunStatus.delayed;
     case 'arrived':
       return BusRunStatus.arrived;
-    case 'idle':
-      return BusRunStatus.idle;
     case 'on_route':
-    default:
+    case 'onRoute':
       return BusRunStatus.onRoute;
+    case 'idle':
+    default:
+      return BusRunStatus.idle;
   }
 }
 
-String _statusToString(BusRunStatus status) {
+String statusToString(BusRunStatus status) {
   switch (status) {
     case BusRunStatus.onRoute:
       return 'on_route';
@@ -32,6 +40,8 @@ String _statusToString(BusRunStatus status) {
       return 'idle';
   }
 }
+
+String _statusToString(BusRunStatus status) => statusToString(status);
 
 class BusLocation {
   final double lat;

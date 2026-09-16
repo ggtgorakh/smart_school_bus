@@ -1,5 +1,8 @@
 // lib/widgets/app_header.dart
 
+import 'dart:async';
+
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../screens/notifications_screen.dart';
@@ -34,6 +37,11 @@ class _AppHeaderState extends State<AppHeader>
   late Animation<double> _logoScaleAnimation;
   late Animation<double> _logoRotationAnimation;
 
+  // Live connectivity indicator. Bound to the RTDB `.info/connected` node,
+  // which Firebase keeps up-to-date without needing auth or a read rule.
+  StreamSubscription<DatabaseEvent>? _connectedSub;
+  bool _isOnline = true;
+
   @override
   void initState() {
     super.initState();
@@ -59,10 +67,21 @@ class _AppHeaderState extends State<AppHeader>
     ));
 
     _logoAnimationController.forward();
+
+    _connectedSub = FirebaseDatabase.instance
+        .ref('.info/connected')
+        .onValue
+        .listen((event) {
+      final online = event.snapshot.value == true;
+      if (mounted && online != _isOnline) {
+        setState(() => _isOnline = online);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _connectedSub?.cancel();
     _logoAnimationController.dispose();
     super.dispose();
   }
@@ -168,13 +187,17 @@ class _AppHeaderState extends State<AppHeader>
   List<Widget> _buildActions(ColorScheme scheme, bool isDark, bool isMobile) {
     final actions = <Widget>[];
 
-    // Online Status Indicator (Desktop only)
+    // Online Status Indicator (Desktop only) — bound to real Firebase
+    // connectivity, not a hardcoded "Live" pill.
     if (!isMobile) {
+      final onlineColor =
+          _isOnline ? AppColors.successGreen : AppColors.alertOrange;
+      final onlineLabel = _isOnline ? 'Live' : 'Offline';
       actions.add(
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: AppColors.successGreen.withValues(alpha: 0.12),
+            color: onlineColor.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
@@ -183,18 +206,18 @@ class _AppHeaderState extends State<AppHeader>
               Container(
                 width: 6,
                 height: 6,
-                decoration: const BoxDecoration(
-                  color: AppColors.successGreen,
+                decoration: BoxDecoration(
+                  color: onlineColor,
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: 4),
-              const Text(
-                'Live',
+              Text(
+                onlineLabel,
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
-                  color: AppColors.successGreen,
+                  color: onlineColor,
                 ),
               ),
             ],
@@ -236,6 +259,7 @@ class _AppHeaderState extends State<AppHeader>
   // ============================================================
 
   Widget _buildThemeToggle(ColorScheme scheme, bool isDark) {
+    final currentMode = ThemeController.instance.mode;
     return PopupMenuButton<ThemeMode>(
       tooltip: 'Theme Settings',
       icon: AnimatedSwitcher(
@@ -251,9 +275,21 @@ class _AppHeaderState extends State<AppHeader>
         borderRadius: BorderRadius.circular(12),
       ),
       itemBuilder: (context) => [
-        const PopupMenuItem(
+        CheckedPopupMenuItem(
+          value: ThemeMode.system,
+          checked: currentMode == ThemeMode.system,
+          child: const Row(
+            children: [
+              Icon(Icons.brightness_auto_outlined, size: 20),
+              SizedBox(width: 12),
+              Text('System Theme'),
+            ],
+          ),
+        ),
+        CheckedPopupMenuItem(
           value: ThemeMode.light,
-          child: Row(
+          checked: currentMode == ThemeMode.light,
+          child: const Row(
             children: [
               Icon(Icons.light_mode_outlined, size: 20),
               SizedBox(width: 12),
@@ -261,9 +297,10 @@ class _AppHeaderState extends State<AppHeader>
             ],
           ),
         ),
-        const PopupMenuItem(
+        CheckedPopupMenuItem(
           value: ThemeMode.dark,
-          child: Row(
+          checked: currentMode == ThemeMode.dark,
+          child: const Row(
             children: [
               Icon(Icons.dark_mode_outlined, size: 20),
               SizedBox(width: 12),

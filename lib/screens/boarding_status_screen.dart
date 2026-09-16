@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../models/student.dart';
 import '../services/firebase_service.dart';
+import 'parent_attendance_history_screen.dart';
 
 class BoardingStatusScreen extends StatefulWidget {
   const BoardingStatusScreen({super.key});
@@ -91,6 +92,14 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
     }
   }
 
+  void _openAttendanceHistory(Student student) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ParentAttendanceHistoryScreen(child: student),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final parentUid = FirebaseAuth.instance.currentUser?.uid;
@@ -146,7 +155,6 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
                 return _buildEmptyState(context);
               }
 
-              // Keep selection valid
               if (_selectedStudentId == null ||
                   !children.any((c) => c.id == _selectedStudentId)) {
                 _selectedStudentId = children.first.id;
@@ -162,29 +170,51 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Header
                       _buildHeader(context, children),
                       const SizedBox(height: 16),
-                      
-                      // Child Selector (if multiple children)
+
                       if (children.length > 1) ...[
                         _buildChildSelector(context, children),
                         const SizedBox(height: 16),
                       ],
-                      
-                      // Main Status Card
+
                       _buildStatusCard(context, student),
                       const SizedBox(height: 16),
-                      
-                      // Student Details
+
                       _buildStudentDetails(context, student),
+                      const SizedBox(height: 12),
+
+                      // Attendance history shortcut
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: student.busId == null ||
+                                  student.busId!.isEmpty
+                              ? null
+                              : () => _openAttendanceHistory(student),
+                          icon: const Icon(Icons.history_rounded, size: 18),
+                          label: const Text(
+                            'View Attendance History',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.safetyBlue,
+                            side: const BorderSide(
+                              color: AppColors.safetyBlue,
+                              width: 1.3,
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 16),
-                      
-                      // Stop Info
+
                       _buildStopInfo(context, student),
                       const SizedBox(height: 16),
-                      
-                      // Safety Tips
+
                       _buildSafetyTips(context),
                     ],
                   ),
@@ -224,8 +254,8 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
             Text(
               "Can't load your child's status",
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -284,8 +314,8 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
             Text(
               'No Child Linked',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -301,7 +331,9 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Contact your school administrator for assistance.'),
+                    content: Text(
+                      'Contact your school administrator for assistance.',
+                    ),
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
@@ -327,7 +359,8 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
   // ============================================================
 
   Widget _buildHeader(BuildContext context, List<Student> children) {
-    final boarded = children.where((c) => c.status == StudentStatus.boarded).length;
+    final boarded =
+        children.where((c) => c.status == StudentStatus.boarded).length;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -361,9 +394,9 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'Boarding Status',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -380,7 +413,6 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
               ],
             ),
           ),
-          // Status Badge
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
@@ -436,7 +468,8 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color:
+              Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -540,7 +573,6 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
       ),
       child: Column(
         children: [
-          // Animated Status Icon
           TweenAnimationBuilder(
             duration: const Duration(milliseconds: 500),
             tween: Tween<double>(begin: 0.0, end: 1.0),
@@ -571,14 +603,12 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
             },
           ),
           const SizedBox(height: 16),
-          
-          // Status Text
           Text(
             _statusHeadline(student.status),
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -589,9 +619,8 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
-          
-          // Boarded Time
-          if (student.status == StudentStatus.boarded && student.boardedAt != null) ...[
+          if (student.status == StudentStatus.boarded &&
+              student.boardedAt != null) ...[
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -623,8 +652,6 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
               ),
             ),
           ],
-          
-          // Pending Alert
           if (student.status == StudentStatus.pending) ...[
             const SizedBox(height: 14),
             Container(
@@ -677,7 +704,8 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color:
+              Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -689,7 +717,6 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
       ),
       child: Row(
         children: [
-          // Avatar
           Container(
             width: 56,
             height: 56,
@@ -706,7 +733,8 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
                   ? Image.network(
                       student.photoUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _buildAvatarPlaceholder(student),
+                      errorBuilder: (_, _, _) =>
+                          _buildAvatarPlaceholder(student),
                     )
                   : _buildAvatarPlaceholder(student),
             ),
@@ -719,8 +747,8 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
                 Text(
                   student.name,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -780,7 +808,8 @@ class _BoardingStatusScreenState extends State<BoardingStatusScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color:
+              Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(

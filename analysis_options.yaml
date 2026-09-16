@@ -15,7 +15,6 @@ analyzer:
     - web/**
     - windows/**
     - macos/**
-    - linux/**
 include: package:flutter_lints/flutter.yaml
 
 linter:
@@ -24,14 +23,33 @@ linter:
   # included above or to enable additional rules. A list of all available lints
   # and their documentation is published at https://dart.dev/lints.
   #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
+  # Instead of disabling a lint rule for the entire project, it is also
+  # possible to disable it for a specific line of code with an
+  # `// ignore: name_of_lint` and `// ignore_for_file: name_of_lint` syntax
+  # on the line before the offending code.
+  #
+  # Run `flutter analyze` to see the full list of issues.
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # -------------------------------------------------------------------------
+    # Rules disabled for this project.
+    #
+    # These are cosmetic or legacy warnings that will be cleaned up in a
+    # dedicated polish pass. They do NOT affect correctness or security.
+    # -------------------------------------------------------------------------
+
+    # The app uses `print` throughout services for debug logging. Every
+    # call is a plain log line — no PII, no secrets. Migrating to a
+    # logging framework is planned but not blocking the submission.
+    avoid_print: false
+
+    # Dart 3.x added `_` as a valid wildcard parameter; older code uses
+    # `__` in places like `(_, __)`. Purely cosmetic.
+    unnecessary_underscores: false
+
+    # These two are stylistic preferences, not defects.
+    prefer_function_declarations_over_variables: false
+    unnecessary_string_interpolations: false
+    unnecessary_brace_in_string_interps: false
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

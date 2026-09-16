@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../config/school_config.dart';
 import '../theme/app_theme.dart';
 import '../services/auth_service.dart';
 import '../services/session_service.dart';
@@ -210,27 +211,20 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   void _selectRole(String role) {
-    // Only switches which role the login attempt is validated against —
-    // no demo email/password auto-fill. The real account's own
-    // email/password must be typed in.
-    setState(() {
-      _selectedRole = role;
-    });
+    setState(() => _selectedRole = role);
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isMobile = context.isMobile;
+    final laptop = context.isDesktop;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Stack(
         children: [
-          // Animated Background
           _buildBackground(isDark),
-
-          // Main Content
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -246,18 +240,11 @@ class _LoginScreenState extends State<LoginScreen>
                       scale: _scaleAnimation,
                       child: Container(
                         constraints: BoxConstraints(
-                          maxWidth: isMobile ? 440 : 480,
+                          maxWidth: laptop ? 920 : (isMobile ? 440 : 520),
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildBrandSection(isMobile),
-                            const SizedBox(height: 32),
-                            _buildLoginCard(isMobile, isDark),
-                            const SizedBox(height: 20),
-                            _buildFooter(),
-                          ],
-                        ),
+                        child: laptop
+                            ? _buildLaptopLayout(isDark)
+                            : _buildMobileLayout(isMobile, isDark),
                       ),
                     ),
                   ),
@@ -270,14 +257,33 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // ============================================================
-  // BACKGROUND
-  // ============================================================
+  Widget _buildLaptopLayout(bool isDark) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: _buildBrandSection(false)),
+        const SizedBox(width: 40),
+        Expanded(child: _buildLoginCard(false, isDark)),
+      ],
+    );
+  }
+
+  Widget _buildMobileLayout(bool isMobile, bool isDark) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _buildBrandSection(isMobile),
+        const SizedBox(height: 32),
+        _buildLoginCard(isMobile, isDark),
+        const SizedBox(height: 20),
+        _buildFooter(),
+      ],
+    );
+  }
 
   Widget _buildBackground(bool isDark) {
     return Stack(
       children: [
-        // Animated blobs
         AnimatedPositioned(
           duration: const Duration(seconds: 8),
           curve: Curves.easeInOut,
@@ -310,30 +316,9 @@ class _LoginScreenState extends State<LoginScreen>
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  AppColors.alertOrange.withValues(alpha: isDark ? 0.08 : 0.06),
+                  AppColors.alertOrange
+                      .withValues(alpha: isDark ? 0.08 : 0.06),
                   AppColors.alertOrange.withValues(alpha: 0.0),
-                ],
-                radius: 1.0,
-              ),
-            ),
-          ),
-        ),
-        AnimatedPositioned(
-          duration: const Duration(seconds: 12),
-          curve: Curves.easeInOut,
-          top: 200,
-          right: -40,
-          child: Container(
-            width: 180,
-            height: 180,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  AppColors.successGreen.withValues(
-                    alpha: isDark ? 0.06 : 0.04,
-                  ),
-                  AppColors.successGreen.withValues(alpha: 0.0),
                 ],
                 radius: 1.0,
               ),
@@ -344,14 +329,10 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // ============================================================
-  // BRAND SECTION
-  // ============================================================
-
-  Widget _buildBrandSection(bool isMobile) {
+  Widget _buildBrandSection(bool compact) {
+    final cfg = SchoolConfigController.instance.config;
     return Column(
       children: [
-        // Animated Logo
         TweenAnimationBuilder(
           duration: const Duration(milliseconds: 600),
           tween: Tween<double>(begin: 0.0, end: 1.0),
@@ -359,8 +340,8 @@ class _LoginScreenState extends State<LoginScreen>
             return Transform.scale(scale: value, child: child);
           },
           child: Container(
-            width: 76,
-            height: 76,
+            width: compact ? 76 : 96,
+            height: compact ? 76 : 96,
             decoration: BoxDecoration(
               gradient: AppTheme.brandGradient,
               borderRadius: BorderRadius.circular(20),
@@ -372,38 +353,46 @@ class _LoginScreenState extends State<LoginScreen>
                 ),
               ],
             ),
-            child: const Icon(
+            child: Icon(
               Icons.directions_bus_filled_rounded,
               color: Colors.white,
-              size: 38,
+              size: compact ? 38 : 48,
             ),
           ),
         ),
         const SizedBox(height: 18),
         Text(
-          'Smart School Bus',
+          cfg.fullName,
+          textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.displayLarge?.copyWith(
-            fontSize: isMobile ? 27 : 32,
-            fontWeight: FontWeight.bold,
-            letterSpacing: -0.5,
-          ),
+                fontSize: compact ? 24 : 30,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
+              ),
         ),
         const SizedBox(height: 6),
         Text(
-          'Safe • Tracked • Connected',
+          cfg.appTagline,
+          textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 14,
+            fontSize: compact ? 13 : 15,
             color: Theme.of(context).colorScheme.onSurfaceVariant,
             letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Smart School Bus Tracking and Student Safety System',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: compact ? 11 : 12.5,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontStyle: FontStyle.italic,
           ),
         ),
       ],
     );
   }
-
-  // ============================================================
-  // LOGIN CARD
-  // ============================================================
 
   Widget _buildLoginCard(bool isMobile, bool isDark) {
     return Container(
@@ -412,9 +401,10 @@ class _LoginScreenState extends State<LoginScreen>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Theme.of(
-            context,
-          ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+          color: Theme.of(context)
+              .colorScheme
+              .outlineVariant
+              .withValues(alpha: 0.3),
         ),
         boxShadow: [
           BoxShadow(
@@ -427,36 +417,21 @@ class _LoginScreenState extends State<LoginScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Role Selector
           _buildRoleSelector(isMobile),
           const SizedBox(height: 16),
-
-          // Role Description
           _buildRoleDescription(),
           const SizedBox(height: 20),
-
-          // Email Field
           _buildEmailField(),
           const SizedBox(height: 14),
-
-          // Password Field
           _buildPasswordField(),
           const SizedBox(height: 12),
-
-          // Options Row
           _buildOptionsRow(),
           const SizedBox(height: 24),
-
-          // Login Button
           _buildLoginButton(),
         ],
       ),
     );
   }
-
-  // ============================================================
-  // ROLE SELECTOR
-  // ============================================================
 
   Widget _buildRoleSelector(bool isMobile) {
     return Column(
@@ -480,9 +455,9 @@ class _LoginScreenState extends State<LoginScreen>
             Text(
               'Sign in as',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-              ),
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
+                  ),
             ),
           ],
         ),
@@ -514,10 +489,6 @@ class _LoginScreenState extends State<LoginScreen>
       ],
     );
   }
-
-  // ============================================================
-  // ROLE DESCRIPTION
-  // ============================================================
 
   Widget _buildRoleDescription() {
     return AnimatedSwitcher(
@@ -556,10 +527,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  // ============================================================
-  // EMAIL FIELD
-  // ============================================================
-
   Widget _buildEmailField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -593,7 +560,7 @@ class _LoginScreenState extends State<LoginScreen>
               size: 20,
             ),
             hintText: 'Enter your email',
-            hintStyle: TextStyle(fontSize: 14, color: AppColors.outline),
+            hintStyle: const TextStyle(fontSize: 14, color: AppColors.outline),
             filled: true,
             fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
             contentPadding: const EdgeInsets.symmetric(
@@ -620,10 +587,6 @@ class _LoginScreenState extends State<LoginScreen>
       ],
     );
   }
-
-  // ============================================================
-  // PASSWORD FIELD
-  // ============================================================
 
   Widget _buildPasswordField() {
     return Column(
@@ -676,7 +639,7 @@ class _LoginScreenState extends State<LoginScreen>
                   setState(() => _obscurePassword = !_obscurePassword),
             ),
             hintText: 'Enter your password',
-            hintStyle: TextStyle(fontSize: 14, color: AppColors.outline),
+            hintStyle: const TextStyle(fontSize: 14, color: AppColors.outline),
             filled: true,
             fillColor: Theme.of(context).colorScheme.surfaceContainerLow,
             contentPadding: const EdgeInsets.symmetric(
@@ -703,10 +666,6 @@ class _LoginScreenState extends State<LoginScreen>
       ],
     );
   }
-
-  // ============================================================
-  // OPTIONS ROW
-  // ============================================================
 
   Widget _buildOptionsRow() {
     return Row(
@@ -761,7 +720,7 @@ class _LoginScreenState extends State<LoginScreen>
             minimumSize: Size.zero,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
-          child: Text(
+          child: const Text(
             'Forgot password?',
             style: TextStyle(
               color: AppColors.alertOrangeDark,
@@ -773,10 +732,6 @@ class _LoginScreenState extends State<LoginScreen>
       ],
     );
   }
-
-  // ============================================================
-  // LOGIN BUTTON
-  // ============================================================
 
   Widget _buildLoginButton() {
     return SizedBox(
@@ -809,10 +764,10 @@ class _LoginScreenState extends State<LoginScreen>
                         color: Colors.white,
                       ),
                     )
-                  : Row(
+                  : const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text(
+                        Text(
                           'Sign In',
                           style: TextStyle(
                             fontSize: 17,
@@ -821,8 +776,8 @@ class _LoginScreenState extends State<LoginScreen>
                             letterSpacing: 0.2,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        const Icon(
+                        SizedBox(width: 8),
+                        Icon(
                           Icons.arrow_forward_rounded,
                           color: Colors.white,
                           size: 20,
@@ -835,10 +790,6 @@ class _LoginScreenState extends State<LoginScreen>
       ),
     );
   }
-
-  // ============================================================
-  // FOOTER
-  // ============================================================
 
   Widget _buildFooter() {
     return Wrap(
@@ -862,7 +813,7 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             );
           },
-          child: Text(
+          child: const Text(
             'Contact Administrator',
             style: TextStyle(
               color: AppColors.safetyBlue,
@@ -875,10 +826,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 }
-
-// ============================================================
-// ROLE CHIP WIDGET
-// ============================================================
 
 class _RoleChip extends StatelessWidget {
   final String role;

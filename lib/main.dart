@@ -1,8 +1,11 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'firebase_options.dart';
+import 'config/school_config.dart';
 import 'theme/app_theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation_shell.dart';
@@ -10,16 +13,45 @@ import 'services/auth_service.dart';
 import 'services/session_service.dart';
 import 'services/notification_service.dart';
 import 'services/offline_write_queue.dart';
+import 'services/location_service.dart';
+import 'services/emergency_service.dart';
+import 'services/firebase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize Firebase
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Restore persisted theme choice before the first frame so the app
+  // doesn't flash light-then-dark on cold start.
+  final themeIndex = await SessionService.instance.getThemeMode();
+  if (themeIndex >= 0 && themeIndex < ThemeMode.values.length) {
+    ThemeController.instance.hydrate(ThemeMode.values[themeIndex]);
+  }
+
+  // Load the school configuration once, synchronously, so the first
+  // frame already knows the school's name, contact, and location.
+  try {
+    final cfg = await FirebaseService.instance.fetchSchoolConfigOnce();
+    SchoolConfigController.instance.hydrate(cfg);
+  } catch (_) {
+    // Defaults are already in place.
+  }
+
   runApp(const SchoolBusApp());
+
   WidgetsBinding.instance.addPostFrameCallback((_) {
     OfflineWriteQueue.instance.initialize();
     NotificationService.instance;
+    LocationService.instance.initialize();
+
+    // Live-update the config when the Admin changes it on any device.
+    FirebaseService.instance.streamSchoolConfig().listen((cfg) {
+      SchoolConfigController.instance.hydrate(cfg);
+    });
   });
 }
 
@@ -29,10 +61,13 @@ class SchoolBusApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: ThemeController.instance,
+      animation: Listenable.merge([
+        ThemeController.instance,
+        SchoolConfigController.instance,
+      ]),
       builder: (context, _) {
         return MaterialApp(
-          title: 'Smart School Bus',
+          title: SchoolConfigController.instance.config.fullName,
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
@@ -93,10 +128,7 @@ class _RoleResolutionShellState extends State<RoleResolutionShell> {
   }
 
   Future<void> _resolveRole() async {
-    final cachedValues = await Future.wait([
-      SessionService.instance.getCachedRole(),
-    ]);
-    final cachedRole = cachedValues[0] as String?;
+    final cachedRole = await SessionService.instance.getCachedRole();
     if (cachedRole != null && mounted) {
       setState(() {
         _role = cachedRole;
@@ -108,11 +140,16 @@ class _RoleResolutionShellState extends State<RoleResolutionShell> {
       AuthService.instance.fetchRole(widget.user.uid),
       AuthService.instance.fetchBusId(widget.user.uid),
     ]);
-    final freshRole = freshValues[0] as String;
-    final freshBusId = freshValues[1] as String;
+    final freshRole = freshValues[0];
+    final freshBusId = freshValues[1];
 
     await SessionService.instance.saveRole(freshRole);
     await SessionService.instance.saveBusId(freshBusId);
+
+    if (freshRole == 'Admin') {
+      // ignore: discarded_futures
+      EmergencyService.instance.registerAdminIndex(widget.user.uid);
+    }
 
     if (mounted) {
       setState(() {
@@ -124,7 +161,11 @@ class _RoleResolutionShellState extends State<RoleResolutionShell> {
   }
 
   Future<void> _handleSignOut() async {
+    final uid = widget.user.uid;
     await NotificationService.instance.clearAll();
+    try {
+      await EmergencyService.instance.unregisterAdminIndex(uid);
+    } catch (_) {}
     await AuthService.instance.signOut();
     await SessionService.instance.clearSession();
   }

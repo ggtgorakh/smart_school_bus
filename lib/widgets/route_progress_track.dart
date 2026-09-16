@@ -1,3 +1,5 @@
+// lib/widgets/route_progress_track.dart
+
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -26,6 +28,12 @@ class RouteProgressTrack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Guard: the Row below builds (totalStops * 2 - 1) children, which is
+    // negative for totalStops < 1 and throws RangeError. Render nothing in
+    // that case rather than crashing a screen that has a bus record but no
+    // route configured yet.
+    if (totalStops < 1) return const SizedBox.shrink();
+
     final dotSize = compact ? 8.0 : 10.0;
     final lineHeight = compact ? 3.0 : 4.0;
 
@@ -49,12 +57,15 @@ class RouteProgressTrack extends StatelessWidget {
                       : AppColors.trackPending,
                   border: isCurrent
                       ? Border.all(
-                          color: AppColors.alertOrange, width: 2.5)
+                          color: AppColors.alertOrange,
+                          width: 2.5,
+                        )
                       : null,
                   boxShadow: isCurrent
                       ? [
                           BoxShadow(
-                            color: AppColors.alertOrange.withOpacity(0.35),
+                            color:
+                                AppColors.alertOrange.withValues(alpha: 0.35),
                             blurRadius: 6,
                           ),
                         ]

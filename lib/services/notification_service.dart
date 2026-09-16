@@ -1,28 +1,33 @@
+// lib/services/notification_service.dart
+
 import 'dart:async';
-import 'package:flutter/foundation.dart';
-import 'package:firebase_database/firebase_database.dart';
+
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
+
 import '../models/app_notification.dart';
 
-/// Enhanced notification service with Firebase persistence and cross-device sync
+/// Enhanced notification service with Firebase persistence and cross-device sync.
 class NotificationService {
   NotificationService._() {
     _initializeListeners();
+    _notificationStream = _buildNotificationStream();
   }
 
   static final NotificationService instance = NotificationService._();
 
-  // Firebase Realtime Database reference
   final DatabaseReference _db = FirebaseDatabase.instance.ref();
 
-  // In-memory notification list
   final ValueNotifier<List<AppNotification>> notifications =
       ValueNotifier<List<AppNotification>>([]);
+
+  late final Stream<List<AppNotification>> _notificationStream;
+
   StreamSubscription<DatabaseEvent>? _notificationsSubscription;
   StreamSubscription<User?>? _authSubscription;
   final Set<String> _pendingReadIds = {};
 
-  // Current user's UID
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
   String _requireUid() {
@@ -33,41 +38,31 @@ class NotificationService {
     return uid;
   }
 
-  // Notification path in Firebase: /notifications/{uid}/{notificationId}
   String get _notificationsPath => 'notifications/$_uid';
 
-  // Unread count getter
-  int get unreadCount => notifications.value.where((n) => !n.isRead).length;
+  int get unreadCount =>
+      notifications.value.where((n) => !n.isRead).length;
 
-  /// Stream for real-time updates - FIXED
-  Stream<List<AppNotification>> get notificationStream {
-    // Create a broadcast stream controller
-    final controller = StreamController<List<AppNotification>>.broadcast();
+  /// Cached broadcast stream of the current user's notifications.
+  Stream<List<AppNotification>> get notificationStream => _notificationStream;
 
-    // Add listener to ValueNotifier
-    VoidCallback listener = () {
-      if (!controller.isClosed) {
-        controller.add(notifications.value);
-      }
-    };
+  Stream<List<AppNotification>> _buildNotificationStream() {
+    final controller =
+        StreamController<List<AppNotification>>.broadcast();
+    void listener() {
+      if (!controller.isClosed) controller.add(notifications.value);
+    }
 
     notifications.addListener(listener);
-
-    // Clean up when controller is disposed
-    controller.onCancel = () {
-      notifications.removeListener(listener);
+    controller.onListen = () {
+      if (!controller.isClosed) controller.add(notifications.value);
     };
-
-    // Add initial value
-    controller.add(notifications.value);
-
     return controller.stream;
   }
 
-  /// Initialize Firebase listeners for real-time notification sync
   void _initializeListeners() {
-    // Listen to auth state changes
-    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+    _authSubscription =
+        FirebaseAuth.instance.authStateChanges().listen((user) {
       _notificationsSubscription?.cancel();
       _notificationsSubscription = null;
       if (user != null) {
@@ -78,7 +73,6 @@ class NotificationService {
     });
   }
 
-  /// Listen to Firebase Realtime Database for notification changes
   void _listenToNotifications() {
     if (_uid == null) return;
 
@@ -108,9 +102,7 @@ class NotificationService {
               });
             }
 
-            // Sort by timestamp (newest first)
             updated.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-
             notifications.value = updated;
           },
           onError: (error) {
@@ -120,14 +112,6 @@ class NotificationService {
   }
 
   /// Add a new notification (persists to Firebase).
-  ///
-  /// By default this writes to the CURRENT user's own notification list
-  /// (`notifications/{currentUid}`). Pass [targetUid] to instead deliver the
-  /// notification to a *different* user — e.g. a driver notifying a parent
-  /// that their child boarded. When [targetUid] is used, the notification is
-  /// written directly (it will not appear in this instance's in-memory
-  /// `notifications` list, since that list only mirrors the signed-in
-  /// user's own node).
   Future<void> add({
     required NotificationKind kind,
     required String title,
@@ -158,9 +142,6 @@ class NotificationService {
       ...?(eventKey == null ? null : {'eventKey': eventKey}),
     };
 
-    // Deduplicate: prevent identical notifications within five minutes
-    // (only meaningful for self-notifications, since that's the only case
-    // where we have the recipient's existing list in memory).
     if (isSelfNotification) {
       final recentDuplicate = notifications.value.any(
         (n) =>
@@ -169,12 +150,12 @@ class NotificationService {
                 (eventKey == null &&
                     n.title == title &&
                     n.message == message)) &&
-            DateTime.now().difference(n.timestamp) < const Duration(minutes: 5),
+            DateTime.now().difference(n.timestamp) <
+                const Duration(minutes: 5),
       );
       if (recentDuplicate) return;
     }
 
-    // Get current user's role for context
     late final String role;
     try {
       final roleSnapshot = await _db.child('users/$senderUid/role').get();
@@ -193,7 +174,6 @@ class NotificationService {
       );
     }
 
-    // Enhance notification with role-based context
     final notification = AppNotification(
       id: _db.child('notifications/$recipientUid').push().key!,
       kind: kind,
@@ -203,10 +183,13 @@ class NotificationService {
       isRead: false,
       busId: busId,
       studentId: studentId,
-      metadata: {...notificationMetadata, 'role': role, 'userId': senderUid},
+      metadata: {
+        ...notificationMetadata,
+        'role': role,
+        'userId': senderUid,
+      },
     );
 
-    // Save to Firebase Realtime Database
     try {
       await _db
           .child('notifications/$recipientUid')
@@ -218,16 +201,46 @@ class NotificationService {
     }
   }
 
-  /// Mark a single notification as read (persists to Firebase)
+  /// ─── BLOCK 8 ───────────────────────────────────────────────
+  /// Public bulk helper: sends the same notification to a set of UIDs.
+  /// Used by [AdminAlertService]. Best-effort: individual delivery
+  /// failures are logged, not thrown, so a single bad UID can't abort
+  /// the whole broadcast.
+  ///
+  /// Returns the number of successful deliveries.
+  Future<int> broadcast({
+    required List<String> recipientUids,
+    required NotificationKind kind,
+    required String title,
+    required String message,
+    Map<String, dynamic>? metadata,
+  }) async {
+    if (recipientUids.isEmpty) return 0;
+    var delivered = 0;
+    for (final uid in recipientUids) {
+      if (uid.trim().isEmpty) continue;
+      try {
+        await add(
+          kind: kind,
+          title: title,
+          message: message,
+          targetUid: uid.trim(),
+          metadata: {
+            ...?metadata,
+            'broadcast': true,
+          },
+        );
+        delivered++;
+      } catch (e) {
+        debugPrint('NotificationService.broadcast: failed for $uid: $e');
+      }
+    }
+    return delivered;
+  }
+
   Future<void> markAsRead(String id) async {
     _requireUid();
 
-    // Find the notification locally so we can write its full record —
-    // writing just the `isRead` leaf assumes the complete record already
-    // exists in Firebase. If it doesn't (e.g. the original `add()` call
-    // failed and fell back to local-only storage), a lone `isRead` field
-    // fails the server's `hasChildren([...])` validation rule and gets
-    // rejected as permission-denied.
     AppNotification? target;
     for (final n in notifications.value) {
       if (n.id == id) {
@@ -236,7 +249,6 @@ class NotificationService {
       }
     }
 
-    // Update local state immediately for UI responsiveness
     _pendingReadIds.add(id);
     notifications.value = notifications.value.map((n) {
       if (n.id == id) n.isRead = true;
@@ -248,8 +260,6 @@ class NotificationService {
       return;
     }
 
-    // Persist to Firebase — write the complete, now-updated record so the
-    // write is self-sufficient regardless of whether it previously synced.
     try {
       await _db
           .child(_notificationsPath)
@@ -263,22 +273,18 @@ class NotificationService {
     }
   }
 
-  /// Mark all notifications as read (persists to Firebase)
   Future<void> markAllAsRead() async {
     _requireUid();
 
-    final ids = notifications.value.map((notification) => notification.id).toSet();
+    final ids =
+        notifications.value.map((notification) => notification.id).toSet();
     _pendingReadIds.addAll(ids);
 
-    // Update local state
     notifications.value = notifications.value.map((n) {
       n.isRead = true;
       return n;
     }).toList();
 
-    // Bulk update in Firebase — write each notification's complete record
-    // (not just the `isRead` leaf) so any notification that never fully
-    // synced still satisfies the server's hasChildren validation rule.
     try {
       final updates = <String, dynamic>{};
       for (final n in notifications.value) {
@@ -293,14 +299,12 @@ class NotificationService {
     }
   }
 
-  /// Delete a notification (persists to Firebase)
   Future<void> deleteNotification(String id) async {
     _requireUid();
 
-    // Remove from local state
-    notifications.value = notifications.value.where((n) => n.id != id).toList();
+    notifications.value =
+        notifications.value.where((n) => n.id != id).toList();
 
-    // Remove from Firebase
     try {
       await _db.child(_notificationsPath).child(id).remove();
     } on FirebaseException catch (error, stackTrace) {
@@ -309,13 +313,11 @@ class NotificationService {
     }
   }
 
-  /// Clear all notifications (persists to Firebase)
   Future<void> clearAll() async {
     notifications.value = [];
     final uid = _uid;
     if (uid == null) return;
 
-    // Remove all from Firebase
     try {
       await _db.child('notifications/$uid').remove();
     } on FirebaseException catch (error, stackTrace) {
@@ -324,7 +326,6 @@ class NotificationService {
     }
   }
 
-  /// Clear sample data (for testing)
   void clearSampleData() {
     notifications.value = [];
   }
@@ -335,7 +336,6 @@ class NotificationService {
     notifications.dispose();
   }
 
-  /// Generate notification for bus status change
   Future<void> notifyBusStatusChange({
     required String busId,
     required String busNumber,
@@ -396,7 +396,6 @@ class NotificationService {
     }
   }
 
-  /// Notify once when a bus stops reporting telemetry, or when it resumes.
   Future<void> notifyTrackerStale({
     required String busId,
     required String busNumber,
@@ -423,8 +422,6 @@ class NotificationService {
     );
   }
 
-  /// Generate notification for student boarding event, delivered to the
-  /// linked parent's own notification list (not the calling driver's).
   Future<void> notifyStudentBoarding({
     required String studentName,
     required String busId,
@@ -436,7 +433,8 @@ class NotificationService {
   }) async {
     if (parentUid == null || parentUid.trim().isEmpty) return;
 
-    final kind = isBoarding ? NotificationKind.boarding : NotificationKind.info;
+    final kind =
+        isBoarding ? NotificationKind.boarding : NotificationKind.info;
     final title = isBoarding
         ? '$studentName boarded the bus'
         : '$studentName got off the bus';
@@ -460,12 +458,6 @@ class NotificationService {
     );
   }
 
-  /// Generate an emergency alert and deliver it to each UID in
-  /// [recipientUids] (in addition to the caller). Looking recipients up by
-  /// role here isn't possible client-side — reading the full `/users` list
-  /// is Admin-only under the database rules — so the caller (which already
-  /// knows the relevant Admins/Drivers for this bus, e.g. from the fleet
-  /// roster it has loaded) must supply the UIDs to notify.
   Future<void> notifyEmergency({
     required String busId,
     required String busNumber,
@@ -483,7 +475,6 @@ class NotificationService {
       'recipientRoles': recipientRoles ?? ['Admin', 'Driver'],
     };
 
-    // Always notify the caller themselves, plus every explicit recipient.
     final targets = <String>{...recipientUids};
     if (_uid != null) targets.add(_uid!);
 
@@ -497,28 +488,5 @@ class NotificationService {
         targetUid: uid,
       );
     }
-  }
-
-  /// Get unread count as a stream for real-time updates - FIXED
-  Stream<int> getUnreadCountStream() {
-    final controller = StreamController<int>.broadcast();
-
-    VoidCallback listener = () {
-      if (!controller.isClosed) {
-        final count = notifications.value.where((n) => !n.isRead).length;
-        controller.add(count);
-      }
-    };
-
-    notifications.addListener(listener);
-
-    controller.onCancel = () {
-      notifications.removeListener(listener);
-    };
-
-    // Add initial value
-    controller.add(unreadCount);
-
-    return controller.stream;
   }
 }

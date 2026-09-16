@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/bus_fleet.dart';
 import '../../services/auth_service.dart';
 import '../../services/firebase_service.dart';
+import '../../services/device_class_guard.dart';
 import '../../theme/app_theme.dart';
 import 'create_user_screen.dart';
 
@@ -17,6 +18,8 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
   final DatabaseReference _users = FirebaseDatabase.instance.ref('users');
   String _filter = 'All';
   String _query = '';
+
+  bool get _laptop => isLaptopActionAllowed();
 
   Stream<List<_ManagedUser>> _usersStream() {
     return _users.onValue.map((event) {
@@ -40,8 +43,7 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
     final query = _query.trim().toLowerCase();
     return users.where((user) {
       final roleMatch = _filter == 'All' || user.role == _filter;
-      final queryMatch =
-          query.isEmpty ||
+      final queryMatch = query.isEmpty ||
           user.name.toLowerCase().contains(query) ||
           user.email.toLowerCase().contains(query) ||
           (user.busId?.toLowerCase().contains(query) ?? false);
@@ -57,13 +59,14 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
       appBar: AppBar(
         title: const Text('People & Assignments'),
         actions: [
-          IconButton(
-            tooltip: 'Add account',
-            icon: const Icon(Icons.person_add_alt_1_rounded),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const AdminCreateUserScreen()),
+          if (_laptop)
+            IconButton(
+              tooltip: 'Add account',
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AdminCreateUserScreen()),
+              ),
             ),
-          ),
         ],
       ),
       body: StreamBuilder<List<_ManagedUser>>(
@@ -96,16 +99,20 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
                       children: [
                         Text(
                           'Operations directory',
-                          style: Theme.of(context).textTheme.headlineMedium
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Manage the small operational team and keep every bus assignment visible. Student rosters remain in the separate Students section.',
+                          _laptop
+                              ? 'Manage the small operational team and keep every bus assignment visible. Student rosters remain in the separate Students section.'
+                              : 'Read-only view of drivers, conductors, and their bus assignments. Edits must be made from a laptop.',
                           style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurfaceVariant,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(height: 22),
@@ -193,7 +200,9 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
               padding: const EdgeInsets.only(bottom: 10),
               child: _UserManagementCard(
                 user: user,
-                onEdit: () => _editUser(context, user, fleet),
+                onEdit: _laptop
+                    ? () => _editUser(context, user, fleet)
+                    : null,
               ),
             ),
         ],
@@ -226,7 +235,9 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
                   DataCell(Text(user.busId ?? 'Unassigned')),
                   DataCell(
                     FilledButton.tonalIcon(
-                      onPressed: () => _editUser(context, user, fleet),
+                      onPressed: _laptop
+                          ? () => _editUser(context, user, fleet)
+                          : null,
                       icon: const Icon(Icons.edit_outlined, size: 16),
                       label: const Text('Edit'),
                     ),
@@ -244,6 +255,7 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
     _ManagedUser user,
     List<BusFleet> fleet,
   ) async {
+    if (!_laptop) return;
     final nameController = TextEditingController(text: user.name);
     final phoneController = TextEditingController(text: user.phone ?? '');
     String? selectedBus = user.busId;
@@ -446,7 +458,9 @@ class _SummaryRow extends StatelessWidget {
                             children: [
                               Text(
                                 '${item.$2}',
-                                style: Theme.of(context).textTheme.headlineSmall
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .headlineSmall
                                     ?.copyWith(fontWeight: FontWeight.w800),
                               ),
                               Text(
@@ -470,7 +484,7 @@ class _SummaryRow extends StatelessWidget {
 
 class _UserManagementCard extends StatelessWidget {
   final _ManagedUser user;
-  final VoidCallback onEdit;
+  final VoidCallback? onEdit;
 
   const _UserManagementCard({required this.user, required this.onEdit});
 
@@ -487,10 +501,12 @@ class _UserManagementCard extends StatelessWidget {
           '${user.role} • ${user.email}\nBus: ${user.busId ?? 'Unassigned'}',
         ),
         isThreeLine: true,
-        trailing: IconButton(
-          onPressed: onEdit,
-          icon: const Icon(Icons.edit_outlined),
-        ),
+        trailing: onEdit == null
+            ? null
+            : IconButton(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+              ),
       ),
     );
   }

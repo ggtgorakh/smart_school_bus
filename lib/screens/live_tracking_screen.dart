@@ -17,9 +17,12 @@ class LiveTrackingScreen extends StatefulWidget {
   final String studentName;
   final String studentGradeAndSeat;
 
+  // busId has no default: every caller must pass the real assigned bus
+  // explicitly, so a forgotten argument fails to compile instead of
+  // silently showing/tracking the wrong bus.
   const LiveTrackingScreen({
     super.key,
-    this.busId = 'bus_01',
+    required this.busId,
     this.canCallDriver = true,
     this.studentName = '',
     this.studentGradeAndSeat = '',
@@ -44,6 +47,10 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
   bool _isBottomSheetExpanded = false;
   BusFleet? _fleetBus;
 
+  /// Route stops for the current bus's route, loaded once from
+  /// /routes/{routeId}/stops. Empty until the fleet record resolves.
+  List<Map<String, dynamic>> _routeStops = const [];
+
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -52,7 +59,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
   void initState() {
     super.initState();
 
-    // Initialize animations
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
@@ -70,9 +76,27 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
         );
 
     _locationStream = FirebaseService.instance.streamBusLocation(widget.busId);
+
+    // Load fleet record; if it has a routeId, load that route's stops.
     FirebaseService.instance.fetchFleetBusOnce(widget.busId).then((bus) {
-      if (mounted) setState(() => _fleetBus = bus);
+      if (!mounted) return;
+      setState(() => _fleetBus = bus);
+
+      final routeId = bus?.routeId;
+      if (routeId != null && routeId.isNotEmpty) {
+        // Listen once to the route's stops. The stop list rarely changes
+        // mid-trip, so a single `.first` snapshot is sufficient.
+        FirebaseService.instance
+            .streamRouteStops(routeId)
+            .first
+            .then((stops) {
+          if (mounted) setState(() => _routeStops = stops);
+        }).catchError((e) {
+          debugPrint('LiveTrackingScreen: route stops load failed: $e');
+        });
+      }
     });
+
     _statusSub = _locationStream.listen(
       _handleLocationUpdate,
       onError: (error) {
@@ -84,12 +108,12 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
         debugPrint('LiveTrackingScreen location stream error: $error');
       },
     );
+
     _staleTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       final location = _lastLocation;
       if (location != null) _processLocation(location);
     });
 
-    // Start animation after a short delay
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) _animationController.forward();
     });
@@ -213,6 +237,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
                 onExpandToggle: () => setState(
                   () => _isBottomSheetExpanded = !_isBottomSheetExpanded,
                 ),
+                routeStops: _routeStops,
               ),
             );
           },
@@ -251,30 +276,28 @@ class _LoadingState extends StatelessWidget {
             duration: const Duration(milliseconds: 600),
             tween: Tween<double>(begin: 0.0, end: 1.0),
             builder: (context, value, child) {
-              return Transform.scale(
-                scale: value,
-                child: Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    gradient: AppTheme.brandGradient,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.safetyBlue.withValues(alpha: 0.3),
-                        blurRadius: 30,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.directions_bus_filled_rounded,
-                    color: Colors.white,
-                    size: 40,
-                  ),
-                ),
-              );
+              return Transform.scale(scale: value, child: child);
             },
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                gradient: AppTheme.brandGradient,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.safetyBlue.withValues(alpha: 0.3),
+                    blurRadius: 30,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.directions_bus_filled_rounded,
+                color: Colors.white,
+                size: 40,
+              ),
+            ),
           ),
           const SizedBox(height: 24),
           const SizedBox(
@@ -288,9 +311,9 @@ class _LoadingState extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             'Connecting to bus...',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
           ),
           const SizedBox(height: 6),
           Text(
@@ -339,9 +362,9 @@ class _ErrorState extends StatelessWidget {
             Text(
               "Can't reach live tracking",
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -360,10 +383,8 @@ class _ErrorState extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.safetyBlue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -407,9 +428,9 @@ class _EmptyState extends StatelessWidget {
             Text(
               'Bus data not available',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -437,6 +458,7 @@ class _LiveTrackingContent extends StatelessWidget {
   final String studentGradeAndSeat;
   final bool isExpanded;
   final VoidCallback onExpandToggle;
+  final List<Map<String, dynamic>> routeStops;
 
   const _LiveTrackingContent({
     required this.location,
@@ -444,11 +466,11 @@ class _LiveTrackingContent extends StatelessWidget {
     required this.studentGradeAndSeat,
     required this.isExpanded,
     required this.onExpandToggle,
+    required this.routeStops,
   });
 
   @override
   Widget build(BuildContext context) {
-    final location = this.location;
     final stale = location.isStale();
     final double progress = location.totalStops > 0
         ? (location.currentStopIndex / location.totalStops).clamp(0.0, 1.0)
@@ -457,28 +479,31 @@ class _LiveTrackingContent extends StatelessWidget {
 
     return Stack(
       children: [
-        // Map Background
+        // Real map background.
         Positioned.fill(
           child: LiveMapCanvas(
+            lat: location.lat,
+            lng: location.lng,
             busStatus: location.statusLabel,
             etaTime: location.etaLabel,
             busNumber: location.busNumber,
             progress: progress,
             speedKmph: location.speedKmph,
+            stops: routeStops,
+            currentStopIndex: location.currentStopIndex,
             showInfoOverlay: false,
           ),
         ),
 
-        // Bottom Sheet
+        // Bottom sheet
         Positioned(
           left: isMobile ? 10 : null,
           right: isMobile ? 10 : 24,
           top: isMobile ? null : 24,
           bottom: isMobile ? 10 : 24,
           child: Align(
-            alignment: isMobile
-                ? Alignment.bottomCenter
-                : Alignment.centerRight,
+            alignment:
+                isMobile ? Alignment.bottomCenter : Alignment.centerRight,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 400),
               curve: Curves.easeOutCubic,
@@ -517,13 +542,12 @@ class _LiveTrackingContent extends StatelessWidget {
                             const SizedBox(height: 12),
                           ],
 
-                          // Next-stop headline row
                           Row(
                             children: [
                               Container(
                                 width: 42,
                                 height: 42,
-                                decoration: BoxDecoration(
+                                decoration: const BoxDecoration(
                                   color: AppColors.amberSoft,
                                   shape: BoxShape.circle,
                                 ),
@@ -555,21 +579,19 @@ class _LiveTrackingContent extends StatelessWidget {
                                           .textTheme
                                           .bodyMedium
                                           ?.copyWith(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
                                             fontSize: isMobile ? 12 : 13,
                                           ),
                                     ),
                                   ],
                                 ),
                               ),
-                              // Status Badge
                               _buildStatusBadge(stale),
                             ],
                           ),
 
-                          // Expandable Content
                           AnimatedCrossFade(
                             firstChild: const SizedBox.shrink(),
                             secondChild: Column(
@@ -577,8 +599,6 @@ class _LiveTrackingContent extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const SizedBox(height: 14),
-
-                                // Route Progress Track
                                 RouteProgressTrack(
                                   totalStops: location.totalStops,
                                   currentStopIndex: location.currentStopIndex,
@@ -586,15 +606,15 @@ class _LiveTrackingContent extends StatelessWidget {
                                       'Next: ${location.currentStopLabel}',
                                   etaLabel: location.etaLabel,
                                 ),
-
                                 const SizedBox(height: 14),
                                 if (!isMobile) ...[
-                                  const SizedBox(height: 14),
-                                  _buildTelemetry(context, location, isMobile),
+                                  _buildTelemetry(
+                                    context,
+                                    location,
+                                    isMobile,
+                                  ),
                                 ],
                                 const SizedBox(height: 12),
-
-                                // Student Info Row
                                 if (studentName.trim().isNotEmpty)
                                   _buildStudentInfo(context, isMobile),
                               ],
@@ -685,7 +705,7 @@ class _LiveTrackingContent extends StatelessWidget {
           Container(
             width: isMobile ? 40 : 46,
             height: isMobile ? 40 : 46,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
               gradient: AppTheme.brandGradient,
             ),
@@ -703,16 +723,16 @@ class _LiveTrackingContent extends StatelessWidget {
                 Text(
                   studentName,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    fontSize: isMobile ? 14 : 15,
-                  ),
+                        fontWeight: FontWeight.bold,
+                        fontSize: isMobile ? 14 : 15,
+                      ),
                 ),
                 Text(
                   studentGradeAndSeat,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontSize: isMobile ? 11 : 12,
-                  ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: isMobile ? 11 : 12,
+                      ),
                 ),
               ],
             ),
@@ -728,9 +748,9 @@ class _LiveTrackingContent extends StatelessWidget {
     bool isMobile,
   ) {
     final textStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-      fontSize: isMobile ? 11 : 12,
-    );
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+          fontSize: isMobile ? 11 : 12,
+        );
     return Row(
       children: [
         Expanded(

@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../utils/platform_utils.dart';
 import '../widgets/app_header.dart';
 import '../services/session_service.dart';
 import 'live_tracking_screen.dart';
@@ -12,9 +13,11 @@ import 'profile_screen.dart';
 import 'manual_attendance_screen.dart';
 import 'parent_tracking_screen.dart';
 import 'trip_workflow_screen.dart';
+import 'admin/admin_dashboard_screen.dart';
 import 'admin/admin_operations_screen.dart';
 import 'admin/admin_bus_operations_screen.dart';
 import 'admin/admin_students_overview_screen.dart';
+import 'admin/admin_alerts_screen.dart';
 import 'admin_fleet_tracking_screen.dart';
 import 'parent_people_screen.dart';
 import 'parent_assigned_staff_screen.dart';
@@ -43,7 +46,7 @@ class MainNavigationShell extends StatefulWidget {
   const MainNavigationShell({
     super.key,
     required this.userRole,
-    this.busId = 'bus_01',
+    required this.busId,
     required this.onSignOut,
   });
 
@@ -88,23 +91,181 @@ class _MainNavigationShellState extends State<MainNavigationShell>
   List<AuthorizedTab> _buildAuthorizedTabs() {
     final role = widget.userRole;
 
-    // Driver Tabs
-    if (role == 'Driver') {
-      return [
-        AuthorizedTab(
-          title: 'Bus Route Navigation',
-          screen: LiveTrackingScreen(busId: widget.busId, canCallDriver: false),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            activeIcon: Icon(Icons.map),
-            label: 'Route',
-          ),
-          icon: Icons.map_outlined,
-          activeIcon: Icons.map,
+    if (role == 'Driver') return _driverTabs();
+    if (role == 'Conductor') return _conductorTabs();
+    if (role == 'Admin') return _adminTabs();
+    return _parentTabs();
+  }
+
+  // ============================================================
+  // DRIVER — 4 tabs
+  // ============================================================
+  List<AuthorizedTab> _driverTabs() {
+    return [
+      AuthorizedTab(
+        title: 'Bus Route Navigation',
+        screen: LiveTrackingScreen(busId: widget.busId, canCallDriver: false),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.map_outlined),
+          activeIcon: Icon(Icons.map),
+          label: 'Route',
         ),
+        icon: Icons.map_outlined,
+        activeIcon: Icons.map,
+      ),
+      AuthorizedTab(
+        title: 'Driver Trip Operations',
+        screen: TripWorkflowScreen(busId: widget.busId, role: 'Driver'),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.route_outlined),
+          activeIcon: Icon(Icons.route),
+          label: 'Trip',
+        ),
+        icon: Icons.route_outlined,
+        activeIcon: Icons.route,
+      ),
+      AuthorizedTab(
+        title: 'Driver Student Attendance',
+        screen: ManualAttendanceScreen(busId: widget.busId),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.how_to_reg_outlined),
+          activeIcon: Icon(Icons.how_to_reg),
+          label: 'Students',
+        ),
+        icon: Icons.how_to_reg_outlined,
+        activeIcon: Icons.how_to_reg,
+      ),
+      AuthorizedTab(
+        title: 'Driver Profile',
+        screen: ProfileScreen(
+          activeRole: 'Driver',
+          onSignOut: widget.onSignOut,
+        ),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          activeIcon: Icon(Icons.person),
+          label: 'Profile',
+        ),
+        icon: Icons.person_outline,
+        activeIcon: Icons.person,
+      ),
+    ];
+  }
+
+  // ============================================================
+  // CONDUCTOR — 4 tabs
+  // ============================================================
+  List<AuthorizedTab> _conductorTabs() {
+    return [
+      AuthorizedTab(
+        title: 'Student Check-in / Check-out',
+        screen: ManualAttendanceScreen(busId: widget.busId),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.how_to_reg_outlined),
+          activeIcon: Icon(Icons.how_to_reg),
+          label: 'Students',
+        ),
+        icon: Icons.how_to_reg_outlined,
+        activeIcon: Icons.how_to_reg,
+      ),
+      AuthorizedTab(
+        title: 'Bus Route Map',
+        screen: LiveTrackingScreen(busId: widget.busId, canCallDriver: false),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.map_outlined),
+          activeIcon: Icon(Icons.map),
+          label: 'Map',
+        ),
+        icon: Icons.map_outlined,
+        activeIcon: Icons.map,
+      ),
+      AuthorizedTab(
+        title: 'Conductor Trip Status',
+        screen: TripWorkflowScreen(busId: widget.busId, role: 'Conductor'),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.route_outlined),
+          activeIcon: Icon(Icons.route),
+          label: 'Trip',
+        ),
+        icon: Icons.route_outlined,
+        activeIcon: Icons.route,
+      ),
+      AuthorizedTab(
+        title: 'Conductor Profile',
+        screen: ProfileScreen(
+          activeRole: 'Conductor',
+          onSignOut: widget.onSignOut,
+        ),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          activeIcon: Icon(Icons.person),
+          label: 'Profile',
+        ),
+        icon: Icons.person_outline,
+        activeIcon: Icons.person,
+      ),
+    ];
+  }
+
+  // ============================================================
+  // ADMIN — platform-dependent
+  //
+  // Laptop: Dashboard, Map, Alerts, Fleet, Ops, Staff, Students, Profile
+  //         (8 tabs — every operation available)
+  //
+  // Mobile: Dashboard, Map, Alerts, Profile
+  //         (4 tabs — read-only + emergency handling only)
+  // ============================================================
+  List<AuthorizedTab> _adminTabs() {
+    final laptop = isLaptopPlatform();
+
+    // Shared tabs that both platforms get, in the same order.
+    final shared = <AuthorizedTab>[
+      AuthorizedTab(
+        title: 'Dashboard',
+        screen: const AdminDashboardScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.dashboard_outlined),
+          activeIcon: Icon(Icons.dashboard),
+          label: 'Home',
+        ),
+        icon: Icons.dashboard_outlined,
+        activeIcon: Icons.dashboard,
+      ),
+      AuthorizedTab(
+        title: 'Fleet Map',
+        screen: const AdminFleetTrackingScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.map_outlined),
+          activeIcon: Icon(Icons.map),
+          label: 'Map',
+        ),
+        icon: Icons.map_outlined,
+        activeIcon: Icons.map,
+      ),
+      AuthorizedTab(
+        title: 'Alerts & Emergencies',
+        screen: const AdminAlertsScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.notifications_active_outlined),
+          activeIcon: Icon(Icons.notifications_active),
+          label: 'Alerts',
+        ),
+        icon: Icons.notifications_active_outlined,
+        activeIcon: Icons.notifications_active,
+      ),
+    ];
+
+    if (!laptop) {
+      // Mobile: only read-only + emergency handling.
+      return [
+        ...shared,
         AuthorizedTab(
-          title: 'Driver Profile',
-          screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
+          title: 'Admin Profile',
+          screen: ProfileScreen(
+            activeRole: 'Admin',
+            onSignOut: widget.onSignOut,
+          ),
           navItem: const BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             activeIcon: Icon(Icons.person),
@@ -113,155 +274,77 @@ class _MainNavigationShellState extends State<MainNavigationShell>
           icon: Icons.person_outline,
           activeIcon: Icons.person,
         ),
-        AuthorizedTab(
-          title: 'Driver Student Attendance',
-          screen: ManualAttendanceScreen(busId: widget.busId),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.how_to_reg_outlined),
-            activeIcon: Icon(Icons.how_to_reg),
-            label: 'Students',
-          ),
-          icon: Icons.how_to_reg_outlined,
-          activeIcon: Icons.how_to_reg,
-        ),
-        AuthorizedTab(
-          title: 'Driver Trip Operations',
-          screen: TripWorkflowScreen(busId: widget.busId, role: role),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.route_outlined),
-            activeIcon: Icon(Icons.route),
-            label: 'Trip',
-          ),
-          icon: Icons.route_outlined,
-
-          activeIcon: Icons.route,
-        ),
       ];
     }
 
-    // Conductor Tabs
-    if (role == 'Conductor') {
-      return [
-        AuthorizedTab(
-          title: 'Student Check-in / Check-out',
-          screen: ManualAttendanceScreen(busId: widget.busId),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.how_to_reg_outlined),
-            activeIcon: Icon(Icons.how_to_reg),
-            label: 'Students',
-          ),
-          icon: Icons.how_to_reg_outlined,
-          activeIcon: Icons.how_to_reg,
+    // Laptop: everything.
+    return [
+      ...shared,
+      AuthorizedTab(
+        title: 'Fleet Operations',
+        screen: const FleetManagementScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.directions_bus_outlined),
+          activeIcon: Icon(Icons.directions_bus),
+          label: 'Fleet',
         ),
-        AuthorizedTab(
-          title: 'Bus Route Map',
-          screen: LiveTrackingScreen(busId: widget.busId, canCallDriver: false),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            activeIcon: Icon(Icons.map),
-            label: 'Map',
-          ),
-          icon: Icons.map_outlined,
-          activeIcon: Icons.map,
+        icon: Icons.directions_bus_outlined,
+        activeIcon: Icons.directions_bus,
+      ),
+      AuthorizedTab(
+        title: 'Bus Operations & Routes',
+        screen: const AdminBusOperationsScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.alt_route_outlined),
+          activeIcon: Icon(Icons.alt_route),
+          label: 'Ops',
         ),
-        AuthorizedTab(
-          title: 'Conductor Profile',
-          screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-          icon: Icons.person_outline,
-          activeIcon: Icons.person,
+        icon: Icons.alt_route_outlined,
+        activeIcon: Icons.alt_route,
+      ),
+      AuthorizedTab(
+        title: 'Drivers & Conductors',
+        screen: const AdminOperationsScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.groups_outlined),
+          activeIcon: Icon(Icons.groups),
+          label: 'Staff',
         ),
-        AuthorizedTab(
-          title: 'Conductor Trip Status',
-          screen: TripWorkflowScreen(busId: widget.busId, role: role),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.route_outlined),
-            activeIcon: Icon(Icons.route),
-            label: 'Trip',
-          ),
-          icon: Icons.route_outlined,
-          activeIcon: Icons.route,
+        icon: Icons.groups_outlined,
+        activeIcon: Icons.groups,
+      ),
+      AuthorizedTab(
+        title: 'All Students',
+        screen: const AdminStudentsOverviewScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.school_outlined),
+          activeIcon: Icon(Icons.school),
+          label: 'Students',
         ),
-      ];
-    }
+        icon: Icons.school_outlined,
+        activeIcon: Icons.school,
+      ),
+      AuthorizedTab(
+        title: 'Admin Profile',
+        screen: ProfileScreen(
+          activeRole: 'Admin',
+          onSignOut: widget.onSignOut,
+        ),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          activeIcon: Icon(Icons.person),
+          label: 'Profile',
+        ),
+        icon: Icons.person_outline,
+        activeIcon: Icons.person,
+      ),
+    ];
+  }
 
-    // Admin Tabs
-    if (role == 'Admin') {
-      return [
-        AuthorizedTab(
-          title: 'Fleet Management Overview',
-          screen: const FleetManagementScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.directions_bus_outlined),
-            activeIcon: Icon(Icons.directions_bus),
-            label: 'Fleet',
-          ),
-          icon: Icons.directions_bus_outlined,
-          activeIcon: Icons.directions_bus,
-        ),
-        AuthorizedTab(
-          title: 'Master GPS Bus Tracking',
-          screen: const AdminFleetTrackingScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.map_outlined),
-            activeIcon: Icon(Icons.map),
-            label: 'Map',
-          ),
-          icon: Icons.map_outlined,
-          activeIcon: Icons.map,
-        ),
-        AuthorizedTab(
-          title: 'Bus Operations & Routes',
-          screen: const AdminBusOperationsScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.alt_route_outlined),
-            activeIcon: Icon(Icons.alt_route),
-            label: 'Ops',
-          ),
-          icon: Icons.alt_route_outlined,
-          activeIcon: Icons.alt_route,
-        ),
-        AuthorizedTab(
-          title: 'Drivers & Conductors',
-          screen: const AdminOperationsScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.groups_outlined),
-            activeIcon: Icon(Icons.groups),
-            label: 'Staff',
-          ),
-          icon: Icons.groups_outlined,
-          activeIcon: Icons.groups,
-        ),
-        AuthorizedTab(
-          title: 'All Students',
-          screen: const AdminStudentsOverviewScreen(),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.school_outlined),
-            activeIcon: Icon(Icons.school),
-            label: 'Students',
-          ),
-          icon: Icons.school_outlined,
-          activeIcon: Icons.school,
-        ),
-        AuthorizedTab(
-          title: 'Admin System Profile',
-          screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
-          navItem: const BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-          icon: Icons.person_outline,
-          activeIcon: Icons.person,
-        ),
-      ];
-    }
-
-    // Parent Tabs (Default)
+  // ============================================================
+  // PARENT — 5 tabs
+  // ============================================================
+  List<AuthorizedTab> _parentTabs() {
     return [
       AuthorizedTab(
         title: 'Child Boarding Status',
@@ -297,17 +380,6 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         activeIcon: Icons.family_restroom,
       ),
       AuthorizedTab(
-        title: 'Parent Profile',
-        screen: ProfileScreen(activeRole: role, onSignOut: widget.onSignOut),
-        navItem: const BottomNavigationBarItem(
-          icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
-          label: 'Profile',
-        ),
-        icon: Icons.person_outline,
-        activeIcon: Icons.person,
-      ),
-      AuthorizedTab(
         title: 'Assigned Staff',
         screen: const ParentAssignedStaffScreen(),
         navItem: const BottomNavigationBarItem(
@@ -317,6 +389,20 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         ),
         icon: Icons.groups_outlined,
         activeIcon: Icons.groups,
+      ),
+      AuthorizedTab(
+        title: 'Parent Profile',
+        screen: ProfileScreen(
+          activeRole: 'Parent',
+          onSignOut: widget.onSignOut,
+        ),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          activeIcon: Icon(Icons.person),
+          label: 'Profile',
+        ),
+        icon: Icons.person_outline,
+        activeIcon: Icons.person,
       ),
     ];
   }
@@ -351,20 +437,12 @@ class _MainNavigationShellState extends State<MainNavigationShell>
             Expanded(
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1280),
+                  constraints: const BoxConstraints(maxWidth: 1600),
                   child: IndexedStack(
                     index: safeIndex,
                     children: [
                       for (int i = 0; i < tabs.length; i++)
                         TickerMode(
-                          // Only the visible tab's animations should keep
-                          // ticking. Without this, every AnimationController
-                          // that calls .repeat() (map pulse, tracking pulse,
-                          // etc.) keeps running forever in the background on
-                          // every hidden tab at once, since IndexedStack
-                          // keeps all children mounted — that's what was
-                          // flooding the render pipeline (BLASTBufferQueue
-                          // "can't acquire next buffer" warnings).
                           enabled: i == safeIndex,
                           child: tabs[i].screen,
                         ),
@@ -381,10 +459,6 @@ class _MainNavigationShellState extends State<MainNavigationShell>
           : _buildMobileBottomNav(tabs, safeIndex, scheme),
     );
   }
-
-  // ============================================================
-  // MOBILE BOTTOM NAVIGATION
-  // ============================================================
 
   Widget _buildMobileBottomNav(
     List<AuthorizedTab> tabs,
@@ -520,16 +594,14 @@ class _DesktopSidebarState extends State<_DesktopSidebar>
       ),
       child: Column(
         children: [
-          // Navigation Items
           Expanded(
             child: ListView.separated(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               itemCount: widget.tabs.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 4),
+              separatorBuilder: (_, _) => const SizedBox(height: 4),
               itemBuilder: (context, index) {
                 final tab = widget.tabs[index];
                 final isSelected = index == widget.currentIndex;
-
                 return _SidebarNavItem(
                   tab: tab,
                   isSelected: isSelected,
@@ -539,43 +611,8 @@ class _DesktopSidebarState extends State<_DesktopSidebar>
               },
             ),
           ),
-
-          // Footer
           _buildSidebarFooter(),
         ],
-      ),
-    );
-  }
-
-  Widget _buildRoleBadge(ColorScheme scheme) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          gradient: AppTheme.brandGradient,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.verified_user_rounded,
-              color: Colors.white,
-              size: 14,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              widget.role.toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -633,10 +670,6 @@ class _DesktopSidebarState extends State<_DesktopSidebar>
     );
   }
 }
-
-// ============================================================
-// SIDEBAR NAVIGATION ITEM
-// ============================================================
 
 class _SidebarNavItem extends StatefulWidget {
   final AuthorizedTab tab;
@@ -700,7 +733,6 @@ class _SidebarNavItemState extends State<_SidebarNavItem>
             ),
             child: Row(
               children: [
-                // Icon Container with Animation
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   padding: EdgeInsets.all(widget.isSelected ? 8 : 0),
@@ -711,7 +743,9 @@ class _SidebarNavItemState extends State<_SidebarNavItem>
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    widget.isSelected ? widget.tab.activeIcon : widget.tab.icon,
+                    widget.isSelected
+                        ? widget.tab.activeIcon
+                        : widget.tab.icon,
                     size: widget.isSelected ? 20 : 22,
                     color: widget.isSelected
                         ? scheme.primary
@@ -721,7 +755,6 @@ class _SidebarNavItemState extends State<_SidebarNavItem>
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Label
                 Expanded(
                   child: Text(
                     widget.tab.title,
@@ -740,7 +773,6 @@ class _SidebarNavItemState extends State<_SidebarNavItem>
                     ),
                   ),
                 ),
-                // Selected Indicator
                 if (widget.isSelected)
                   Container(
                     width: 4,

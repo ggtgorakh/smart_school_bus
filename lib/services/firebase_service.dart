@@ -4,7 +4,9 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 
+import '../config/school_config.dart';
 import '../models/bus_fleet.dart';
 import '../models/bus_location.dart';
 import '../models/student.dart';
@@ -22,6 +24,42 @@ class FirebaseService {
   final OfflineWriteQueue _writeQueue = OfflineWriteQueue.instance;
 
   String? get currentUserUid => FirebaseAuth.instance.currentUser?.uid;
+
+  // ============================================================
+  // ─── BLOCK 8: SCHOOL CONFIG ────────────────────────────────
+  // ============================================================
+
+  /// Live stream of the school configuration. If the config node is
+  /// missing, emits the in-code defaults. If it partially exists, missing
+  /// fields fall back per-key.
+  Stream<SchoolConfig> streamSchoolConfig() {
+    return _root.child('config/school').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw is Map) return SchoolConfig.fromMap(raw);
+      return SchoolConfig.defaults;
+    });
+  }
+
+  /// One-off read of the school config. Used at startup.
+  Future<SchoolConfig> fetchSchoolConfigOnce() async {
+    try {
+      final snap = await _root.child('config/school').get();
+      final raw = snap.value;
+      if (raw is Map) return SchoolConfig.fromMap(raw);
+    } catch (e) {
+      debugPrint('FirebaseService: fetchSchoolConfigOnce failed: $e');
+    }
+    return SchoolConfig.defaults;
+  }
+
+  /// Admin-only: replace the school config in Firebase.
+  Future<void> pushSchoolConfig(SchoolConfig config) async {
+    await _root.child('config/school').update(config.toMap());
+  }
+
+  // ============================================================
+  // TRIPS
+  // ============================================================
 
   Stream<List<Trip>> streamTripsForBus(String busId) {
     return _root.child('trips/$busId').onValue.map((event) {
@@ -112,12 +150,38 @@ class FirebaseService {
       updates['endTime'] = now.millisecondsSinceEpoch;
     }
     await _root.child('trips/$busId/$tripId').update(updates);
+
+    if (nextStatus == TripStatus.active ||
+        nextStatus == TripStatus.paused ||
+        nextStatus == TripStatus.preparing) {
+      try {
+        await _root
+            .child('busesFleet/$busId/status')
+            .set(FleetStatus.onRoute.name);
+      } catch (e) {
+        debugPrint('FirebaseService: fleet status mirror failed: $e');
+      }
+    } else if (nextStatus == TripStatus.completed ||
+        nextStatus == TripStatus.cancelled) {
+      try {
+        await _root
+            .child('busesFleet/$busId/status')
+            .set(FleetStatus.idle.name);
+      } catch (e) {
+        debugPrint('FirebaseService: fleet status mirror failed: $e');
+      }
+    }
+
     return current.copyWith(
       status: nextStatus,
       startTime: updates.containsKey('startTime') ? now : current.startTime,
       endTime: updates.containsKey('endTime') ? now : current.endTime,
     );
   }
+
+  // ============================================================
+  // ATTENDANCE
+  // ============================================================
 
   Stream<List<AttendanceEvent>> streamAttendanceEvents(String tripId) {
     return _root.child('attendanceEvents').onValue.map((event) {
@@ -131,6 +195,26 @@ class FirebaseService {
             events.add(AttendanceEvent.fromMap(value, eventId: key.toString()));
           }
         });
+      });
+      events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      return events;
+    });
+  }
+
+  Stream<List<AttendanceEvent>> streamAttendanceHistoryForParent({
+    required String busId,
+    required String studentId,
+  }) {
+    return _root.child('attendanceEvents/$busId').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return <AttendanceEvent>[];
+      final events = <AttendanceEvent>[];
+      raw.forEach((key, value) {
+        if (value is Map && value['studentId']?.toString() == studentId) {
+          events.add(
+            AttendanceEvent.fromMap(value, eventId: key.toString()),
+          );
+        }
       });
       events.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       return events;
@@ -214,7 +298,146 @@ class FirebaseService {
         error.code == 'timeout';
   }
 
-  /// Streams the administrator's route plan from Realtime Database.
+  // ============================================================
+  // ROUTES
+  // ============================================================
+
+  Stream<List<Map<String, dynamic>>> streamAllRoutes() {
+    return _root.child('routes').onValue.map<List<Map<String, dynamic>>>(
+      (event) {
+        final raw = event.snapshot.value;
+        if (raw is! Map) return <Map<String, dynamic>>[];
+        final routes = <Map<String, dynamic>>[];
+        raw.forEach((id, value) {
+          if (value is Map) {
+            routes.add({
+              'id': id.toString(),
+              ...Map<String, dynamic>.from(value),
+            });
+          }
+        });
+        routes.sort((a, b) {
+          final aName = (a['name'] ?? '').toString().toLowerCase();
+          final bName = (b['name'] ?? '').toString().toLowerCase();
+          return aName.compareTo(bName);
+        });
+        return routes;
+      },
+    );
+  }
+
+  /// ─── BLOCK 8 ───────────────────────────────────────────────
+  /// Streams every route along with its ordered stops.
+  ///
+  /// Emits `[{id, name, ..., stops: [{id, lat, lng, name, order}, ...]}]`.
+  /// Intended for the Admin dashboard's map overlay, where all routes'
+  /// stops are rendered at once.
+  Stream<List<Map<String, dynamic>>> streamAllRoutesWithStops() {
+    return _root.child('routes').onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw is! Map) return <Map<String, dynamic>>[];
+      final routes = <Map<String, dynamic>>[];
+      raw.forEach((id, value) {
+        if (value is Map) {
+          final rawStops = value['stops'];
+          final stops = <Map<String, dynamic>>[];
+          if (rawStops is Map) {
+            rawStops.forEach((stopId, stopVal) {
+              if (stopVal is Map) {
+                stops.add({
+                  'id': stopId.toString(),
+                  ...Map<String, dynamic>.from(stopVal),
+                });
+              }
+            });
+            stops.sort(
+              (a, b) =>
+                  (a['order'] as num? ?? 0).compareTo(b['order'] as num? ?? 0),
+            );
+          }
+          routes.add({
+            'id': id.toString(),
+            'name': value['name']?.toString() ?? '',
+            'description': value['description']?.toString(),
+            'stops': stops,
+          });
+        }
+      });
+      return routes;
+    });
+  }
+
+  Future<Map<String, dynamic>?> fetchRouteOnce(String routeId) async {
+    try {
+      final snap = await _root.child('routes/$routeId').get();
+      final value = snap.value;
+      if (value is Map) {
+        return {'id': routeId, ...Map<String, dynamic>.from(value)};
+      }
+    } catch (error) {
+      debugPrint('FirebaseService: Error fetching route $routeId: $error');
+    }
+    return null;
+  }
+
+  Future<String> createRoute({
+    required String name,
+    String? description,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError.value(name, 'name', 'must not be empty');
+    }
+    final ref = _root.child('routes').push();
+    final id = ref.key;
+    if (id == null) throw StateError('Unable to create a route ID.');
+    final data = <String, dynamic>{
+      'name': trimmed,
+      'createdAt': DateTime.now().millisecondsSinceEpoch,
+      'stops': <String, dynamic>{},
+    };
+    final desc = description?.trim();
+    if (desc != null && desc.isNotEmpty) {
+      data['description'] = desc;
+    }
+    await ref.set(data);
+    return id;
+  }
+
+  Future<void> updateRouteMeta({
+    required String routeId,
+    String? name,
+    String? description,
+  }) async {
+    final updates = <String, dynamic>{};
+    final trimmedName = name?.trim();
+    if (trimmedName != null && trimmedName.isNotEmpty) {
+      updates['name'] = trimmedName;
+    }
+    if (description != null) {
+      final trimmedDesc = description.trim();
+      updates['description'] = trimmedDesc.isEmpty ? null : trimmedDesc;
+    }
+    if (updates.isEmpty) return;
+    await _root.child('routes/$routeId').update(updates);
+  }
+
+  Future<void> deleteRoute(String routeId) async {
+    final fleetSnap = await _root.child('busesFleet').get();
+    final fleet = fleetSnap.value;
+    if (fleet is Map) {
+      for (final entry in fleet.entries) {
+        final bus = entry.value;
+        if (bus is Map && bus['routeId']?.toString() == routeId) {
+          throw StateError(
+            'Cannot delete this route while ${entry.key} is assigned to it.',
+          );
+        }
+      }
+    }
+    await _root.child('routes/$routeId').remove();
+  }
+
   Stream<List<Map<String, dynamic>>> streamRouteStops(String routeId) {
     return _root.child('routes/$routeId/stops').onValue.map((event) {
       final raw = event.snapshot.value;
@@ -272,22 +495,47 @@ class FirebaseService {
     }
   }
 
-  /// Streams live telemetry for [busId] from /buses/{busId}.
+  Future<void> reorderRouteStops(
+    String routeId,
+    List<String> orderedStopIds,
+  ) async {
+    if (orderedStopIds.isEmpty) return;
+    final updates = <String, dynamic>{};
+    for (var i = 0; i < orderedStopIds.length; i++) {
+      updates['$routeId/stops/${orderedStopIds[i]}/order'] = i;
+    }
+    await _root.child('routes').update(updates);
+  }
+
+  Future<void> assignRouteToBus({
+    required String busId,
+    required String? routeId,
+    required String? routeName,
+  }) async {
+    final updates = <String, dynamic>{
+      'busesFleet/$busId/routeId':
+          (routeId == null || routeId.trim().isEmpty) ? null : routeId.trim(),
+      'busesFleet/$busId/routeName':
+          (routeName == null || routeName.trim().isEmpty)
+              ? 'No route assigned'
+              : routeName.trim(),
+    };
+    await _root.update(updates);
+  }
+
+  // ============================================================
+  // BUS LOCATION
+  // ============================================================
+
   Stream<BusLocation?> streamBusLocation(String busId) {
     return _root.child('buses/$busId').onValue.map<BusLocation?>((event) {
       final rawData = event.snapshot.value;
-      if (rawData == null) {
-        return null;
-      }
-
-      if (rawData is Map) {
-        return BusLocation.fromMap(rawData);
-      }
+      if (rawData == null) return null;
+      if (rawData is Map) return BusLocation.fromMap(rawData);
       return null;
     }).asBroadcastStream();
   }
 
-  /// Streams every available live bus telemetry record for Admin fleet views.
   Stream<Map<String, BusLocation>> streamAllBusLocations() {
     return _root.child('buses').onValue.map((event) {
       final raw = event.snapshot.value;
@@ -302,17 +550,12 @@ class FirebaseService {
     }).asBroadcastStream();
   }
 
-  /// Streams real-time student attendance for a given bus route.
   Stream<List<Student>> streamStudents(String busId) {
     return _root.child('studentRosters/$busId').onValue.map<List<Student>>((
       event,
     ) {
       final raw = event.snapshot.value;
-      if (raw == null) {
-        // No roster imported yet for this bus — return an honest empty
-        // list instead of silently seeding fake demo students.
-        return <Student>[];
-      }
+      if (raw == null) return <Student>[];
       if (raw is Map) {
         final List<Student> list = [];
         raw.forEach((key, val) {
@@ -338,12 +581,10 @@ class FirebaseService {
     });
   }
 
-  /// Streams every student roster for Admin-wide student management views.
   Stream<List<Student>> streamAllStudents() {
     return _root.child('studentRosters').onValue.map<List<Student>>((event) {
       final raw = event.snapshot.value;
       if (raw is! Map) return <Student>[];
-
       final students = <Student>[];
       raw.forEach((busId, roster) {
         if (roster is! Map) return;
@@ -359,14 +600,13 @@ class FirebaseService {
           }
         });
       });
-      students.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      students.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
       return students;
     });
   }
 
-  /// Streams a single child's status for the Parent Boarding Status screen.
-  /// Emits null when the student doesn't exist (yet) instead of falling
-  /// back to fake demo data.
   Stream<Student?> streamStudent(String busId, String studentId) {
     return _root
         .child('studentRosters/$busId/$studentId')
@@ -380,7 +620,6 @@ class FirebaseService {
         });
   }
 
-  /// Streams every child currently linked to [parentUid].
   Stream<List<Student>> streamChildrenForParent(String parentUid) {
     late StreamController<List<Student>> controller;
     StreamSubscription<DatabaseEvent>? indexSub;
@@ -433,9 +672,8 @@ class FirebaseService {
         });
       }
 
-      final removedIds = childSubs.keys
-          .where((id) => !currentIds.contains(id))
-          .toList();
+      final removedIds =
+          childSubs.keys.where((id) => !currentIds.contains(id)).toList();
       for (final id in removedIds) {
         childSubs.remove(id)?.cancel();
         latest.remove(id);
@@ -507,7 +745,6 @@ class FirebaseService {
     }
   }
 
-  /// Updates a student's boarding status.
   Future<void> updateStudentStatus(
     String busId,
     String studentId,
@@ -519,9 +756,7 @@ class FirebaseService {
       'status': status.name,
       'boardedAt': status == StudentStatus.boarded ? now : null,
     };
-    if (stopName != null) {
-      updates['stopName'] = stopName;
-    }
+    if (stopName != null) updates['stopName'] = stopName;
     final path = 'studentRosters/$busId/$studentId';
     try {
       await _root.child(path).update(updates);
@@ -536,12 +771,11 @@ class FirebaseService {
           studentId: studentId,
         );
       }
-      print('FirebaseService: Error updating student status: $error');
+      debugPrint('FirebaseService: Error updating student status: $error');
       rethrow;
     }
   }
 
-  /// Marks all students on the bus with the given status.
   Future<void> markAllStudentsStatus(String busId, StudentStatus status) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final snapshot = await _root.child('studentRosters/$busId').get();
@@ -551,9 +785,8 @@ class FirebaseService {
       final Map<String, Object?> updates = {};
       data.forEach((key, _) {
         updates['$key/status'] = status.name;
-        updates['$key/boardedAt'] = status == StudentStatus.boarded
-            ? now
-            : null;
+        updates['$key/boardedAt'] =
+            status == StudentStatus.boarded ? now : null;
       });
       final path = 'studentRosters/$busId';
       try {
@@ -568,19 +801,18 @@ class FirebaseService {
             busId: busId,
           );
         }
-        print('FirebaseService: Error marking all student statuses: $error');
+        debugPrint(
+          'FirebaseService: Error marking all student statuses: $error',
+        );
         rethrow;
       }
     } else {
-      // No roster exists for this bus yet — nothing to mark, so no-op
-      // instead of seeding fake demo students.
-      print(
+      debugPrint(
         'FirebaseService: markAllStudentsStatus skipped — no roster for $busId',
       );
     }
   }
 
-  /// Seeds a list of students into RTDB.
   Future<void> seedStudents(String busId, List<Student> students) async {
     try {
       final Map<String, dynamic> data = {};
@@ -589,11 +821,10 @@ class FirebaseService {
       }
       await _root.child('studentRosters/$busId').set(data);
     } catch (error) {
-      print('FirebaseService: Error seeding students: $error');
+      debugPrint('FirebaseService: Error seeding students: $error');
     }
   }
 
-  /// Creates or updates a single student record.
   Future<void> upsertStudent({
     required String busId,
     required Student student,
@@ -620,12 +851,11 @@ class FirebaseService {
       }
       await _root.update(updates);
     } catch (error) {
-      print('FirebaseService: Error upserting student: $error');
+      debugPrint('FirebaseService: Error upserting student: $error');
       rethrow;
     }
   }
 
-  /// Removes a child's link to a Parent account.
   Future<void> unlinkChildFromParent({
     required String parentUid,
     required String busId,
@@ -636,12 +866,11 @@ class FirebaseService {
           .child('parentChildIndex/$parentUid/$busId/$studentId')
           .remove();
     } catch (error) {
-      print('FirebaseService: Error unlinking child: $error');
+      debugPrint('FirebaseService: Error unlinking child: $error');
       rethrow;
     }
   }
 
-  /// One-off read for manual refresh checks.
   Future<BusLocation?> fetchBusLocationOnce(String busId) async {
     try {
       final snapshot = await _root.child('buses/$busId').get();
@@ -651,37 +880,139 @@ class FirebaseService {
       }
       return null;
     } catch (error) {
-      print('FirebaseService: Error fetching bus location: $error');
+      debugPrint('FirebaseService: Error fetching bus location: $error');
       return null;
     }
   }
 
-  /// Writes driver or hardware telemetry updates to Firebase.
   Future<void> updateBusLocation(String busId, BusLocation location) async {
     try {
       await _root.child('buses/$busId').update(location.toMap());
     } catch (error) {
-      print('FirebaseService: Error updating bus location: $error');
+      debugPrint('FirebaseService: Error updating bus location: $error');
+      rethrow;
+    }
+  }
+
+  Future<void> updateBusLocationCoordinates({
+    required String busId,
+    required double lat,
+    required double lng,
+    double speedKmph = 0.0,
+    BusRunStatus status = BusRunStatus.onRoute,
+  }) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final busRef = _root.child('buses/$busId');
+    try {
+      final snapshot = await busRef.get();
+      if (snapshot.exists && snapshot.value is Map) {
+        final existing = Map<dynamic, dynamic>.from(snapshot.value as Map);
+        final updates = <String, dynamic>{
+          'lat': lat,
+          'lng': lng,
+          'speedKmph': speedKmph,
+          'status': statusToString(status),
+          'lastUpdated': now,
+        };
+        if (!existing.containsKey('currentStopIndex')) {
+          updates['currentStopIndex'] = 0;
+        }
+        if (!existing.containsKey('totalStops')) updates['totalStops'] = 1;
+        if (!existing.containsKey('currentStopLabel')) {
+          updates['currentStopLabel'] = 'On Route';
+        }
+        if (!existing.containsKey('etaMinutes')) updates['etaMinutes'] = 0;
+        if (!existing.containsKey('busNumber')) {
+          updates['busNumber'] = busId.toUpperCase();
+        }
+        await busRef.update(updates);
+      } else {
+        final fleetBus = await fetchFleetBusOnce(busId);
+        final initial = BusLocation(
+          lat: lat,
+          lng: lng,
+          speedKmph: speedKmph,
+          status: status,
+          lastUpdated: DateTime.fromMillisecondsSinceEpoch(now),
+          currentStopIndex: 0,
+          totalStops: 1,
+          currentStopLabel: 'On Route',
+          etaMinutes: 0,
+          busNumber: fleetBus?.busId.toUpperCase() ?? busId.toUpperCase(),
+        );
+        await busRef.set(initial.toMap());
+      }
+    } catch (error) {
+      debugPrint(
+        'FirebaseService: Error updating bus location coordinates: $error',
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> updateBusCoordinates(
+    String busId,
+    double lat,
+    double lng, {
+    double speedKmph = 0.0,
+    BusRunStatus status = BusRunStatus.onRoute,
+  }) async {
+    await updateBusLocationCoordinates(
+      busId: busId,
+      lat: lat,
+      lng: lng,
+      speedKmph: speedKmph,
+      status: status,
+    );
+  }
+
+  Future<void> setBusOffline(String busId) async {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final busRef = _root.child('buses/$busId');
+    try {
+      final snapshot = await busRef.get();
+      if (snapshot.exists && snapshot.value is Map) {
+        final existing = Map<dynamic, dynamic>.from(snapshot.value as Map);
+        final updates = <String, dynamic>{
+          'status': 'idle',
+          'speedKmph': 0.0,
+          'lastUpdated': now,
+        };
+        if (!existing.containsKey('lat')) updates['lat'] = 0.0;
+        if (!existing.containsKey('lng')) updates['lng'] = 0.0;
+        if (!existing.containsKey('currentStopIndex')) {
+          updates['currentStopIndex'] = 0;
+        }
+        if (!existing.containsKey('totalStops')) updates['totalStops'] = 1;
+        if (!existing.containsKey('currentStopLabel')) {
+          updates['currentStopLabel'] = 'Idle';
+        }
+        if (!existing.containsKey('etaMinutes')) updates['etaMinutes'] = 0;
+        if (!existing.containsKey('busNumber')) {
+          updates['busNumber'] = busId.toUpperCase();
+        }
+        await busRef.update(updates);
+      }
+    } catch (error) {
+      debugPrint('FirebaseService: Error marking bus offline: $error');
       rethrow;
     }
   }
 
   // ============================================================
-  // ADDITIONAL UTILITY METHODS
+  // UTILITIES
   // ============================================================
 
-  /// Check if a bus exists in the database.
   Future<bool> busExists(String busId) async {
     try {
       final snapshot = await _root.child('buses/$busId').get();
       return snapshot.exists;
     } catch (error) {
-      print('FirebaseService: Error checking bus exists: $error');
+      debugPrint('FirebaseService: Error checking bus exists: $error');
       return false;
     }
   }
 
-  /// Get all bus IDs.
   Future<List<String>> getAllBusIds() async {
     try {
       final snapshot = await _root.child('buses').get();
@@ -691,12 +1022,11 @@ class FirebaseService {
       }
       return [];
     } catch (error) {
-      print('FirebaseService: Error getting bus IDs: $error');
+      debugPrint('FirebaseService: Error getting bus IDs: $error');
       return [];
     }
   }
 
-  /// Get student by ID across all buses.
   Future<Student?> findStudentById(String studentId) async {
     try {
       final snapshot = await _root.child('studentRosters').get();
@@ -718,12 +1048,11 @@ class FirebaseService {
       }
       return null;
     } catch (error) {
-      print('FirebaseService: Error finding student: $error');
+      debugPrint('FirebaseService: Error finding student: $error');
       return null;
     }
   }
 
-  /// Get all students across all buses (Admin only).
   Future<List<Student>> getAllStudents() async {
     try {
       final List<Student> allStudents = [];
@@ -752,27 +1081,19 @@ class FirebaseService {
       allStudents.sort((a, b) => a.name.compareTo(b.name));
       return allStudents;
     } catch (error) {
-      print('FirebaseService: Error getting all students: $error');
+      debugPrint('FirebaseService: Error getting all students: $error');
       return [];
     }
   }
 
   // ============================================================
-  // FLEET MANAGEMENT (10 physical buses, /busesFleet/{busId})
-  //
-  // Kept separate from /buses/{busId}, which is owned by the ESP32
-  // hardware telemetry pipeline and must never be written to from here.
+  // FLEET MANAGEMENT
   // ============================================================
 
   static const int totalFleetSize = 10;
 
   String _padBusId(int n) => 'bus_${n.toString().padLeft(2, '0')}';
 
-  /// Ensures exactly bus_01..bus_10 exist under /busesFleet, creating any
-  /// missing ones with status idle and placeholder driver/route info.
-  /// Safe to call repeatedly — it never overwrites a bus that already
-  /// exists, so it will not clobber a real, already-imported roster's
-  /// on-route status.
   Future<void> ensureTenBusesExist() async {
     try {
       final snapshot = await _root.child('busesFleet').get();
@@ -802,11 +1123,10 @@ class FirebaseService {
         await _root.child('busesFleet').update(missing);
       }
     } catch (error) {
-      print('FirebaseService: Error ensuring fleet exists: $error');
+      debugPrint('FirebaseService: Error ensuring fleet exists: $error');
     }
   }
 
-  /// Streams all 10 buses from /busesFleet, sorted by busId (bus_01 first).
   Stream<List<BusFleet>> streamFleet() {
     return _root
         .child('busesFleet')
@@ -824,13 +1144,11 @@ class FirebaseService {
           return list;
         })
         .handleError((error) {
-          print('FirebaseService: Error streaming fleet: $error');
+          debugPrint('FirebaseService: Error streaming fleet: $error');
           return <BusFleet>[];
         });
   }
 
-  /// Streams one fleet record. Parents must use this scoped read because
-  /// Firebase rules allow them to read only a bus assigned to their child.
   Stream<BusFleet?> streamFleetBus(String busId) {
     return _root.child('busesFleet/$busId').onValue.map<BusFleet?>((event) {
       final raw = event.snapshot.value;
@@ -839,9 +1157,6 @@ class FirebaseService {
     });
   }
 
-  /// Updates just the given fields of one bus under /busesFleet/{busId}.
-  /// Uses update() (not set()) so unrelated fields (e.g. fuelPercent) are
-  /// never clobbered by a status-only change.
   Future<void> updateFleetStatus(
     String busId,
     FleetStatus status, {
@@ -858,39 +1173,32 @@ class FirebaseService {
       if (driverName != null && driverName.trim().isNotEmpty) {
         updates['driverName'] = driverName.trim();
       }
-
       if (routeName != null && routeName.trim().isNotEmpty) {
         updates['routeName'] = routeName.trim();
       }
-
       if (driverUid != null) {
-        updates['driverUid'] = driverUid.trim().isEmpty
-            ? null
-            : driverUid.trim();
+        updates['driverUid'] =
+            driverUid.trim().isEmpty ? null : driverUid.trim();
       }
       if (driverPhone != null) {
-        updates['driverPhone'] = driverPhone.trim().isEmpty
-            ? null
-            : driverPhone.trim();
+        updates['driverPhone'] =
+            driverPhone.trim().isEmpty ? null : driverPhone.trim();
       }
       if (conductorUid != null) {
-        updates['conductorUid'] = conductorUid.trim().isEmpty
-            ? null
-            : conductorUid.trim();
+        updates['conductorUid'] =
+            conductorUid.trim().isEmpty ? null : conductorUid.trim();
       }
       if (conductorName != null) {
-        updates['conductorName'] = conductorName.trim().isEmpty
-            ? null
-            : conductorName.trim();
+        updates['conductorName'] =
+            conductorName.trim().isEmpty ? null : conductorName.trim();
       }
       if (conductorPhone != null) {
-        updates['conductorPhone'] = conductorPhone.trim().isEmpty
-            ? null
-            : conductorPhone.trim();
+        updates['conductorPhone'] =
+            conductorPhone.trim().isEmpty ? null : conductorPhone.trim();
       }
       await _root.child('busesFleet/$busId').update(updates);
     } catch (error) {
-      print('FirebaseService: Error updating fleet status: $error');
+      debugPrint('FirebaseService: Error updating fleet status: $error');
       rethrow;
     }
   }
@@ -910,7 +1218,7 @@ class FirebaseService {
         '${prefix}Phone': phone,
       });
     } catch (error) {
-      print('FirebaseService: Error updating $role assignment: $error');
+      debugPrint('FirebaseService: Error updating $role assignment: $error');
       rethrow;
     }
   }
@@ -923,7 +1231,7 @@ class FirebaseService {
         return BusFleet.fromMap(value, busId: busId);
       }
     } catch (error) {
-      print('FirebaseService: Error fetching fleet bus: $error');
+      debugPrint('FirebaseService: Error fetching fleet bus: $error');
     }
     return null;
   }

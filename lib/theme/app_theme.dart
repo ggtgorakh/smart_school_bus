@@ -3,6 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../services/session_service.dart';
+
 /// Semantic colors intentionally remain stable so existing business logic and
 /// status widgets keep their meaning. Surfaces/text are resolved from the
 /// active ThemeData so the same UI supports Day and Dark modes.
@@ -66,18 +68,39 @@ class AppColors {
   );
 }
 
+/// App-wide theme controller.
+///
+/// Persistence: the chosen ThemeMode is saved to SessionService so it
+/// survives app restart. On startup, main.dart reads the saved value and
+/// calls [hydrate] before runApp so the first frame already uses the
+/// correct theme (no light→dark flash).
 class ThemeController extends ChangeNotifier {
   ThemeController._();
   static final ThemeController instance = ThemeController._();
 
-  ThemeMode _mode = ThemeMode.light;
+  ThemeMode _mode = ThemeMode.system;
   ThemeMode get mode => _mode;
   bool get isDark => _mode == ThemeMode.dark;
 
+  /// Called once from main.dart with the value read from SessionService.
+  /// Does NOT persist — the value on disk is already what we're setting.
+  void hydrate(ThemeMode mode) {
+    if (_mode == mode) return;
+    _mode = mode;
+    notifyListeners();
+  }
+
+  /// User-initiated theme change. Persists via SessionService so the
+  /// choice survives app restart. The persistence call is fire-and-forget
+  /// — a storage failure must never block a theme change.
   void setMode(ThemeMode mode) {
     if (_mode == mode) return;
     _mode = mode;
     notifyListeners();
+    // Fire-and-forget. SessionService.saveThemeMode is internally
+    // try/catch'd and cannot throw.
+    // ignore: discarded_futures
+    SessionService.instance.saveThemeMode(_mode.index);
   }
 
   void toggle() => setMode(isDark ? ThemeMode.light : ThemeMode.dark);
@@ -95,7 +118,8 @@ class AppTheme {
   static TextTheme _textTheme(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
     final primaryText = isDark ? const Color(0xFFF1F5F9) : AppColors.textMain;
-    final secondaryText = isDark ? const Color(0xFF94A3B8) : AppColors.onSurfaceVariant;
+    final secondaryText =
+        isDark ? const Color(0xFF94A3B8) : AppColors.onSurfaceVariant;
 
     return TextTheme(
       displayLarge: GoogleFonts.sora(
@@ -233,7 +257,8 @@ class AppTheme {
         fillColor: surfaceLow,
         hintStyle: GoogleFonts.inter(color: muted, fontSize: 13),
         labelStyle: GoogleFonts.inter(color: muted, fontSize: 13),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: border),
@@ -272,7 +297,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: dark ? const Color(0xFFD9E7FF) : AppColors.safetyBlue,
+          foregroundColor:
+              dark ? const Color(0xFFD9E7FF) : AppColors.safetyBlue,
           side: BorderSide(
             color: dark ? const Color(0xFF355071) : AppColors.outlineVariant,
           ),
@@ -289,7 +315,8 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: surfaceLow,
-        selectedColor: dark ? const Color(0xFF163A78) : AppColors.primaryContainer,
+        selectedColor:
+            dark ? const Color(0xFF163A78) : AppColors.primaryContainer,
         side: BorderSide(color: border),
         labelStyle: GoogleFonts.inter(
           fontSize: 12,
@@ -307,7 +334,8 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: dark ? const Color(0xFF1E293B) : const Color(0xFF17324D),
+        backgroundColor:
+            dark ? const Color(0xFF1E293B) : const Color(0xFF17324D),
         contentTextStyle: GoogleFonts.inter(color: Colors.white),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
@@ -334,10 +362,10 @@ class AppTheme {
   static ThemeData get darkTheme => _buildTheme(Brightness.dark);
 
   static BoxDecoration panelDecoration(
-      BuildContext context, {
-        double borderRadius = 14,
-        bool elevated = false,
-      }) {
+    BuildContext context, {
+    double borderRadius = 14,
+    bool elevated = false,
+  }) {
     final scheme = Theme.of(context).colorScheme;
     return BoxDecoration(
       color: scheme.surface,
@@ -345,14 +373,16 @@ class AppTheme {
       border: Border.all(color: scheme.outlineVariant),
       boxShadow: elevated
           ? [
-        BoxShadow(
-          color: Colors.black.withValues(
-            alpha: Theme.of(context).brightness == Brightness.dark ? 0.18 : 0.05,
-          ),
-          blurRadius: 14,
-          offset: const Offset(0, 5),
-        ),
-      ]
+              BoxShadow(
+                color: Colors.black.withValues(
+                  alpha: Theme.of(context).brightness == Brightness.dark
+                      ? 0.18
+                      : 0.05,
+                ),
+                blurRadius: 14,
+                offset: const Offset(0, 5),
+              ),
+            ]
           : [],
     );
   }
@@ -417,14 +447,14 @@ extension ResponsiveUtils on BuildContext {
   bool get isMobile => MediaQuery.sizeOf(this).width < 600;
   bool get isTablet =>
       MediaQuery.sizeOf(this).width >= 600 &&
-          MediaQuery.sizeOf(this).width < 1200;
+      MediaQuery.sizeOf(this).width < 1200;
   bool get isDesktop => MediaQuery.sizeOf(this).width >= 1200;
   double get screenWidth => MediaQuery.sizeOf(this).width;
   double get screenHeight => MediaQuery.sizeOf(this).height;
 
   EdgeInsets get screenPadding => EdgeInsets.all(
-    isMobile ? 16 : isTablet ? 24 : 32,
-  );
+        isMobile ? 16 : isTablet ? 24 : 32,
+      );
 
   double get cardSpacing => isMobile ? 8 : 12;
   double get sectionSpacing => isMobile ? 12 : 16;

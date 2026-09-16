@@ -5,6 +5,9 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
+
+import 'location_service.dart';
 
 /// Centralized authentication service managing Firebase Auth sessions,
 /// role fetching from Realtime Database, and secondary-app Admin user provisioning.
@@ -41,17 +44,38 @@ class AuthService {
         password: password.trim(),
       );
     } on FirebaseAuthException catch (e) {
-      print('AuthService: Sign in error: ${e.code} - ${e.message}');
+      debugPrint('AuthService: Sign in error: ${e.code} - ${e.message}');
       rethrow;
     }
   }
 
   /// Sign out the current user.
+  ///
+  /// For a Driver, resolves their assigned bus directly from
+  /// `/users/$uid/busId` before signing out, rather than relying only on
+  /// [LocationService.currentBusId]. That in-memory field is reset if the
+  /// app process was restarted after an active trip.
   Future<void> signOut() async {
     try {
+      try {
+        final uid = currentUid;
+        String? driverBusId;
+        if (uid != null) {
+          final userSnapshot = await _db.child('users/$uid').get();
+          if (userSnapshot.exists && userSnapshot.value is Map) {
+            final userData = userSnapshot.value as Map;
+            if (userData['role']?.toString() == 'Driver') {
+              driverBusId = userData['busId']?.toString();
+            }
+          }
+        }
+        final assignedBusId =
+            driverBusId ?? LocationService.instance.currentBusId;
+        await LocationService.instance.stopTracking(busId: assignedBusId);
+      } catch (_) {}
       await _auth.signOut();
     } catch (error) {
-      print('AuthService: Sign out error: $error');
+      debugPrint('AuthService: Sign out error: $error');
       rethrow;
     }
   }
@@ -65,7 +89,6 @@ class AuthService {
         if (roleVal.isNotEmpty) return roleVal;
       }
 
-      // Check full user record if role was stored inside an object
       final userSnapshot = await _db.child('users/$uid').get();
       if (userSnapshot.exists && userSnapshot.value is Map) {
         final data = Map<dynamic, dynamic>.from(userSnapshot.value as Map);
@@ -75,7 +98,7 @@ class AuthService {
         }
       }
     } catch (error) {
-      print('AuthService: Error fetching role for $uid: $error');
+      debugPrint('AuthService: Error fetching role for $uid: $error');
     }
     return defaultRole;
   }
@@ -89,7 +112,7 @@ class AuthService {
         if (val.isNotEmpty) return val;
       }
     } catch (error) {
-      print('AuthService: Error fetching busId for $uid: $error');
+      debugPrint('AuthService: Error fetching busId for $uid: $error');
     }
     return defaultBusId;
   }
@@ -103,7 +126,7 @@ class AuthService {
       }
       return null;
     } catch (error) {
-      print('AuthService: Error fetching user profile: $error');
+      debugPrint('AuthService: Error fetching user profile: $error');
       return null;
     }
   }
@@ -121,7 +144,7 @@ class AuthService {
       if (name != null) data['name'] = name;
       await _db.child('users/$uid').update(data);
     } catch (error) {
-      print('AuthService: Error setting user role: $error');
+      debugPrint('AuthService: Error setting user role: $error');
     }
   }
 
@@ -175,7 +198,7 @@ class AuthService {
 
       return userCredential;
     } catch (error) {
-      print('AuthService: Error creating user: $error');
+      debugPrint('AuthService: Error creating user: $error');
       rethrow;
     } finally {
       if (secondaryApp != null) {
@@ -189,7 +212,7 @@ class AuthService {
     try {
       await _db.child('users/$uid').update({'name': name.trim()});
     } catch (error) {
-      print('AuthService: Error updating name: $error');
+      debugPrint('AuthService: Error updating name: $error');
       rethrow;
     }
   }
@@ -200,7 +223,7 @@ class AuthService {
         'phone': phone.trim().isEmpty ? null : phone.trim(),
       });
     } catch (error) {
-      print('AuthService: Error updating phone: $error');
+      debugPrint('AuthService: Error updating phone: $error');
       rethrow;
     }
   }
@@ -209,7 +232,7 @@ class AuthService {
     try {
       await _db.child('users/$uid').update({'profileImage': imageData});
     } catch (error) {
-      print('AuthService: Error updating profile image: $error');
+      debugPrint('AuthService: Error updating profile image: $error');
       rethrow;
     }
   }
@@ -231,7 +254,7 @@ class AuthService {
             : emergencyContact?.trim(),
       });
     } catch (error) {
-      print('AuthService: Error updating profile fields: $error');
+      debugPrint('AuthService: Error updating profile fields: $error');
       rethrow;
     }
   }
@@ -250,7 +273,7 @@ class AuthService {
         'busId': busId == null || busId.trim().isEmpty ? null : busId.trim(),
       });
     } catch (error) {
-      print('AuthService: Error updating managed user: $error');
+      debugPrint('AuthService: Error updating managed user: $error');
       rethrow;
     }
   }
@@ -260,7 +283,7 @@ class AuthService {
     try {
       await _auth.sendPasswordResetEmail(email: email.trim());
     } catch (error) {
-      print('AuthService: Error sending password reset: $error');
+      debugPrint('AuthService: Error sending password reset: $error');
       rethrow;
     }
   }
@@ -277,7 +300,7 @@ class AuthService {
       await _db.child('users/$uid').remove();
       await currentUser!.delete();
     } catch (error) {
-      print('AuthService: Error deleting user: $error');
+      debugPrint('AuthService: Error deleting user: $error');
       rethrow;
     }
   }
@@ -292,7 +315,7 @@ class AuthService {
           .get();
       return snapshot.exists && snapshot.value is Map;
     } catch (error) {
-      print('AuthService: Error checking email: $error');
+      debugPrint('AuthService: Error checking email: $error');
       return false;
     }
   }
@@ -316,7 +339,7 @@ class AuthService {
       }
       return users;
     } catch (error) {
-      print('AuthService: Error getting users by role: $error');
+      debugPrint('AuthService: Error getting users by role: $error');
       return [];
     }
   }

@@ -18,7 +18,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   String _filterType = 'all';
-  bool _isLoading = false;
 
   final List<Map<String, String>> _filterOptions = [
     {'key': 'all', 'label': 'All', 'icon': '📋'},
@@ -128,7 +127,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 valueListenable: _service.notifications,
                 builder: (context, items, _) {
                   final filteredItems = _filterNotifications(items);
-                  final unreadCount = items.where((n) => !n.isRead).length;
 
                   if (items.isEmpty) {
                     return _buildEmptyState(context);
@@ -158,7 +156,11 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                             } catch (error) {
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Could not update notification: $error')),
+                                SnackBar(
+                                  content: Text(
+                                    'Could not update notification: $error',
+                                  ),
+                                ),
                               );
                             }
                           },
@@ -168,7 +170,11 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                             } catch (error) {
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Could not delete notification: $error')),
+                                SnackBar(
+                                  content: Text(
+                                    'Could not delete notification: $error',
+                                  ),
+                                ),
                               );
                             }
                           },
@@ -234,7 +240,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         ],
       ),
       actions: [
-        // Unread count badge
         ValueListenableBuilder<List<AppNotification>>(
           valueListenable: _service.notifications,
           builder: (context, items, _) {
@@ -321,7 +326,8 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                     _filterType = filter['key'] ?? 'all';
                   });
                 },
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                backgroundColor:
+                    Theme.of(context).colorScheme.surfaceContainerLow,
                 selectedColor: AppColors.safetyBlue.withValues(alpha: 0.12),
                 labelStyle: TextStyle(
                   color: isSelected
@@ -434,7 +440,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           ),
           const SizedBox(height: 16),
           Text(
-            'No ${_filterType} notifications',
+            'No $_filterType notifications',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.bold,
             ),
@@ -466,9 +472,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   // ============================================================
 
   Future<void> _refreshNotifications() async {
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    setState(() => _isLoading = false);
+    // Notifications are streamed from Firebase; nothing to re-fetch here.
+    // Small delay so the spinner is visible to the user.
+    await Future.delayed(const Duration(milliseconds: 400));
   }
 
   // ============================================================
@@ -483,13 +489,13 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           borderRadius: BorderRadius.circular(16),
         ),
         title: Row(
-          children: [
-            const Icon(
+          children: const [
+            Icon(
               Icons.delete_outline_rounded,
               color: AppColors.errorRed,
             ),
-            const SizedBox(width: 8),
-            const Text('Clear all notifications?'),
+            SizedBox(width: 8),
+            Text('Clear all notifications?'),
           ],
         ),
         content: const Text(
@@ -567,14 +573,14 @@ class _NotificationCard extends StatelessWidget {
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
+            children: const [
+              Icon(
                 Icons.delete_outline_rounded,
                 color: Colors.white,
                 size: 28,
               ),
-              const SizedBox(height: 4),
-              const Text(
+              SizedBox(height: 4),
+              Text(
                 'Delete',
                 style: TextStyle(
                   color: Colors.white,
@@ -621,7 +627,8 @@ class _NotificationCard extends StatelessWidget {
                       )
                     else
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.1 : 0.04),
+                        color: Colors.black
+                            .withValues(alpha: isDark ? 0.1 : 0.04),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -630,7 +637,6 @@ class _NotificationCard extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Icon
                     Container(
                       width: 44,
                       height: 44,
@@ -639,7 +645,8 @@ class _NotificationCard extends StatelessWidget {
                         shape: BoxShape.circle,
                         border: isEmergency
                             ? Border.all(
-                                color: AppColors.errorRed.withValues(alpha: 0.2),
+                                color:
+                                    AppColors.errorRed.withValues(alpha: 0.2),
                               )
                             : null,
                       ),
@@ -650,13 +657,10 @@ class _NotificationCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 14),
-
-                    // Content
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Title Row
                           Row(
                             children: [
                               Expanded(
@@ -670,13 +674,9 @@ class _NotificationCard extends StatelessWidget {
                                             ? FontWeight.w500
                                             : FontWeight.bold,
                                         fontSize: 14,
-                                        color: notification.isRead
-                                            ? Theme.of(context)
-                                                .colorScheme
-                                                .onSurface
-                                            : Theme.of(context)
-                                                .colorScheme
-                                                .onSurface,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
                                       ),
                                 ),
                               ),
@@ -704,8 +704,6 @@ class _NotificationCard extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 6),
-
-                          // Message
                           Text(
                             notification.message,
                             style: Theme.of(context)
@@ -720,21 +718,17 @@ class _NotificationCard extends StatelessWidget {
                                 ),
                           ),
                           const SizedBox(height: 8),
-
-                          // Metadata Chips
                           Wrap(
                             spacing: 8,
                             runSpacing: 4,
                             children: [
-                              _buildChip(
-                                context,
-                                kindLabel,
-                                color,
-                              ),
+                              _buildChip(context, kindLabel, color),
                               _buildChip(
                                 context,
                                 notification.relativeTime,
-                                Theme.of(context).colorScheme.onSurfaceVariant,
+                                Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                                 icon: Icons.schedule_rounded,
                               ),
                               if (notification.busId != null)
@@ -802,11 +796,7 @@ class _NotificationCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(
-              icon,
-              size: 11,
-              color: color,
-            ),
+            Icon(icon, size: 11, color: color),
             const SizedBox(width: 3),
           ],
           Text(

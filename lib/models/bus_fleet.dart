@@ -28,7 +28,17 @@ class BusFleet {
   final String? conductorUid;
   final String? conductorName;
   final String? conductorPhone;
+
+  /// Human-readable route name (e.g. "Route 7A - Morning Run"). Kept for
+  /// display even when [routeId] is null (legacy records).
   final String routeName;
+
+  /// Stable route identifier pointing at /routes/{routeId}. Null when the
+  /// bus has no route assigned. Used by LiveTrackingScreen to load that
+  /// route's stops, and by TripWorkflowScreen to derive the route without
+  /// asking the driver to type one.
+  final String? routeId;
+
   final String estArrival;
   final FleetStatus status;
   final int speedMph;
@@ -43,6 +53,7 @@ class BusFleet {
     this.conductorName,
     this.conductorPhone,
     required this.routeName,
+    this.routeId,
     required this.estArrival,
     required this.status,
     required this.speedMph,
@@ -121,6 +132,7 @@ class BusFleet {
     String? conductorName,
     String? conductorPhone,
     String? routeName,
+    String? routeId,
     String? estArrival,
     FleetStatus? status,
     int? speedMph,
@@ -135,6 +147,7 @@ class BusFleet {
       conductorName: conductorName ?? this.conductorName,
       conductorPhone: conductorPhone ?? this.conductorPhone,
       routeName: routeName ?? this.routeName,
+      routeId: routeId ?? this.routeId,
       estArrival: estArrival ?? this.estArrival,
       status: status ?? this.status,
       speedMph: speedMph ?? this.speedMph,
@@ -158,6 +171,8 @@ class BusFleet {
       if (conductorPhone != null && conductorPhone!.trim().isNotEmpty)
         'conductorPhone': conductorPhone!.trim(),
       'routeName': routeName,
+      if (routeId != null && routeId!.trim().isNotEmpty)
+        'routeId': routeId!.trim(),
       'estArrival': estArrival,
       'status': status.name,
       'speedMph': speedMph,
@@ -178,6 +193,7 @@ class BusFleet {
       conductorName: map['conductorName']?.toString(),
       conductorPhone: map['conductorPhone']?.toString(),
       routeName: map['routeName']?.toString() ?? 'No route assigned',
+      routeId: map['routeId']?.toString(),
       estArrival: map['estArrival']?.toString() ?? '--',
       status: fleetStatusFromString(map['status']?.toString()),
       speedMph: (map['speedMph'] is num) ? (map['speedMph'] as num).toInt() : 0,

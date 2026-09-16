@@ -8,6 +8,7 @@ import '../models/bus_fleet.dart';
 import '../models/app_notification.dart';
 import '../services/firebase_service.dart';
 import '../services/notification_service.dart';
+import '../services/device_class_guard.dart';
 import '../widgets/kpi_card.dart';
 import 'admin/create_user_screen.dart';
 import 'admin/manage_students_screen.dart';
@@ -33,11 +34,11 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
-  // Live fleet data, streamed from Firebase (/busesFleet/{busId}) — no more
-  // hardcoded demo buses. Starts empty while the first snapshot loads.
   List<BusFleet> _fleetList = [];
   bool _fleetLoading = true;
   StreamSubscription<List<BusFleet>>? _fleetSubscription;
+
+  bool get _laptop => isLaptopActionAllowed();
 
   @override
   void initState() {
@@ -59,8 +60,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
         );
     _animationController.forward();
 
-    // Make sure bus_01..bus_10 exist in Firebase (idle, no-op if already
-    // present), then subscribe to live fleet updates.
     FirebaseService.instance.ensureTenBusesExist();
     _fleetSubscription = FirebaseService.instance.streamFleet().listen((buses) {
       if (!mounted) return;
@@ -81,21 +80,15 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
 
   List<BusFleet> get _filteredFleet {
     var filtered = _fleetList;
-
-    // Apply search filter
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase().trim();
       filtered = filtered
-          .where(
-            (bus) =>
-                bus.busId.toLowerCase().contains(query) ||
-                bus.driverName.toLowerCase().contains(query) ||
-                bus.routeName.toLowerCase().contains(query),
-          )
+          .where((bus) =>
+              bus.busId.toLowerCase().contains(query) ||
+              bus.driverName.toLowerCase().contains(query) ||
+              bus.routeName.toLowerCase().contains(query))
           .toList();
     }
-
-    // Apply status filter
     if (_filterStatus != 'all') {
       filtered = filtered.where((bus) {
         final statusMap = {
@@ -106,7 +99,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
         return bus.status == statusMap[_filterStatus];
       }).toList();
     }
-
     return filtered;
   }
 
@@ -133,15 +125,12 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
           child: SafeArea(
             child: CustomScrollView(
               slivers: [
-                // Header
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.all(isMobile ? 16 : 20),
                     child: _buildHeader(context),
                   ),
                 ),
-
-                // KPI Section
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.symmetric(
@@ -150,8 +139,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                     child: _buildKpiSection(context),
                   ),
                 ),
-
-                // Fleet List Header
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.fromLTRB(
@@ -163,14 +150,13 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                     child: _buildListHeader(context),
                   ),
                 ),
-
-                // Fleet List
                 SliverPadding(
                   padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 20),
                   sliver: _buildFleetList(filteredFleet),
                 ),
-
-                SliverToBoxAdapter(child: SizedBox(height: isMobile ? 80 : 20)),
+                SliverToBoxAdapter(
+                  child: SizedBox(height: isMobile ? 80 : 20),
+                ),
               ],
             ),
           ),
@@ -179,12 +165,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
     );
   }
 
-  // ============================================================
-  // HEADER
-  // ============================================================
-
   Widget _buildHeader(BuildContext context) {
     final isMobile = context.isMobile;
+    final laptop = _laptop;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,12 +194,13 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                   Text(
                     'Fleet Overview',
                     style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontSize: isMobile ? 20 : 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontSize: isMobile ? 20 : 24,
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   Text(
-                    '${_fleetList.length} vehicles • ${_fleetList.where((b) => b.status == FleetStatus.onRoute).length} active',
+                    '${_fleetList.length} vehicles • '
+                    '${_fleetList.where((b) => b.status == FleetStatus.onRoute).length} active',
                     style: TextStyle(
                       fontSize: 13,
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -227,62 +211,117 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
             ),
           ],
         ),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildActionButton(
-              context,
-              icon: Icons.person_add_rounded,
-              label: 'Add User',
-              onTap: () => Navigator.push(
+        if (laptop) ...[
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildActionButton(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const AdminCreateUserScreen(),
+                icon: Icons.person_add_rounded,
+                label: 'Add User',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AdminCreateUserScreen(),
+                  ),
                 ),
               ),
-            ),
-            _buildActionButton(
-              context,
-              icon: Icons.groups_rounded,
-              label: 'People & Assignments',
-              onTap: () => Navigator.push(
+              _buildActionButton(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => const AdminOperationsScreen(),
+                icon: Icons.groups_rounded,
+                label: 'People & Assignments',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AdminOperationsScreen(),
+                  ),
                 ),
               ),
-            ),
-            _buildActionButton(
-              context,
-              icon: Icons.child_care_rounded,
-              label: 'Students',
-              onTap: () => Navigator.push(
+              _buildActionButton(
                 context,
-                MaterialPageRoute(builder: (_) => const ManageStudentsScreen()),
+                icon: Icons.child_care_rounded,
+                label: 'Students',
+                onTap: () => _openManageStudents(context),
               ),
-            ),
-            _buildActionButton(
-              context,
-              icon: Icons.upload_file_rounded,
-              label: 'Import Roster',
-              onTap: () => Navigator.push(
+              _buildActionButton(
                 context,
-                MaterialPageRoute(builder: (_) => const ImportRosterScreen()),
+                icon: Icons.upload_file_rounded,
+                label: 'Import Roster',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const ImportRosterScreen(),
+                  ),
+                ),
               ),
-            ),
-            _buildActionButton(
-              context,
-              icon: Icons.add_rounded,
-              label: 'Dispatch',
-              onTap: () => _openDispatchModal(context),
-              isPrimary: true,
-            ),
-          ],
-        ),
+              _buildActionButton(
+                context,
+                icon: Icons.add_rounded,
+                label: 'Dispatch',
+                onTap: () => _openDispatchModal(context),
+                isPrimary: true,
+              ),
+            ],
+          ),
+        ],
       ],
     );
+  }
+
+  Future<void> _openManageStudents(BuildContext context) async {
+    final buses = await FirebaseService.instance.streamFleet().first;
+    if (!context.mounted) return;
+    if (buses.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No buses found in the fleet yet.')),
+      );
+      return;
+    }
+    if (buses.length == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ManageStudentsScreen(busId: buses.first.busId),
+        ),
+      );
+      return;
+    }
+    final selectedBusId = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Select a bus',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+              ),
+              for (final bus in buses)
+                ListTile(
+                  leading: const Icon(Icons.directions_bus_rounded),
+                  title: Text(bus.busId.toUpperCase()),
+                  subtitle: Text(bus.routeName),
+                  onTap: () => Navigator.pop(sheetContext, bus.busId),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selectedBusId != null && context.mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ManageStudentsScreen(busId: selectedBusId),
+        ),
+      );
+    }
   }
 
   Widget _buildActionButton(
@@ -311,7 +350,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
         ),
       );
     }
-
     return OutlinedButton.icon(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
@@ -328,28 +366,19 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
     );
   }
 
-  // ============================================================
-  // KPI SECTION
-  // ============================================================
-
   Widget _buildKpiSection(BuildContext context) {
     final isMobile = context.isMobile;
-    final activeBuses = _fleetList
-        .where((b) => b.status == FleetStatus.onRoute)
-        .length;
-    final delayedBuses = _fleetList
-        .where((b) => b.status == FleetStatus.delayed)
-        .length;
-    final maintenanceBuses = _fleetList
-        .where((b) => b.status == FleetStatus.maintenance)
-        .length;
+    final activeBuses =
+        _fleetList.where((b) => b.status == FleetStatus.onRoute).length;
+    final delayedBuses =
+        _fleetList.where((b) => b.status == FleetStatus.delayed).length;
+    final maintenanceBuses =
+        _fleetList.where((b) => b.status == FleetStatus.maintenance).length;
     final averageFuel = _fleetList.isEmpty
         ? 0
-        : (_fleetList
-                      .map((bus) => bus.fuelPercent)
-                      .reduce((a, b) => a + b) /
-                  _fleetList.length)
-              .round();
+        : (_fleetList.map((bus) => bus.fuelPercent).reduce((a, b) => a + b) /
+                _fleetList.length)
+            .round();
 
     return GridView.count(
       shrinkWrap: true,
@@ -389,7 +418,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
           icon: Icons.build_rounded,
           iconBgColor: AppColors.errorContainer,
           iconColor: Colors.white,
-          badgeText: '${maintenanceBuses > 0 ? '2 Critical' : 'All Good'}',
+          badgeText: maintenanceBuses > 0 ? 'Needs review' : 'All Good',
           badgeBgColor: maintenanceBuses > 0
               ? AppColors.alertOrange.withValues(alpha: 0.12)
               : AppColors.successGreen.withValues(alpha: 0.12),
@@ -417,10 +446,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
     );
   }
 
-  // ============================================================
-  // LIST HEADER
-  // ============================================================
-
   Widget _buildListHeader(BuildContext context) {
     return Row(
       children: [
@@ -431,9 +456,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
               Text(
                 'Live Telemetry',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
               ),
               Text(
                 '${_filteredFleet.length} vehicles match your filters',
@@ -447,7 +472,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
         ),
         Row(
           children: [
-            // View toggle
             IconButton(
               onPressed: () => setState(() => _isGridView = !_isGridView),
               icon: Icon(
@@ -456,7 +480,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
               ),
               tooltip: _isGridView ? 'List View' : 'Grid View',
             ),
-            // Filter button
             PopupMenuButton<String>(
               icon: Icon(
                 Icons.filter_list_rounded,
@@ -481,10 +504,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
       ],
     );
   }
-
-  // ============================================================
-  // FLEET LIST
-  // ============================================================
 
   Widget _buildFleetList(List<BusFleet> filteredFleet) {
     if (filteredFleet.isEmpty) {
@@ -521,7 +540,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
         ),
       );
     }
-
     if (_isGridView) {
       return SliverPadding(
         padding: const EdgeInsets.only(bottom: 8),
@@ -539,7 +557,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
         ),
       );
     }
-
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
         final bus = filteredFleet[index];
@@ -553,13 +570,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
     );
   }
 
-  // ============================================================
-  // FLEET CARD (List View)
-  // ============================================================
-
   Widget _buildFleetCard(BusFleet bus) {
     final statusInfo = _getStatusInfo(bus.status);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final laptop = _laptop;
 
     return Material(
       color: Colors.transparent,
@@ -572,9 +586,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: Theme.of(
-                context,
-              ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+              color: Theme.of(context)
+                  .colorScheme
+                  .outlineVariant
+                  .withValues(alpha: 0.3),
             ),
             boxShadow: [
               BoxShadow(
@@ -586,7 +601,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
           ),
           child: Row(
             children: [
-              // Bus Icon
               Container(
                 width: 48,
                 height: 48,
@@ -601,8 +615,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                 ),
               ),
               const SizedBox(width: 14),
-
-              // Bus Info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -678,8 +690,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                   ],
                 ),
               ),
-
-              // Telemetry
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -728,29 +738,24 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                   ),
                 ],
               ),
-
-              const SizedBox(width: 8),
-
-              // Actions
-              IconButton(
-                icon: const Icon(
-                  Icons.chat_bubble_outline_rounded,
-                  size: 20,
-                  color: AppColors.safetyBlue,
+              if (laptop) ...[
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    size: 20,
+                    color: AppColors.safetyBlue,
+                  ),
+                  onPressed: () => _openDriverChat(bus),
+                  tooltip: 'Message Driver',
                 ),
-                onPressed: () => _openDriverChat(bus),
-                tooltip: 'Message Driver',
-              ),
+              ],
             ],
           ),
         ),
       ),
     );
   }
-
-  // ============================================================
-  // GRID CARD
-  // ============================================================
 
   Widget _buildGridCard(BusFleet bus) {
     final statusInfo = _getStatusInfo(bus.status);
@@ -767,9 +772,10 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: Theme.of(
-                context,
-              ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+              color: Theme.of(context)
+                  .colorScheme
+                  .outlineVariant
+                  .withValues(alpha: 0.3),
             ),
             boxShadow: [
               BoxShadow(
@@ -782,7 +788,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
               Row(
                 children: [
                   Container(
@@ -808,22 +813,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                       ),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.chat_bubble_outline_rounded,
-                      size: 16,
-                      color: AppColors.safetyBlue,
-                    ),
-                    onPressed: () => _openDriverChat(bus),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    tooltip: 'Message Driver',
-                  ),
                 ],
               ),
               const SizedBox(height: 8),
-
-              // Driver & Route
               Text(
                 bus.driverName,
                 style: TextStyle(
@@ -841,10 +833,7 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-
               const Spacer(),
-
-              // Status & Telemetry
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -897,28 +886,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                       ),
                     ],
                   ),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.local_gas_station_rounded,
-                        size: 12,
-                        color: bus.fuelPercent < 20
-                            ? AppColors.errorRed
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 2),
-                      Text(
-                        '${bus.fuelPercent}%',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: bus.fuelPercent < 20
-                              ? AppColors.errorRed
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ],
@@ -927,10 +894,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
       ),
     );
   }
-
-  // ============================================================
-  // STATUS INFO HELPER
-  // ============================================================
 
   ({Color color, IconData icon, String label}) _getStatusInfo(
     FleetStatus status,
@@ -963,14 +926,11 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
     }
   }
 
-  // ============================================================
-  // BUS DETAIL SHEET
-  // ============================================================
-
   void _openBusDetailSheet(
     BusFleet bus,
     ({Color color, IconData icon, String label}) statusInfo,
   ) {
+    final laptop = _laptop;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -990,7 +950,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Drag Handle
             Center(
               child: Container(
                 width: 40,
@@ -1002,8 +961,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
               ),
             ),
             const SizedBox(height: 16),
-
-            // Bus Header
             Row(
               children: [
                 Container(
@@ -1037,34 +994,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 13,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusInfo.color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: statusInfo.color.withValues(alpha: 0.2),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(statusInfo.icon, size: 14, color: statusInfo.color),
-                      const SizedBox(width: 4),
-                      Text(
-                        statusInfo.label,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: statusInfo.color,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -1073,74 +1004,79 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
               ],
             ),
             const SizedBox(height: 20),
-
-            // Detail Grid
             Row(
               children: [
-                _buildDetailItem(
-                  icon: Icons.person_outline_rounded,
-                  label: 'Driver',
-                  value: bus.driverName,
+                Expanded(
+                  child: _buildDetailItem(
+                    icon: Icons.person_outline_rounded,
+                    label: 'Driver',
+                    value: bus.driverName,
+                  ),
                 ),
                 const SizedBox(width: 12),
-                _buildDetailItem(
-                  icon: Icons.schedule_rounded,
-                  label: 'Est. Arrival',
-                  value: bus.estArrival,
+                Expanded(
+                  child: _buildDetailItem(
+                    icon: Icons.schedule_rounded,
+                    label: 'Est. Arrival',
+                    value: bus.estArrival,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
             Row(
               children: [
-                _buildDetailItem(
-                  icon: Icons.speed_rounded,
-                  label: 'Speed',
-                  value: '${bus.speedMph} mph',
+                Expanded(
+                  child: _buildDetailItem(
+                    icon: Icons.speed_rounded,
+                    label: 'Speed',
+                    value: '${bus.speedMph} mph',
+                  ),
                 ),
                 const SizedBox(width: 12),
-                _buildDetailItem(
-                  icon: Icons.local_gas_station_rounded,
-                  label: 'Fuel',
-                  value: '${bus.fuelPercent}%',
-                  valueColor: bus.fuelPercent < 20 ? AppColors.errorRed : null,
+                Expanded(
+                  child: _buildDetailItem(
+                    icon: Icons.local_gas_station_rounded,
+                    label: 'Fuel',
+                    value: '${bus.fuelPercent}%',
+                    valueColor:
+                        bus.fuelPercent < 20 ? AppColors.errorRed : null,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 20),
-
-            // Actions
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.of(ctx).pop();
-                      _openDriverChat(bus);
-                    },
-                    icon: const Icon(
-                      Icons.chat_bubble_outline_rounded,
-                      size: 18,
-                    ),
-                    label: const Text('Message'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.safetyBlue,
-                      side: const BorderSide(
-                        color: AppColors.safetyBlue,
-                        width: 1.3,
+                if (laptop)
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        _openDriverChat(bus);
+                      },
+                      icon: const Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        size: 18,
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                      label: const Text('Message'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.safetyBlue,
+                        side: const BorderSide(
+                          color: AppColors.safetyBlue,
+                          width: 1.3,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
+                if (laptop) const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed:
-                        bus.driverPhone == null ||
+                    onPressed: bus.driverPhone == null ||
                             bus.driverPhone!.trim().isEmpty
                         ? null
                         : () => _callDriver(bus),
@@ -1208,66 +1144,57 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
     required String value,
     Color? valueColor,
   }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                  Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color:
-                          valueColor ?? Theme.of(context).colorScheme.onSurface,
-                    ),
+                ),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: valueColor ??
+                        Theme.of(context).colorScheme.onSurface,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  // ============================================================
-  // DISPATCH MODAL
-  // ============================================================
-
   void _openDispatchModal(BuildContext context) {
-    // Only buses that are actually idle in Firebase can be dispatched as a
-    // replacement — no more fake BUS-901/BUS-804 standby reserves.
-    final idleBuses = _fleetList
-        .where((b) => b.status == FleetStatus.idle)
-        .toList();
+    if (!_laptop) return;
+    final idleBuses =
+        _fleetList.where((b) => b.status == FleetStatus.idle).toList();
     final activeRoutes = _fleetList
-        .where(
-          (b) => b.routeName.isNotEmpty && b.routeName != 'No route assigned',
-        )
+        .where((b) =>
+            b.routeName.isNotEmpty && b.routeName != 'No route assigned')
         .map((b) => b.routeName)
         .toSet()
         .toList();
@@ -1313,7 +1240,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Drag Handle
                 Center(
                   child: Container(
                     width: 40,
@@ -1325,8 +1251,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Header
                 Row(
                   children: [
                     Container(
@@ -1345,7 +1269,9 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                     Expanded(
                       child: Text(
                         'Dispatch Replacement Vehicle',
-                        style: Theme.of(context).textTheme.headlineSmall
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
                             ?.copyWith(
                               fontSize: 17,
                               fontWeight: FontWeight.bold,
@@ -1355,8 +1281,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // Route Select
                 const Text(
                   'Target Route:',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -1374,16 +1298,13 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                       borderRadius: BorderRadius.circular(10),
                     ),
                     filled: true,
-                    fillColor: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerLow,
+                    fillColor:
+                        Theme.of(context).colorScheme.surfaceContainerLow,
                   ),
                   style: const TextStyle(fontSize: 13),
                   onChanged: (val) => selectedRoute = val,
                 ),
                 const SizedBox(height: 14),
-
-                // Bus Select — only real idle buses from Firebase
                 const Text(
                   'Assign Idle Bus:',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -1400,9 +1321,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                       borderRadius: BorderRadius.circular(10),
                     ),
                     filled: true,
-                    fillColor: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerLow,
+                    fillColor:
+                        Theme.of(context).colorScheme.surfaceContainerLow,
                   ),
                   items: idleBuses
                       .map(
@@ -1420,8 +1340,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                   },
                 ),
                 const SizedBox(height: 14),
-
-                // Driver name
                 const Text(
                   'Driver Name:',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -1439,9 +1357,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                       borderRadius: BorderRadius.circular(10),
                     ),
                     filled: true,
-                    fillColor: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerLow,
+                    fillColor:
+                        Theme.of(context).colorScheme.surfaceContainerLow,
                   ),
                   style: const TextStyle(fontSize: 13),
                 ),
@@ -1463,9 +1380,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                       borderRadius: BorderRadius.circular(10),
                     ),
                     filled: true,
-                    fillColor: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerLow,
+                    fillColor:
+                        Theme.of(context).colorScheme.surfaceContainerLow,
                   ),
                   style: const TextStyle(fontSize: 13),
                 ),
@@ -1488,15 +1404,12 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                       borderRadius: BorderRadius.circular(10),
                     ),
                     filled: true,
-                    fillColor: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerLow,
+                    fillColor:
+                        Theme.of(context).colorScheme.surfaceContainerLow,
                   ),
                   style: const TextStyle(fontSize: 13),
                 ),
                 const SizedBox(height: 20),
-
-                // Confirm Button
                 SizedBox(
                   width: double.infinity,
                   height: 48,
@@ -1509,7 +1422,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                       final driver = driverController.text.trim().isEmpty
                           ? 'Unassigned'
                           : driverController.text.trim();
-
                       try {
                         await FirebaseService.instance.updateFleetStatus(
                           busId,
@@ -1532,9 +1444,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                         }
                         return;
                       }
-
-                      // The fleet stream will reflect the change automatically;
-                      // no local list mutation needed.
                       NotificationService.instance.add(
                         kind: NotificationKind.info,
                         title: 'Replacement Bus Dispatched',
@@ -1590,11 +1499,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
     );
   }
 
-  // ============================================================
-  // DRIVER CHAT
-  // ============================================================
-
   void _openDriverChat(BusFleet bus) {
+    if (!_laptop) return;
     final textController = TextEditingController();
 
     showModalBottomSheet(
@@ -1616,7 +1522,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Drag Handle
             Center(
               child: Container(
                 width: 40,
@@ -1628,8 +1533,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
               ),
             ),
             const SizedBox(height: 16),
-
-            // Header
             Row(
               children: [
                 Container(
@@ -1661,7 +1564,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                         '${bus.busId} • ${bus.routeName}',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -1670,8 +1574,6 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
               ],
             ),
             const SizedBox(height: 16),
-
-            // Quick Messages
             const Text(
               'Quick Dispatch Messages:',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
@@ -1680,39 +1582,35 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children:
-                  [
-                    'Hold at next stop',
-                    'Traffic detour ahead',
-                    'Confirm student manifest',
-                    'Return to depot',
-                  ].map((msg) {
-                    return ActionChip(
-                      label: Text(msg, style: const TextStyle(fontSize: 12)),
-                      onPressed: () {
-                        Navigator.of(ctx).pop();
-                        NotificationService.instance.add(
-                          kind: NotificationKind.info,
-                          title: 'Dispatch Msg sent to ${bus.driverName}',
-                          message: '"$msg" (${bus.busId})',
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Sent: "$msg" to ${bus.driverName}'),
-                            backgroundColor: AppColors.safetyBlue,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                      backgroundColor: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerLow,
+              children: [
+                'Hold at next stop',
+                'Traffic detour ahead',
+                'Confirm student manifest',
+                'Return to depot',
+              ].map((msg) {
+                return ActionChip(
+                  label: Text(msg, style: const TextStyle(fontSize: 12)),
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    NotificationService.instance.add(
+                      kind: NotificationKind.info,
+                      title: 'Dispatch Msg sent to ${bus.driverName}',
+                      message: '"$msg" (${bus.busId})',
                     );
-                  }).toList(),
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Sent: "$msg" to ${bus.driverName}'),
+                        backgroundColor: AppColors.safetyBlue,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  },
+                  backgroundColor:
+                      Theme.of(context).colorScheme.surfaceContainerLow,
+                );
+              }).toList(),
             ),
             const SizedBox(height: 14),
-
-            // Custom Message
             Row(
               children: [
                 Expanded(
@@ -1728,9 +1626,8 @@ class _FleetManagementScreenState extends State<FleetManagementScreen>
                         borderRadius: BorderRadius.circular(10),
                       ),
                       filled: true,
-                      fillColor: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerLow,
+                      fillColor:
+                          Theme.of(context).colorScheme.surfaceContainerLow,
                     ),
                     onSubmitted: (_) =>
                         _sendCustomMessage(textController.text, bus, ctx),

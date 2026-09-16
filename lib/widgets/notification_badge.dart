@@ -38,7 +38,10 @@ class _NotificationBadgeState extends State<NotificationBadge>
       curve: Curves.easeInOut,
     ));
 
-    _pulseController.repeat(reverse: true);
+    // Pulse is started lazily from build() only when unread > 0.
+    // Starting it here unconditionally would keep the animation running
+    // forever even with no badge, above MainNavigationShell's TickerMode
+    // boundary — meaning every tab in the app would keep ticking.
   }
 
   @override
@@ -55,11 +58,19 @@ class _NotificationBadgeState extends State<NotificationBadge>
         final unreadCount = items.where((n) => !n.isRead).length;
         final hasUnread = unreadCount > 0;
 
+        // Start / stop the pulse based on badge visibility.
+        if (hasUnread && !_pulseController.isAnimating) {
+          _pulseController.repeat(reverse: true);
+        } else if (!hasUnread && _pulseController.isAnimating) {
+          _pulseController.stop();
+        }
+
         return Stack(
           children: [
             // Icon Button with Animation
             IconButton(
-              tooltip: 'Notifications${hasUnread ? ' ($unreadCount new)' : ''}',
+              tooltip:
+                  'Notifications${hasUnread ? ' ($unreadCount new)' : ''}',
               onPressed: widget.onTap,
               icon: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
@@ -95,7 +106,10 @@ class _NotificationBadgeState extends State<NotificationBadge>
                       scale: _pulseAnimation.value,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
-                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
+                        ),
                         decoration: BoxDecoration(
                           gradient: AppTheme.dangerGradient,
                           borderRadius: BorderRadius.circular(9),
@@ -105,7 +119,8 @@ class _NotificationBadgeState extends State<NotificationBadge>
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: AppColors.errorRed.withValues(alpha: 0.3),
+                              color:
+                                  AppColors.errorRed.withValues(alpha: 0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),

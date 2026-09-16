@@ -87,8 +87,6 @@ class _PeopleDirectoryScreenState extends State<PeopleDirectoryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -108,7 +106,7 @@ class _PeopleDirectoryScreenState extends State<PeopleDirectoryScreen>
           labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
           unselectedLabelStyle: const TextStyle(fontSize: 12),
           tabs: const [
-            Tab(text: '👨‍👩‍👦 Parents'),
+            Tab(text: '👨👩👦 Parents'),
             Tab(text: '🚌 Drivers'),
             Tab(text: '📋 Conductors'),
             Tab(text: '👶 Children'),
@@ -121,9 +119,7 @@ class _PeopleDirectoryScreenState extends State<PeopleDirectoryScreen>
           position: _slideAnimation,
           child: Column(
             children: [
-              // Search Bar
               _buildSearchBar(),
-              // Tab Bar View
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
@@ -168,7 +164,10 @@ class _PeopleDirectoryScreenState extends State<PeopleDirectoryScreen>
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
+                .withValues(alpha: 0.3),
           ),
         ),
       ),
@@ -388,7 +387,6 @@ class _UserCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Avatar
             Container(
               width: 48,
               height: 48,
@@ -399,8 +397,6 @@ class _UserCard extends StatelessWidget {
               child: Icon(icon, color: color, size: 24),
             ),
             const SizedBox(width: 12),
-
-            // User Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,8 +469,6 @@ class _UserCard extends StatelessWidget {
                 ],
               ),
             ),
-
-            // UID Badge
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
@@ -517,17 +511,6 @@ class _ChildrenList extends StatelessWidget {
     required this.busId,
     required this.searchQuery,
   });
-
-  Color _statusColor(StudentStatus status) {
-    switch (status) {
-      case StudentStatus.boarded:
-        return AppColors.successGreen;
-      case StudentStatus.alert:
-        return AppColors.errorRed;
-      case StudentStatus.pending:
-        return AppColors.alertOrange;
-    }
-  }
 
   List<Student> _filterStudents(List<Student> students) {
     if (searchQuery.isEmpty) return students;
@@ -633,7 +616,9 @@ class _ChildrenList extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final student = filteredStudents[index];
                     return Padding(
-                      padding: EdgeInsets.only(bottom: index < filteredStudents.length - 1 ? 10 : 0),
+                      padding: EdgeInsets.only(
+                        bottom: index < filteredStudents.length - 1 ? 10 : 0,
+                      ),
                       child: _ChildCard(
                         student: student,
                         index: index,
@@ -691,7 +676,6 @@ class _ChildCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Avatar
             CircleAvatar(
               radius: 24,
               backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
@@ -707,8 +691,6 @@ class _ChildCard extends StatelessWidget {
                   : null,
             ),
             const SizedBox(width: 12),
-
-            // Student Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -732,7 +714,6 @@ class _ChildCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      // Status Badge
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
@@ -752,7 +733,6 @@ class _ChildCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Parent Link Badge
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
@@ -791,8 +771,6 @@ class _ChildCard extends StatelessWidget {
                 ],
               ),
             ),
-
-            // Student ID
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(

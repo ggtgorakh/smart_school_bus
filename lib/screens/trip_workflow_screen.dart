@@ -1,8 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
+import '../models/bus_fleet.dart';
 import '../models/trip.dart';
 import '../services/firebase_service.dart';
+import '../services/location_service.dart';
 import '../theme/app_theme.dart';
+import 'emergency_sos_sheet.dart';
 
 class TripWorkflowScreen extends StatefulWidget {
   final String busId;
@@ -19,27 +23,39 @@ class TripWorkflowScreen extends StatefulWidget {
 }
 
 class _TripWorkflowScreenState extends State<TripWorkflowScreen> {
-  final _routeIdController = TextEditingController();
   bool _isSaving = false;
+  bool _isTransitioning = false;
+  Trip? _openTrip;
 
   @override
-  void dispose() {
-    _routeIdController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _checkActiveTripTracking();
   }
 
-  Future<void> _createTrip() async {
-    final routeId = _routeIdController.text.trim();
+  Future<void> _checkActiveTripTracking() async {
+    if (widget.role != 'Driver') return;
+    try {
+      final trip =
+          await FirebaseService.instance.streamActiveTrip(widget.busId).first;
+      if (trip != null &&
+          trip.status == TripStatus.active &&
+          !LocationService.instance.isTracking) {
+        await LocationService.instance.startTracking(trip.busId);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _createTrip(String routeId) async {
     final driverUid = FirebaseAuth.instance.currentUser?.uid;
-    if (routeId.isEmpty || driverUid == null) return;
+    if (routeId.trim().isEmpty || driverUid == null) return;
     setState(() => _isSaving = true);
     try {
       await FirebaseService.instance.createTrip(
         busId: widget.busId,
-        routeId: routeId,
+        routeId: routeId.trim(),
         driverUid: driverUid,
       );
-      _routeIdController.clear();
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -52,101 +68,219 @@ class _TripWorkflowScreenState extends State<TripWorkflowScreen> {
   }
 
   Future<void> _transition(Trip trip, TripStatus status) async {
+    if (_isTransitioning) return;
+    setState(() => _isTransitioning = true);
     try {
       await FirebaseService.instance.transitionTrip(
         busId: trip.busId,
         tripId: trip.tripId,
         nextStatus: status,
       );
+      if (widget.role == 'Driver') {
+        if (status == TripStatus.active) {
+          await LocationService.instance.startTracking(trip.busId);
+        } else if (status == TripStatus.completed ||
+            status == TripStatus.cancelled) {
+          await LocationService.instance.stopTracking(busId: trip.busId);
+        }
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Unable to update trip: $error')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _isTransitioning = false);
     }
+  }
+
+  void _openSOS() {
+    EmergencySosSheet.show(
+      context,
+      busId: widget.busId,
+      tripId: _openTrip?.tripId,
+      actorRole: widget.role,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<Trip>>(
-      stream: FirebaseService.instance.streamTripsForBus(widget.busId),
-      builder: (context, snapshot) {
-        final trips = snapshot.data ?? const <Trip>[];
-        final openTrip = trips.where((trip) => trip.isOpen).firstOrNull;
+    return StreamBuilder<BusFleet?>(
+      stream: FirebaseService.instance.streamFleetBus(widget.busId),
+      builder: (context, fleetSnapshot) {
+        final fleetBus = fleetSnapshot.data;
+        final assignedRouteId = fleetBus?.routeId?.trim();
+        final hasRoute =
+            assignedRouteId != null && assignedRouteId.isNotEmpty;
 
-        return Scaffold(
-          body: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              Text(
-                'Trip Operations',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
+        return StreamBuilder<List<Trip>>(
+          stream: FirebaseService.instance.streamTripsForBus(widget.busId),
+          builder: (context, tripSnapshot) {
+            final trips = tripSnapshot.data ?? const <Trip>[];
+            final openTrip = trips.where((trip) => trip.isOpen).firstOrNull;
+            _openTrip = openTrip;
+
+            return Scaffold(
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              appBar: AppBar(
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                elevation: 0,
+                foregroundColor: Theme.of(context).colorScheme.onSurface,
+                title: const Text(
+                  'Trip Operations',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                'Assigned bus: ${widget.busId}',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 20),
-              if (openTrip == null && widget.role == 'Driver') ...[
-                TextField(
-                  controller: _routeIdController,
-                  decoration: const InputDecoration(
-                    labelText: 'Route ID',
-                    hintText: 'Enter the configured Firebase route ID',
-                    border: OutlineInputBorder(),
+              // SOS FAB — visible only for Driver / Conductor.
+              floatingActionButton: (widget.role == 'Driver' ||
+                      widget.role == 'Conductor')
+                  ? FloatingActionButton.extended(
+                      heroTag: 'sos_fab_trip',
+                      onPressed: _openSOS,
+                      backgroundColor: AppColors.errorRed,
+                      foregroundColor: Colors.white,
+                      icon: const Icon(Icons.sos_rounded),
+                      label: const Text('SOS'),
+                    )
+                  : null,
+              body: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  Text(
+                    'Assigned bus: ${widget.busId.toUpperCase()}',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                ),
-                const SizedBox(height: 12),
-                FilledButton.icon(
-                  onPressed: _isSaving ? null : _createTrip,
-                  icon: const Icon(Icons.playlist_add),
-                  label: const Text('Schedule Trip'),
-                ),
-                const SizedBox(height: 20),
-              ],
-              if (openTrip != null)
-                _TripCard(
-                  trip: openTrip,
-                  canOperate: widget.role == 'Driver',
-                  onTransition: (status) => _transition(openTrip, status),
-                )
-              else
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text(
-                      'No open trip is currently assigned to this bus.',
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 20),
-              Text(
-                'Trip history',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              ...trips
-                  .where((trip) => !trip.isOpen)
-                  .map(
-                    (trip) => ListTile(
-                      leading: Icon(
-                        trip.status == TripStatus.completed
-                            ? Icons.check_circle
-                            : Icons.cancel,
-                        color: trip.status == TripStatus.completed
-                            ? AppColors.successGreen
-                            : AppColors.errorRed,
+                  const SizedBox(height: 4),
+                  if (hasRoute)
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.alt_route_rounded,
+                          size: 16,
+                          color: AppColors.safetyBlue,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Route: ${fleetBus!.routeName}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.amberSoft,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: AppColors.alertOrange.withValues(alpha: 0.3),
+                        ),
                       ),
-                      title: Text(trip.routeId),
-                      subtitle: Text('${trip.status.name} • ${trip.tripId}'),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            color: AppColors.alertOrangeDark,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'No route assigned to this bus. Ask your '
+                              'administrator to assign a route before starting '
+                              'a trip.',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                  const SizedBox(height: 20),
+
+                  if (openTrip == null && widget.role == 'Driver') ...[
+                    FilledButton.icon(
+                      onPressed: (!hasRoute || _isSaving)
+                          ? null
+                          : () => _createTrip(assignedRouteId),
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.playlist_add),
+                      label: const Text('Schedule Trip'),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+
+                  if (openTrip != null)
+                    _TripCard(
+                      trip: openTrip,
+                      routeName: fleetBus?.routeName ?? openTrip.routeId,
+                      canOperate: widget.role == 'Driver',
+                      isBusy: _isTransitioning,
+                      onTransition: (status) => _transition(openTrip, status),
+                    )
+                  else
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          widget.role == 'Driver'
+                              ? (hasRoute
+                                  ? 'No open trip. Tap "Schedule Trip" to start.'
+                                  : 'No open trip. Assign a route first.')
+                              : 'No open trip is currently assigned to this bus.',
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 20),
+                  Text(
+                    'Trip history',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-            ],
-          ),
+                  const SizedBox(height: 8),
+                  ...trips
+                      .where((trip) => !trip.isOpen)
+                      .map(
+                        (trip) => ListTile(
+                          leading: Icon(
+                            trip.status == TripStatus.completed
+                                ? Icons.check_circle
+                                : Icons.cancel,
+                            color: trip.status == TripStatus.completed
+                                ? AppColors.successGreen
+                                : AppColors.errorRed,
+                          ),
+                          title: Text(
+                            trip.routeId == fleetBus?.routeId
+                                ? (fleetBus?.routeName ?? trip.routeId)
+                                : trip.routeId,
+                          ),
+                          subtitle:
+                              Text('${trip.status.name} • ${trip.tripId}'),
+                        ),
+                      ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
@@ -155,12 +289,16 @@ class _TripWorkflowScreenState extends State<TripWorkflowScreen> {
 
 class _TripCard extends StatelessWidget {
   final Trip trip;
+  final String routeName;
   final bool canOperate;
+  final bool isBusy;
   final ValueChanged<TripStatus> onTransition;
 
   const _TripCard({
     required this.trip,
+    required this.routeName,
     required this.canOperate,
+    this.isBusy = false,
     required this.onTransition,
   });
 
@@ -181,7 +319,7 @@ class _TripCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Route ${trip.routeId}',
+              routeName,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 6),
@@ -195,25 +333,35 @@ class _TripCard extends StatelessWidget {
               children: [
                 if (canOperate && nextStatus != null)
                   FilledButton(
-                    onPressed: () => onTransition(nextStatus),
-                    child: Text(
-                      nextStatus == TripStatus.active
-                          ? 'Start trip'
-                          : nextStatus == TripStatus.paused
-                          ? 'Pause trip'
-                          : 'Prepare trip',
-                    ),
+                    onPressed: isBusy ? null : () => onTransition(nextStatus),
+                    child: isBusy
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            nextStatus == TripStatus.active
+                                ? 'Start trip'
+                                : nextStatus == TripStatus.paused
+                                ? 'Pause trip'
+                                : 'Prepare trip',
+                          ),
                   ),
                 if (canOperate &&
                     (trip.status == TripStatus.active ||
                         trip.status == TripStatus.paused))
                   OutlinedButton(
-                    onPressed: () => onTransition(TripStatus.completed),
+                    onPressed: isBusy
+                        ? null
+                        : () => onTransition(TripStatus.completed),
                     child: const Text('End trip'),
                   ),
                 if (canOperate && trip.status != TripStatus.cancelled)
                   TextButton(
-                    onPressed: () => onTransition(TripStatus.cancelled),
+                    onPressed: isBusy
+                        ? null
+                        : () => onTransition(TripStatus.cancelled),
                     child: const Text('Cancel'),
                   ),
               ],

@@ -4,6 +4,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import '../../models/student.dart';
 import '../../services/firebase_service.dart';
+import '../../services/device_class_guard.dart';
 import '../../theme/app_theme.dart';
 import 'import_roster_screen.dart';
 
@@ -18,7 +19,7 @@ class _ParentOption {
 class ManageStudentsScreen extends StatefulWidget {
   final String busId;
 
-  const ManageStudentsScreen({super.key, this.busId = 'bus_01'});
+  const ManageStudentsScreen({super.key, required this.busId});
 
   @override
   State<ManageStudentsScreen> createState() => _ManageStudentsScreenState();
@@ -32,6 +33,8 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
   late Animation<Offset> _slideAnimation;
   String _searchQuery = '';
   String _filterStatus = 'all';
+
+  bool get _laptop => isLaptopActionAllowed();
 
   @override
   void initState() {
@@ -101,13 +104,9 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
 
   List<Student> _filterStudents(List<Student> students) {
     var filtered = students;
-
-    // Apply status filter
     if (_filterStatus != 'all') {
       filtered = filtered.where((s) => s.status.name == _filterStatus).toList();
     }
-
-    // Apply search filter
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase().trim();
       filtered = filtered.where((s) =>
@@ -116,15 +115,11 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
         s.grade.toLowerCase().contains(query)
       ).toList();
     }
-
     return filtered;
   }
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = context.isMobile;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -136,19 +131,21 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
         ),
         actions: [
-          IconButton(
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ImportRosterScreen()),
+          if (_laptop)
+            IconButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ImportRosterScreen()),
+              ),
+              icon: const Icon(Icons.upload_file_rounded),
+              tooltip: 'Import Roster',
             ),
-            icon: const Icon(Icons.upload_file_rounded),
-            tooltip: 'Import Roster',
-          ),
-          IconButton(
-            onPressed: () => _openStudentForm(),
-            icon: const Icon(Icons.person_add_alt_1_rounded),
-            tooltip: 'Add Student',
-          ),
+          if (_laptop)
+            IconButton(
+              onPressed: () => _openStudentForm(),
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              tooltip: 'Add Student',
+            ),
         ],
       ),
       body: FadeTransition(
@@ -157,9 +154,7 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
           position: _slideAnimation,
           child: Column(
             children: [
-              // Search & Filter
               _buildSearchAndFilter(context),
-              // Student List
               Expanded(
                 child: StreamBuilder<List<Student>>(
                   stream: FirebaseService.instance.streamStudents(widget.busId),
@@ -167,24 +162,21 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
                     if (snapshot.hasError) {
                       return _buildErrorState(context);
                     }
-
                     if (!snapshot.hasData) {
                       return const Center(
-                        child: CircularProgressIndicator(color: AppColors.safetyBlue),
+                        child: CircularProgressIndicator(
+                          color: AppColors.safetyBlue,
+                        ),
                       );
                     }
-
                     final students = snapshot.data!;
                     final filteredStudents = _filterStudents(students);
-
                     if (students.isEmpty) {
                       return _buildEmptyState(context);
                     }
-
                     if (filteredStudents.isEmpty) {
                       return _buildEmptyFilterState(context);
                     }
-
                     return RefreshIndicator(
                       onRefresh: () async {
                         setState(() {});
@@ -197,12 +189,16 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
                           final student = filteredStudents[index];
                           return Padding(
                             padding: EdgeInsets.only(
-                              bottom: index < filteredStudents.length - 1 ? 10 : 0,
+                              bottom:
+                                  index < filteredStudents.length - 1 ? 10 : 0,
                             ),
                             child: _StudentCard(
                               student: student,
-                              onEdit: () => _openStudentForm(existing: student),
+                              onEdit: _laptop
+                                  ? () => _openStudentForm(existing: student)
+                                  : () {},
                               index: index,
+                              showEdit: _laptop,
                             ),
                           );
                         },
@@ -218,10 +214,6 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
     );
   }
 
-  // ============================================================
-  // SEARCH & FILTER
-  // ============================================================
-
   Widget _buildSearchAndFilter(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -229,13 +221,15 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
+                .withValues(alpha: 0.3),
           ),
         ),
       ),
       child: Column(
         children: [
-          // Search Bar
           Container(
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -271,7 +265,6 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
             ),
           ),
           const SizedBox(height: 10),
-          // Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -300,7 +293,9 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
       backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
       selectedColor: AppColors.safetyBlue.withValues(alpha: 0.12),
       labelStyle: TextStyle(
-        color: isSelected ? AppColors.safetyBlue : Theme.of(context).colorScheme.onSurfaceVariant,
+        color: isSelected
+            ? AppColors.safetyBlue
+            : Theme.of(context).colorScheme.onSurfaceVariant,
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
         fontSize: 12.5,
       ),
@@ -308,13 +303,9 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
         color: isSelected ? AppColors.safetyBlue : AppColors.outlineVariant,
         width: isSelected ? 1.5 : 1,
       ),
-      shape: StadiumBorder(),
+      shape: const StadiumBorder(),
     );
   }
-
-  // ============================================================
-  // ERROR STATE
-  // ============================================================
 
   Widget _buildErrorState(BuildContext context) {
     return Center(
@@ -323,7 +314,7 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            const Icon(
               Icons.error_outline_rounded,
               size: 48,
               color: AppColors.errorRed,
@@ -357,10 +348,6 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
     );
   }
 
-  // ============================================================
-  // EMPTY STATE
-  // ============================================================
-
   Widget _buildEmptyState(BuildContext context) {
     return Center(
       child: Padding(
@@ -370,7 +357,7 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.amberSoft,
                 shape: BoxShape.circle,
               ),
@@ -384,40 +371,40 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
             Text(
               'No Students Yet',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Tap the + button to add your first student.',
+              _laptop
+                  ? 'Tap the + button to add your first student.'
+                  : 'No students imported yet. Ask the office to import the roster from a laptop.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () => _openStudentForm(),
-              icon: const Icon(Icons.person_add_alt_1_rounded),
-              label: const Text('Add Student'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.safetyBlue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            if (_laptop) ...[
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () => _openStudentForm(),
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: const Text('Add Student'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.safetyBlue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
     );
   }
-
-  // ============================================================
-  // EMPTY FILTER STATE
-  // ============================================================
 
   Widget _buildEmptyFilterState(BuildContext context) {
     return Center(
@@ -455,19 +442,17 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen>
   }
 }
 
-// ============================================================
-// STUDENT CARD
-// ============================================================
-
 class _StudentCard extends StatelessWidget {
   final Student student;
   final VoidCallback onEdit;
   final int index;
+  final bool showEdit;
 
   const _StudentCard({
     required this.student,
     required this.onEdit,
     required this.index,
+    this.showEdit = true,
   });
 
   @override
@@ -485,7 +470,10 @@ class _StudentCard extends StatelessWidget {
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.3),
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
+                .withValues(alpha: 0.3),
           ),
           boxShadow: [
             BoxShadow(
@@ -497,7 +485,6 @@ class _StudentCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Avatar
             CircleAvatar(
               radius: 24,
               backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
@@ -505,7 +492,7 @@ class _StudentCard extends StatelessWidget {
                   ? NetworkImage(student.photoUrl)
                   : null,
               child: student.photoUrl.isEmpty
-                  ? Icon(
+                  ? const Icon(
                       Icons.person_rounded,
                       color: AppColors.safetyBlue,
                       size: 28,
@@ -513,8 +500,6 @@ class _StudentCard extends StatelessWidget {
                   : null,
             ),
             const SizedBox(width: 12),
-
-            // Student Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -538,29 +523,26 @@ class _StudentCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      // Status Badge
                       _buildStatusBadge(),
                       const SizedBox(width: 8),
-                      // Parent Link Badge
                       _buildParentLinkBadge(linked),
                     ],
                   ),
                 ],
               ),
             ),
-
-            // Edit Button
-            IconButton(
-              icon: const Icon(
-                Icons.edit_outlined,
-                color: AppColors.safetyBlue,
-                size: 22,
+            if (showEdit)
+              IconButton(
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  color: AppColors.safetyBlue,
+                  size: 22,
+                ),
+                onPressed: onEdit,
+                tooltip: 'Edit Student',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
-              onPressed: onEdit,
-              tooltip: 'Edit Student',
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-            ),
           ],
         ),
       ),
@@ -588,9 +570,7 @@ class _StudentCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: color.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Text(
         student.status.name.toUpperCase(),
@@ -639,10 +619,6 @@ class _StudentCard extends StatelessWidget {
     );
   }
 }
-
-// ============================================================
-// STUDENT FORM SHEET
-// ============================================================
 
 class _StudentFormSheet extends StatefulWidget {
   final String busId;
@@ -713,9 +689,7 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isSaving = true);
-
     try {
       final oldParentUid = widget.existing?.parentUid;
       final studentId = widget.existing?.id ??
@@ -737,7 +711,6 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
         parentUid: _selectedParentUid,
       );
 
-      // If parent link changed, remove stale index entry
       if (oldParentUid != null &&
           oldParentUid.isNotEmpty &&
           oldParentUid != _selectedParentUid) {
@@ -759,7 +732,11 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
           SnackBar(
             content: Row(
               children: [
-                const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                const Icon(
+                  Icons.check_circle_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -849,7 +826,6 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Drag Handle
                   Center(
                     child: Container(
                       width: 40,
@@ -861,8 +837,6 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Header
                   Row(
                     children: [
                       Container(
@@ -872,7 +846,9 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
-                          _isEditing ? Icons.edit_rounded : Icons.person_add_alt_1_rounded,
+                          _isEditing
+                              ? Icons.edit_rounded
+                              : Icons.person_add_alt_1_rounded,
                           color: AppColors.safetyBlue,
                           size: 22,
                         ),
@@ -889,21 +865,18 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
                     ],
                   ),
                   const SizedBox(height: 20),
-
-                  // Name Field
                   _label('Full Name'),
                   const SizedBox(height: 6),
                   TextFormField(
                     controller: _nameController,
                     enabled: !_isSaving,
-                    decoration: _decoration('e.g. Maya Patel', Icons.badge_outlined),
+                    decoration:
+                        _decoration('e.g. Maya Patel', Icons.badge_outlined),
                     validator: (v) => (v == null || v.trim().isEmpty)
                         ? 'Name is required'
                         : null,
                   ),
                   const SizedBox(height: 14),
-
-                  // Grade & Seat Row
                   Row(
                     children: [
                       Expanded(
@@ -915,7 +888,10 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
                             TextFormField(
                               controller: _gradeController,
                               enabled: !_isSaving,
-                              decoration: _decoration('e.g. Grade 4', Icons.school_outlined),
+                              decoration: _decoration(
+                                'e.g. Grade 4',
+                                Icons.school_outlined,
+                              ),
                               validator: (v) => (v == null || v.trim().isEmpty)
                                   ? 'Required'
                                   : null,
@@ -933,7 +909,10 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
                             TextFormField(
                               controller: _seatController,
                               enabled: !_isSaving,
-                              decoration: _decoration('e.g. Seat 2B', Icons.event_seat_outlined),
+                              decoration: _decoration(
+                                'e.g. Seat 2B',
+                                Icons.event_seat_outlined,
+                              ),
                               validator: (v) => (v == null || v.trim().isEmpty)
                                   ? 'Required'
                                   : null,
@@ -944,31 +923,29 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
                     ],
                   ),
                   const SizedBox(height: 14),
-
-                  // Stop Field
                   _label('Stop Name'),
                   const SizedBox(height: 6),
                   TextFormField(
                     controller: _stopController,
                     enabled: !_isSaving,
-                    decoration: _decoration('e.g. Oak St & Maple Ave', Icons.location_on_outlined),
+                    decoration: _decoration(
+                      'e.g. Oak St & Maple Ave',
+                      Icons.location_on_outlined,
+                    ),
                     validator: (v) => (v == null || v.trim().isEmpty)
                         ? 'Stop name is required'
                         : null,
                   ),
                   const SizedBox(height: 14),
-
-                  // Photo URL Field
                   _label('Photo URL (optional)'),
                   const SizedBox(height: 6),
                   TextFormField(
                     controller: _photoController,
                     enabled: !_isSaving,
-                    decoration: _decoration('https://...', Icons.image_outlined),
+                    decoration:
+                        _decoration('https://...', Icons.image_outlined),
                   ),
                   const SizedBox(height: 14),
-
-                  // Parent Link
                   _label('Linked Parent Account'),
                   const SizedBox(height: 6),
                   StreamBuilder<List<_ParentOption>>(
@@ -976,15 +953,20 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
                     builder: (context, snapshot) {
                       final parents = snapshot.data ?? [];
                       return DropdownButtonFormField<String?>(
-                        value: _selectedParentUid,
-                        decoration: _decoration('No parent linked', Icons.family_restroom_rounded),
+                        initialValue: _selectedParentUid,
+                        decoration: _decoration(
+                          'No parent linked',
+                          Icons.family_restroom_rounded,
+                        ),
                         items: [
                           DropdownMenuItem<String?>(
                             value: null,
                             child: Text(
                               'No parent linked',
                               style: TextStyle(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                               ),
                             ),
                           ),
@@ -1004,13 +986,12 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
                         ],
                         onChanged: _isSaving
                             ? null
-                            : (val) => setState(() => _selectedParentUid = val),
+                            : (val) =>
+                                setState(() => _selectedParentUid = val),
                       );
                     },
                   ),
                   const SizedBox(height: 24),
-
-                  // Save Button
                   SizedBox(
                     width: double.infinity,
                     height: 52,
@@ -1019,7 +1000,8 @@ class _StudentFormSheetState extends State<_StudentFormSheet>
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.safetyBlue,
                         foregroundColor: Colors.white,
-                        disabledBackgroundColor: AppColors.safetyBlue.withValues(alpha: 0.6),
+                        disabledBackgroundColor:
+                            AppColors.safetyBlue.withValues(alpha: 0.6),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
