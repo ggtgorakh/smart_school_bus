@@ -485,7 +485,8 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
         _buildProgressSummary(),
         const SizedBox(height: 12),
         for (var i = 0; i < _stops.length; i++)
-          _buildStopRow(context, _stops[i], i, isFirst: i == 0, isLast: i == _stops.length - 1),
+          _buildStopRow(context, _stops[i], i,
+              isFirst: i == 0, isLast: i == _stops.length - 1),
       ],
     );
   }
@@ -608,7 +609,6 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
                     ],
                   ),
                 ),
-                // Reorder / delete actions
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -660,7 +660,6 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
   // ============================================================
 
   Widget _buildMapView(BuildContext context) {
-    // Convert internal RouteStop list to the shape LiveMapCanvas expects.
     final stopsForMap = _stops
         .map((s) => <String, dynamic>{
               'lat': s.lat,
@@ -853,7 +852,6 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
     );
     if (result == null || !mounted) return;
 
-    // Show the metadata form with the picked location.
     final stop = await _showStopMetadataDialog(
       initialName: '',
       initialTime: '',
@@ -1063,7 +1061,7 @@ class _RoutePlanningScreenState extends State<RoutePlanningScreen>
 }
 
 // ============================================================
-// PICK STOP LOCATION SCREEN
+// PICK STOP LOCATION SCREEN (center-pin pattern)
 // ============================================================
 
 class _StopLocationResult {
@@ -1083,13 +1081,13 @@ class _PickStopLocationScreen extends StatefulWidget {
 
 class _PickStopLocationScreenState extends State<_PickStopLocationScreen> {
   final MapController _mapController = MapController();
-  LatLng _selected = const LatLng(0, 0);
-  bool _hasSelected = false;
+  late LatLng _center;
+  bool _mapReady = false;
 
   @override
   void initState() {
     super.initState();
-    _selected = widget.initialCenter;
+    _center = widget.initialCenter;
   }
 
   @override
@@ -1098,84 +1096,376 @@ class _PickStopLocationScreenState extends State<_PickStopLocationScreen> {
     super.dispose();
   }
 
+  void _onMapPositionChanged(MapCamera camera, bool hasGesture) {
+    // Called on every pan/zoom. Update the coordinate readout so the
+    // user always sees exactly where the crosshair is pointing.
+    setState(() => _center = camera.center);
+  }
+
+  void _recenter() {
+    if (!_mapReady) return;
+    _mapController.move(widget.initialCenter, _mapController.camera.zoom);
+    setState(() => _center = widget.initialCenter);
+  }
+
+  void _confirm() {
+    Navigator.of(context).pop(
+      _StopLocationResult(_center.latitude, _center.longitude),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isWide = context.isDesktop || context.isTablet;
+
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Pick stop location'),
         backgroundColor: Theme.of(context).colorScheme.surface,
+        elevation: 0,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        title: const Text(
+          'Pick stop location',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+        ),
       ),
-      body: Stack(
-        children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: widget.initialCenter,
-              initialZoom: 15,
-              onTap: (tapPosition, point) {
-                setState(() {
-                  _selected = point;
-                  _hasSelected = true;
-                });
-              },
-            ),
+      body: SafeArea(
+        top: false,
+        child: isWide ? _buildWideLayout() : _buildNarrowLayout(),
+      ),
+    );
+  }
+
+  // ── Narrow: map fills, action bar at bottom ────────────────
+  Widget _buildNarrowLayout() {
+    return Column(
+      children: [
+        Expanded(
+          child: Stack(
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.schoolbussafe.schoolbusSafe',
-              ),
-              if (_hasSelected)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _selected,
-                      width: 44,
-                      height: 44,
-                      child: const Icon(
-                        Icons.location_on_rounded,
-                        color: AppColors.alertOrange,
-                        size: 44,
-                      ),
-                    ),
-                  ],
-                ),
-              const RichAttributionWidget(
-                attributions: [
-                  TextSourceAttribution('OpenStreetMap contributors'),
-                ],
-              ),
+              _buildMap(),
+              _buildCrosshair(),
+              _buildCoordinateChip(),
+              _buildRecenterButton(),
             ],
           ),
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: AppTheme.panelDecoration(context, borderRadius: 12),
-              child: Text(
-                _hasSelected
-                    ? 'Selected: ${_selected.latitude.toStringAsFixed(5)}, '
-                        '${_selected.longitude.toStringAsFixed(5)}'
-                    : 'Tap on the map to place the stop marker',
-                style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        _buildActionBar(),
+      ],
+    );
+  }
+
+  // ── Wide: map on left, action panel on right ───────────────
+  Widget _buildWideLayout() {
+    return Row(
+      children: [
+        Expanded(
+          child: Stack(
+            children: [
+              _buildMap(),
+              _buildCrosshair(),
+              _buildRecenterButton(),
+            ],
+          ),
+        ),
+        SizedBox(width: 320, child: _buildSidePanel()),
+      ],
+    );
+  }
+
+  Widget _buildMap() {
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: widget.initialCenter,
+        initialZoom: 16,
+        minZoom: 3,
+        maxZoom: 18,
+        onMapReady: () => setState(() => _mapReady = true),
+        onPositionChanged: _onMapPositionChanged,
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.schoolbussafe.schoolbusSafe',
+        ),
+        const RichAttributionWidget(
+          attributions: [
+            TextSourceAttribution('OpenStreetMap contributors'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Fixed crosshair at the map's visual center. Panning moves the
+  /// map underneath; the pin stays put.
+  Widget _buildCrosshair() {
+    return IgnorePointer(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.alertOrange,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.location_on_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
+            Container(
+              width: 3,
+              height: 16,
+              color: AppColors.alertOrange,
+            ),
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: AppColors.alertOrange,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCoordinateChip() {
+    return Positioned(
+      top: 12,
+      left: 12,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
+                .withValues(alpha: 0.5),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.my_location_rounded,
+              size: 14,
+              color: AppColors.safetyBlue,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '${_center.latitude.toStringAsFixed(5)}, '
+              '${_center.longitude.toStringAsFixed(5)}',
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecenterButton() {
+    return Positioned(
+      right: 12,
+      bottom: 12,
+      child: FloatingActionButton.small(
+        heroTag: 'recenter_pick_stop',
+        tooltip: 'Recenter',
+        onPressed: _mapReady ? _recenter : null,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        foregroundColor: AppColors.safetyBlue,
+        elevation: 3,
+        child: const Icon(Icons.center_focus_strong_rounded),
+      ),
+    );
+  }
+
+  /// Action bar for narrow layout — two buttons side by side.
+  Widget _buildActionBar() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
+                .withValues(alpha: 0.4),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Cancel'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: FilledButton.icon(
+              onPressed: _mapReady ? _confirm : null,
+              icon: const Icon(Icons.check_rounded, size: 18),
+              label: const Text('Use this location'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.safetyBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _hasSelected
-            ? () => Navigator.of(context).pop(
-                  _StopLocationResult(_selected.latitude, _selected.longitude),
-                )
-            : null,
-        backgroundColor: AppColors.safetyBlue,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.check_rounded),
-        label: const Text('Use this location'),
+    );
+  }
+
+  /// Side panel for wide layout — coordinates + actions.
+  Widget _buildSidePanel() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          left: BorderSide(
+            color: Theme.of(context)
+                .colorScheme
+                .outlineVariant
+                .withValues(alpha: 0.4),
+          ),
+        ),
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Selected location',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _coordinateRow('Latitude', _center.latitude.toStringAsFixed(6)),
+                const SizedBox(height: 8),
+                _coordinateRow(
+                  'Longitude',
+                  _center.longitude.toStringAsFixed(6),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Pan the map to position the crosshair, then confirm.',
+            style: TextStyle(
+              fontSize: 12.5,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              height: 1.4,
+            ),
+          ),
+          const Spacer(),
+          OutlinedButton(
+            onPressed: () => Navigator.of(context).pop(),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Cancel'),
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: _mapReady ? _confirm : null,
+            icon: const Icon(Icons.check_rounded, size: 18),
+            label: const Text('Use this location'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.safetyBlue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _coordinateRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
     );
   }
 }
