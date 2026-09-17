@@ -1,5 +1,8 @@
+// lib/screens/trip_workflow_screen.dart
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/bus_fleet.dart';
 import '../models/trip.dart';
@@ -104,6 +107,26 @@ class _TripWorkflowScreenState extends State<TripWorkflowScreen> {
     );
   }
 
+  Future<void> _callConductor(String number) async {
+    final clean = number.trim();
+    if (clean.isEmpty) return;
+    final uri = Uri(scheme: 'tel', path: clean);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open the phone app.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to call: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<BusFleet?>(
@@ -132,7 +155,6 @@ class _TripWorkflowScreenState extends State<TripWorkflowScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                 ),
               ),
-              // SOS FAB — visible only for Driver / Conductor.
               floatingActionButton: (widget.role == 'Driver' ||
                       widget.role == 'Conductor')
                   ? FloatingActionButton.extended(
@@ -180,7 +202,8 @@ class _TripWorkflowScreenState extends State<TripWorkflowScreen> {
                         color: AppColors.amberSoft,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: AppColors.alertOrange.withValues(alpha: 0.3),
+                          color:
+                              AppColors.alertOrange.withValues(alpha: 0.3),
                         ),
                       ),
                       child: Row(
@@ -193,8 +216,8 @@ class _TripWorkflowScreenState extends State<TripWorkflowScreen> {
                           Expanded(
                             child: Text(
                               'No route assigned to this bus. Ask your '
-                              'administrator to assign a route before starting '
-                              'a trip.',
+                              'administrator to assign a route before '
+                              'starting a trip.',
                               style: TextStyle(
                                 fontSize: 12.5,
                                 color: Theme.of(context)
@@ -206,6 +229,28 @@ class _TripWorkflowScreenState extends State<TripWorkflowScreen> {
                         ],
                       ),
                     ),
+
+                  // ─────────────────────────────────────────────
+                  // CONDUCTOR INFO (Unit 5 — new)
+                  // Shown to Driver and Conductor alike, so each can
+                  // reach the other by phone.
+                  // ─────────────────────────────────────────────
+                  if (fleetBus != null && fleetBus.conductorName != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: _StaffRow(
+                        label: 'Conductor',
+                        name: fleetBus.conductorName ?? 'Unassigned',
+                        phone: fleetBus.conductorPhone,
+                        icon: Icons.badge_rounded,
+                        color: AppColors.successGreen,
+                        onCall: (fleetBus.conductorPhone != null &&
+                                fleetBus.conductorPhone!.trim().isNotEmpty)
+                            ? () => _callConductor(fleetBus.conductorPhone!)
+                            : null,
+                      ),
+                    ),
+
                   const SizedBox(height: 20),
 
                   if (openTrip == null && widget.role == 'Driver') ...[
@@ -287,6 +332,97 @@ class _TripWorkflowScreenState extends State<TripWorkflowScreen> {
   }
 }
 
+// ============================================================
+// STAFF ROW (conductor info shown to driver)
+// ============================================================
+
+class _StaffRow extends StatelessWidget {
+  final String label;
+  final String name;
+  final String? phone;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onCall;
+
+  const _StaffRow({
+    required this.label,
+    required this.name,
+    required this.phone,
+    required this.icon,
+    required this.color,
+    required this.onCall,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhone = phone != null && phone!.trim().isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (hasPhone)
+                  Text(
+                    phone!,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color:
+                          Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (onCall != null)
+            IconButton(
+              onPressed: onCall,
+              icon: Icon(Icons.call_rounded, color: color, size: 20),
+              tooltip: 'Call $label',
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// TRIP CARD
+// ============================================================
+
 class _TripCard extends StatelessWidget {
   final Trip trip;
   final String routeName;
@@ -333,7 +469,8 @@ class _TripCard extends StatelessWidget {
               children: [
                 if (canOperate && nextStatus != null)
                   FilledButton(
-                    onPressed: isBusy ? null : () => onTransition(nextStatus),
+                    onPressed:
+                        isBusy ? null : () => onTransition(nextStatus),
                     child: isBusy
                         ? const SizedBox(
                             width: 16,
@@ -344,8 +481,8 @@ class _TripCard extends StatelessWidget {
                             nextStatus == TripStatus.active
                                 ? 'Start trip'
                                 : nextStatus == TripStatus.paused
-                                ? 'Pause trip'
-                                : 'Prepare trip',
+                                    ? 'Pause trip'
+                                    : 'Prepare trip',
                           ),
                   ),
                 if (canOperate &&

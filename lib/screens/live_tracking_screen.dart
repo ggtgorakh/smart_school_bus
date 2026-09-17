@@ -17,9 +17,6 @@ class LiveTrackingScreen extends StatefulWidget {
   final bool canCallDriver;
   final String studentName;
   final String studentGradeAndSeat;
-  /// Optional — when provided, the screen streams the child's latest
-  /// protocol event and shows a banner above the map. When null, no
-  /// banner is shown (used by the Driver / Conductor variants).
   final String? studentId;
 
   const LiveTrackingScreen({
@@ -176,16 +173,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      floatingActionButton: widget.canCallDriver &&
-              _fleetBus?.driverPhone?.trim().isNotEmpty == true
-          ? FloatingActionButton.extended(
-              onPressed: _callDriver,
-              backgroundColor: AppColors.successGreen,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.call_rounded),
-              label: const Text('Call driver'),
-            )
-          : null,
       body: FadeTransition(
         opacity: _fadeAnimation,
         child: StreamBuilder<BusLocation?>(
@@ -237,6 +224,8 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
                 ),
                 routeStops: _routeStops,
                 protocolBanner: _buildProtocolBanner(context),
+                fleetBus: _fleetBus,
+                onCallStaff: _showStaffSheet,
               ),
             );
           },
@@ -245,8 +234,6 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
     );
   }
 
-  /// Renders the protocol banner above the map when a studentId is set
-  /// and there is an active event. Returns a zero-size widget otherwise.
   Widget _buildProtocolBanner(BuildContext context) {
     final studentId = widget.studentId;
     if (studentId == null || studentId.isEmpty) {
@@ -379,16 +366,195 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
     }
   }
 
-  Future<void> _callDriver() async {
-    final phone = _fleetBus?.driverPhone?.trim();
-    if (phone == null || phone.isEmpty) return;
-    final uri = Uri(scheme: 'tel', path: phone);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication) &&
-        mounted) {
+  /// Shows a small sheet with driver and conductor call buttons. This is
+  /// the parent's 1-tap access to staff contact — no need to navigate to
+  /// the Children tab or any other screen.
+  Future<void> _showStaffSheet() async {
+    final bus = _fleetBus;
+    if (bus == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to open the phone app.')),
+        const SnackBar(content: Text('Bus staff details not available yet.')),
       );
+      return;
     }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Bus Staff',
+                  style: Theme.of(sheetContext)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Bus ${bus.busId.toUpperCase()} • ${bus.routeName}',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color:
+                        Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _StaffCallTile(
+                  roleLabel: 'Driver',
+                  name: bus.driverName,
+                  phone: bus.driverPhone,
+                  icon: Icons.drive_eta_rounded,
+                  color: AppColors.alertOrange,
+                  onCall: (bus.driverPhone != null &&
+                          bus.driverPhone!.trim().isNotEmpty)
+                      ? () => _callNumber(sheetContext, bus.driverPhone!)
+                      : null,
+                ),
+                const SizedBox(height: 10),
+                _StaffCallTile(
+                  roleLabel: 'Conductor',
+                  name: bus.conductorName ?? 'Unassigned',
+                  phone: bus.conductorPhone,
+                  icon: Icons.badge_rounded,
+                  color: AppColors.successGreen,
+                  onCall: (bus.conductorPhone != null &&
+                          bus.conductorPhone!.trim().isNotEmpty)
+                      ? () => _callNumber(sheetContext, bus.conductorPhone!)
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _callNumber(BuildContext context, String number) async {
+    final clean = number.trim();
+    if (clean.isEmpty) return;
+    final uri = Uri(scheme: 'tel', path: clean);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open the phone app.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to call: $e')),
+        );
+      }
+    }
+  }
+}
+
+// ============================================================
+// STAFF CALL TILE (used in the staff sheet)
+// ============================================================
+
+class _StaffCallTile extends StatelessWidget {
+  final String roleLabel;
+  final String name;
+  final String? phone;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onCall;
+
+  const _StaffCallTile({
+    required this.roleLabel,
+    required this.name,
+    required this.phone,
+    required this.icon,
+    required this.color,
+    required this.onCall,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhone = phone != null && phone!.trim().isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  roleLabel.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  hasPhone ? phone! : 'Number not provided',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontStyle: hasPhone ? FontStyle.normal : FontStyle.italic,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onCall != null)
+            SizedBox(
+              width: 52,
+              height: 52,
+              child: Material(
+                color: color,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onCall,
+                  child: const Icon(
+                    Icons.call_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -593,6 +759,8 @@ class _LiveTrackingContent extends StatelessWidget {
   final VoidCallback onExpandToggle;
   final List<Map<String, dynamic>> routeStops;
   final Widget protocolBanner;
+  final BusFleet? fleetBus;
+  final Future<void> Function() onCallStaff;
 
   const _LiveTrackingContent({
     required this.location,
@@ -602,6 +770,8 @@ class _LiveTrackingContent extends StatelessWidget {
     required this.onExpandToggle,
     required this.routeStops,
     required this.protocolBanner,
+    required this.fleetBus,
+    required this.onCallStaff,
   });
 
   @override
@@ -629,7 +799,6 @@ class _LiveTrackingContent extends StatelessWidget {
           ),
         ),
 
-        // ── NEW: protocol banner floats at the top of the map ──
         Positioned(
           top: 0,
           left: 0,
@@ -791,6 +960,22 @@ class _LiveTrackingContent extends StatelessWidget {
             ),
           ),
         ),
+
+        // ── Floating "Call Staff" button — top-right, always visible ──
+        // Gives parents 1-tap access to driver/conductor without
+        // expanding the bottom sheet.
+        if (fleetBus != null)
+          Positioned(
+            right: 12,
+            top: 0,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: _CallStaffFab(onTap: onCallStaff),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -951,6 +1136,41 @@ class _LiveTrackingContent extends StatelessWidget {
     if (seconds < 10) return 'Just now';
     if (seconds < 60) return '$seconds sec ago';
     return '${seconds ~/ 60} min ago';
+  }
+}
+
+// ============================================================
+// CALL STAFF FAB (top-right of map)
+// ============================================================
+
+class _CallStaffFab extends StatelessWidget {
+  final Future<void> Function() onTap;
+
+  const _CallStaffFab({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surface,
+      shape: const CircleBorder(),
+      elevation: 4,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () {
+          onTap();
+        },
+        child: Container(
+          width: 48,
+          height: 48,
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.support_agent_rounded,
+            color: AppColors.safetyBlue,
+            size: 22,
+          ),
+        ),
+      ),
+    );
   }
 }
 

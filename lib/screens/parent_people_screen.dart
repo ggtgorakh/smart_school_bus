@@ -1,4 +1,7 @@
+// lib/screens/parent_people_screen.dart
+
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/bus_fleet.dart';
 import '../models/bus_location.dart';
@@ -20,7 +23,9 @@ class _ParentPeopleScreenState extends State<ParentPeopleScreen> {
   Widget build(BuildContext context) {
     final uid = FirebaseService.instance.currentUserUid;
     if (uid == null) {
-      return const Center(child: Text('Please sign in to view linked children.'));
+      return const Center(
+        child: Text('Please sign in to view linked children.'),
+      );
     }
 
     return StreamBuilder<List<Student>>(
@@ -51,40 +56,52 @@ class _ParentPeopleScreenState extends State<ParentPeopleScreen> {
 
         return LayoutBuilder(
           builder: (context, constraints) {
-            final isWide = constraints.maxWidth >= 980;
+            // Mobile-first: single column with dropdown selector on narrow
+            // screens. On wider screens, keep the two-pane layout.
+            final isWide = constraints.maxWidth >= 900;
+
+            if (!isWide) {
+              return Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  children: [
+                    if (children.length > 1) ...[
+                      _MobileChildSelector(
+                        children: children,
+                        selectedId: selectedChild.id,
+                        onSelect: (id) =>
+                            setState(() => _selectedChildId = id),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    Expanded(
+                      child: _ChildDetailPanel(child: selectedChild),
+                    ),
+                  ],
+                ),
+              );
+            }
+
             return Padding(
               padding: const EdgeInsets.all(18),
-              child: isWide
-                  ? Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 340,
-                          child: _ChildListPanel(
-                            children: children,
-                            selectedId: selectedChild.id,
-                            onSelect: (id) => setState(() => _selectedChildId = id),
-                          ),
-                        ),
-                        const SizedBox(width: 18),
-                        Expanded(child: _ChildDetailPanel(child: selectedChild)),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        SizedBox(
-                          height: 300,
-                          child: _ChildListPanel(
-                            children: children,
-                            selectedId: selectedChild.id,
-                            onSelect: (id) =>
-                                setState(() => _selectedChildId = id),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Expanded(child: _ChildDetailPanel(child: selectedChild)),
-                      ],
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 340,
+                    child: _ChildListPanel(
+                      children: children,
+                      selectedId: selectedChild.id,
+                      onSelect: (id) =>
+                          setState(() => _selectedChildId = id),
                     ),
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: _ChildDetailPanel(child: selectedChild),
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -102,15 +119,23 @@ class _ParentPeopleScreenState extends State<ParentPeopleScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.family_restroom_outlined, size: 48, color: AppColors.safetyBlue),
+                const Icon(
+                  Icons.family_restroom_outlined,
+                  size: 48,
+                  color: AppColors.safetyBlue,
+                ),
                 const SizedBox(height: 12),
                 Text(
                   'No children linked',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Your linked children will appear here once the school has assigned them to your account.',
+                  'Your linked children will appear here once the school '
+                  'has assigned them to your account.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -124,6 +149,110 @@ class _ParentPeopleScreenState extends State<ParentPeopleScreen> {
     );
   }
 }
+
+// ============================================================
+// MOBILE CHILD SELECTOR (dropdown)
+// ============================================================
+
+class _MobileChildSelector extends StatelessWidget {
+  final List<Student> children;
+  final String selectedId;
+  final void Function(String) onSelect;
+
+  const _MobileChildSelector({
+    required this.children,
+    required this.selectedId,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Theme.of(context)
+              .colorScheme
+              .outlineVariant
+              .withValues(alpha: 0.4),
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedId,
+          isExpanded: true,
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppColors.safetyBlue,
+          ),
+          items: children.map((c) {
+            return DropdownMenuItem(
+              value: c.id,
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppColors.safetyBlue.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        c.name.isNotEmpty ? c.name[0].toUpperCase() : 'S',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.safetyBlue,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          c.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          '${c.grade} • ${c.busId?.toUpperCase() ?? 'No bus'}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) onSelect(val);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// DESKTOP CHILD LIST
+// ============================================================
 
 class _ChildListPanel extends StatelessWidget {
   final List<Student> children;
@@ -149,8 +278,8 @@ class _ChildListPanel extends StatelessWidget {
               child: Text(
                 'My Children',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                      fontWeight: FontWeight.w800,
+                    ),
               ),
             ),
             Expanded(
@@ -169,11 +298,15 @@ class _ChildListPanel extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: isSelected
                             ? AppColors.safetyBlue.withValues(alpha: 0.09)
-                            : Theme.of(context).colorScheme.surfaceContainerLow,
+                            : Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerLow,
                         border: Border.all(
                           color: isSelected
                               ? AppColors.safetyBlue
-                              : Theme.of(context).colorScheme.outlineVariant,
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant,
                         ),
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -181,8 +314,12 @@ class _ChildListPanel extends StatelessWidget {
                         children: [
                           CircleAvatar(
                             radius: 24,
-                            backgroundColor: AppColors.safetyBlue.withValues(alpha: 0.12),
-                            child: const Icon(Icons.child_care_rounded, color: AppColors.safetyBlue),
+                            backgroundColor:
+                                AppColors.safetyBlue.withValues(alpha: 0.12),
+                            child: const Icon(
+                              Icons.child_care_rounded,
+                              color: AppColors.safetyBlue,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -191,21 +328,17 @@ class _ChildListPanel extends StatelessWidget {
                               children: [
                                 Text(
                                   child.name,
-                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                                 const SizedBox(height: 3),
                                 Text(
                                   '${child.grade} • ${child.section ?? 'Section not assigned'}',
                                   style: TextStyle(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Student ID: ${child.rollNumber ?? child.id}',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                                   ),
                                 ),
                               ],
@@ -226,6 +359,10 @@ class _ChildListPanel extends StatelessWidget {
   }
 }
 
+// ============================================================
+// CHILD DETAIL PANEL — 2 tabs (Details, Bus Staff)
+// ============================================================
+
 class _ChildDetailPanel extends StatelessWidget {
   final Student child;
 
@@ -235,7 +372,9 @@ class _ChildDetailPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       child: DefaultTabController(
-      length: 2,
+        // Two tabs now: Details and Bus Staff. This is mobile-first —
+        // fewer tabs = less horizontal squeeze on narrow phones.
+        length: 2,
         child: Column(
           children: [
             Container(
@@ -244,33 +383,48 @@ class _ChildDetailPanel extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
-                    radius: 28,
-                    backgroundColor: AppColors.safetyBlue.withValues(alpha: 0.12),
-                    child: const Icon(Icons.person_rounded, color: AppColors.safetyBlue),
+                    radius: 26,
+                    backgroundColor:
+                        AppColors.safetyBlue.withValues(alpha: 0.12),
+                    child: const Icon(
+                      Icons.person_rounded,
+                      color: AppColors.safetyBlue,
+                    ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           child.name,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${child.grade} • ${child.section ?? 'Section not assigned'} • ${child.busId ?? 'No bus'}',
+                          '${child.grade} • ${child.busId?.toUpperCase() ?? 'No bus'}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontSize: 12.5,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant,
                           ),
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: _statusColor(child.status),
                       borderRadius: BorderRadius.circular(999),
@@ -287,10 +441,11 @@ class _ChildDetailPanel extends StatelessWidget {
                 ],
               ),
             ),
-            TabBar(
-              tabs: const [
-                Tab(text: 'Child Info'),
-                Tab(text: 'Bus & Route'),
+            const SizedBox(height: 8),
+            const TabBar(
+              tabs: [
+                Tab(text: 'Details'),
+                Tab(text: 'Bus Staff'),
               ],
               labelColor: AppColors.safetyBlue,
               indicatorColor: AppColors.safetyBlue,
@@ -299,8 +454,8 @@ class _ChildDetailPanel extends StatelessWidget {
             Expanded(
               child: TabBarView(
                 children: [
-                  _buildChildInfoTab(context, child),
-                  _buildBusRouteTab(context, child),
+                  _buildDetailsTab(context, child),
+                  _buildStaffTab(context, child),
                 ],
               ),
             ),
@@ -310,54 +465,123 @@ class _ChildDetailPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildChildInfoTab(BuildContext context, Student child) {
-    final readOnlyFields = <_FieldItem>[
-      _FieldItem('Full Name', child.name),
-      _FieldItem('Student ID', child.rollNumber ?? child.id),
-      _FieldItem('Date of Birth', _formatDate(child.dateOfBirth)),
-      _FieldItem('Class', child.grade),
-      _FieldItem('Section', child.section ?? 'Not assigned'),
-      _FieldItem('School', child.schoolName ?? 'School not assigned'),
-      _FieldItem('School ID', child.schoolId ?? 'Not assigned'),
-    ];
+  // ───────────────────────────────────────────────────────────
+  // DETAILS TAB — merged Child Info + Bus & Route
+  // ───────────────────────────────────────────────────────────
 
-    final editableFields = <_FieldItem>[
-      _FieldItem('Home Address', child.homeAddress ?? 'Not provided'),
-      _FieldItem('Pickup Stop', child.pickupStop ?? 'Not provided'),
-      _FieldItem('Drop-off Stop', child.dropOffStop ?? 'Not provided'),
-      _FieldItem('Emergency Contact', child.emergencyContact ?? 'Not provided'),
-      _FieldItem('Authorized Pickup', child.authorizedPickupPerson ?? 'Not provided'),
-      _FieldItem('Transportation Instructions', child.transportationInstructions ?? 'Not provided'),
-    ];
-
+  Widget _buildDetailsTab(BuildContext context, Student child) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SectionCard(
-            title: 'School-controlled / Read-only',
-            icon: Icons.lock_outline_rounded,
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: readOnlyFields.map((value) => _ReadOnlyFieldTile(value: value)).toList(),
+          // ── Transport assignment (top — most important) ──
+          if (child.busId != null && child.busId!.trim().isNotEmpty)
+            StreamBuilder<BusFleet?>(
+              stream: FirebaseService.instance.streamFleetBus(child.busId!),
+              builder: (context, snapshot) {
+                final bus = snapshot.data;
+                return _SectionCard(
+                  title: 'Transport',
+                  icon: Icons.directions_bus_rounded,
+                  child: Column(
+                    children: [
+                      _KeyValueRow(
+                        label: 'Bus',
+                        value: child.busId ?? 'Not assigned',
+                      ),
+                      _KeyValueRow(
+                        label: 'Route',
+                        value: bus?.routeName ?? '—',
+                      ),
+                      _KeyValueRow(
+                        label: 'Pickup stop',
+                        value: child.pickupStop ?? child.stopName,
+                      ),
+                      _KeyValueRow(
+                        label: 'Drop-off stop',
+                        value: child.dropOffStop ?? '—',
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
-          ),
-          const SizedBox(height: 16),
+
+          const SizedBox(height: 14),
+
+          // ── Editable parent-managed fields ──
           _SectionCard(
             title: 'Parent-managed details',
             icon: Icons.edit_note_rounded,
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: editableFields.map((field) {
-                return _EditableFieldTile(
-                  label: field.label,
-                  value: field.value,
-                  onEdit: () => _editField(context, child, field.label),
-                );
-              }).toList(),
+            child: Column(
+              children: [
+                _EditableRow(
+                  label: 'Home Address',
+                  value: child.homeAddress ?? 'Not provided',
+                  onEdit: () => _editField(context, child, 'Home Address'),
+                ),
+                _EditableRow(
+                  label: 'Pickup Stop',
+                  value: child.pickupStop ?? 'Not provided',
+                  onEdit: () => _editField(context, child, 'Pickup Stop'),
+                ),
+                _EditableRow(
+                  label: 'Drop-off Stop',
+                  value: child.dropOffStop ?? 'Not provided',
+                  onEdit: () => _editField(context, child, 'Drop-off Stop'),
+                ),
+                _EditableRow(
+                  label: 'Emergency Contact',
+                  value: child.emergencyContact ?? 'Not provided',
+                  onEdit: () =>
+                      _editField(context, child, 'Emergency Contact'),
+                ),
+                _EditableRow(
+                  label: 'Authorized Pickup',
+                  value: child.authorizedPickupPerson ?? 'Not provided',
+                  onEdit: () =>
+                      _editField(context, child, 'Authorized Pickup'),
+                ),
+                _EditableRow(
+                  label: 'Transportation Instructions',
+                  value: child.transportationInstructions ?? 'Not provided',
+                  onEdit: () => _editField(
+                    context,
+                    child,
+                    'Transportation Instructions',
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          // ── School-controlled read-only ──
+          _SectionCard(
+            title: 'School records',
+            icon: Icons.school_outlined,
+            child: Column(
+              children: [
+                _KeyValueRow(
+                  label: 'Student ID',
+                  value: child.rollNumber ?? child.id,
+                ),
+                _KeyValueRow(label: 'Class', value: child.grade),
+                _KeyValueRow(
+                  label: 'Section',
+                  value: child.section ?? '—',
+                ),
+                _KeyValueRow(
+                  label: 'Date of birth',
+                  value: _formatDate(child.dateOfBirth),
+                ),
+                _KeyValueRow(
+                  label: 'School',
+                  value: child.schoolName ?? '—',
+                ),
+              ],
             ),
           ),
         ],
@@ -365,65 +589,126 @@ class _ChildDetailPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildBusRouteTab(BuildContext context, Student child) {
+  // ───────────────────────────────────────────────────────────
+  // BUS STAFF TAB
+  // ───────────────────────────────────────────────────────────
+
+  Widget _buildStaffTab(BuildContext context, Student child) {
     if (child.busId == null || child.busId!.trim().isEmpty) {
       return const Center(
-        child: Text('This child is not currently assigned to a bus.'),
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('This child is not currently assigned to a bus.'),
+        ),
       );
     }
 
-    return StreamBuilder<BusLocation?>(
-      stream: FirebaseService.instance.streamBusLocation(child.busId!),
+    return StreamBuilder<BusFleet?>(
+      stream: FirebaseService.instance.streamFleetBus(child.busId!),
       builder: (context, snapshot) {
-        final location = snapshot.data;
-        final isLoading = !snapshot.hasData && !snapshot.hasError;
-
-        if (isLoading) {
+        if (!snapshot.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
+        final bus = snapshot.data;
+        if (bus == null) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('Bus record not found.'),
+            ),
+          );
+        }
 
-        return StreamBuilder<BusFleet?>(
-          stream: FirebaseService.instance.streamFleetBus(child.busId!),
-          builder: (context, fleetSnapshot) {
-            final bus = fleetSnapshot.data;
-
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _StaffCard(
+              roleLabel: 'Driver',
+              name: bus.driverName,
+              phone: bus.driverPhone,
+              icon: Icons.drive_eta_rounded,
+              color: AppColors.alertOrange,
+              onCall: (bus.driverPhone != null &&
+                      bus.driverPhone!.trim().isNotEmpty)
+                  ? () => _callNumber(context, bus.driverPhone!)
+                  : null,
+            ),
+            const SizedBox(height: 12),
+            _StaffCard(
+              roleLabel: 'Conductor',
+              name: bus.conductorName ?? 'Unassigned',
+              phone: bus.conductorPhone,
+              icon: Icons.badge_rounded,
+              color: AppColors.successGreen,
+              onCall: (bus.conductorPhone != null &&
+                      bus.conductorPhone!.trim().isNotEmpty)
+                  ? () => _callNumber(context, bus.conductorPhone!)
+                  : null,
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
                 children: [
-                  _SectionCard(
-                    title: 'Current transport assignment',
-                    icon: Icons.directions_bus_rounded,
-                    child: Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _ReadOnlyFieldTile(value: _FieldItem('Bus Number', child.busId ?? 'Not assigned')),
-                        _ReadOnlyFieldTile(value: _FieldItem('Route', bus?.routeName ?? 'No route assigned')),
-                        _ReadOnlyFieldTile(value: _FieldItem('Pickup Stop', child.pickupStop ?? 'Not provided')),
-                        _ReadOnlyFieldTile(value: _FieldItem('Drop-off Stop', child.dropOffStop ?? 'Not provided')),
-                        _ReadOnlyFieldTile(value: _FieldItem('Trip Status', bus?.statusLabel ?? 'Not available')),
-                        _ReadOnlyFieldTile(value: _FieldItem('Driver', bus?.driverName ?? 'Unassigned')),
-                        _ReadOnlyFieldTile(value: _FieldItem('Conductor', bus?.conductorName ?? 'Unassigned')),
-                        _ReadOnlyFieldTile(
-                          value: _FieldItem(
-                            'GPS',
-                            location == null ? 'No live location' : '${location.statusLabel} • ${location.etaLabel}',
-                          ),
-                        ),
-                      ],
+                  const Icon(
+                    Icons.info_outline_rounded,
+                    size: 18,
+                    color: AppColors.safetyBlue,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'If a number is incorrect, contact the school office.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color:
+                            Theme.of(context).colorScheme.onSurfaceVariant,
+                        height: 1.4,
+                      ),
                     ),
                   ),
                 ],
               ),
-            );
-          },
+            ),
+          ],
         );
       },
     );
   }
 
-  Future<void> _editField(BuildContext context, Student child, String fieldKey) async {
+  // ───────────────────────────────────────────────────────────
+  // HELPERS
+  // ───────────────────────────────────────────────────────────
+
+  Future<void> _callNumber(BuildContext context, String number) async {
+    final clean = number.trim();
+    if (clean.isEmpty) return;
+    final uri = Uri(scheme: 'tel', path: clean);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open the phone app.')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to call: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _editField(
+    BuildContext context,
+    Student child,
+    String fieldKey,
+  ) async {
     final valueMap = {
       'Home Address': 'homeAddress',
       'Pickup Stop': 'pickupStop',
@@ -436,7 +721,9 @@ class _ChildDetailPanel extends StatelessWidget {
     final key = valueMap[fieldKey];
     if (key == null || child.busId == null || child.busId!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This child is not assigned to a bus yet.')),
+        const SnackBar(
+          content: Text('This child is not assigned to a bus yet.'),
+        ),
       );
       return;
     }
@@ -454,7 +741,9 @@ class _ChildDetailPanel extends StatelessWidget {
           maxLines: 5,
           decoration: InputDecoration(
             hintText: 'Enter $fieldKey',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
           autofocus: true,
         ),
@@ -474,7 +763,9 @@ class _ChildDetailPanel extends StatelessWidget {
     if (result != true) return;
 
     final updatedValue = controller.text.trim();
-    final updates = <String, dynamic>{key: updatedValue.isEmpty ? null : updatedValue};
+    final updates = <String, dynamic>{
+      key: updatedValue.isEmpty ? null : updatedValue,
+    };
 
     try {
       await FirebaseService.instance.updateStudentParentDetails(
@@ -527,17 +818,131 @@ class _ChildDetailPanel extends StatelessWidget {
   }
 
   String _formatDate(DateTime? value) {
-    if (value == null) return 'Not set';
+    if (value == null) return '—';
     return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
   }
 }
 
-class _FieldItem {
-  final String label;
-  final String value;
+// ============================================================
+// STAFF CARD — mobile-first, full-width call button
+// ============================================================
 
-  const _FieldItem(this.label, this.value);
+class _StaffCard extends StatelessWidget {
+  final String roleLabel;
+  final String name;
+  final String? phone;
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onCall;
+
+  const _StaffCard({
+    required this.roleLabel,
+    required this.name,
+    required this.phone,
+    required this.icon,
+    required this.color,
+    required this.onCall,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhone = phone != null && phone!.trim().isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: color, size: 26),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      roleLabel.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                        color:
+                            Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      hasPhone ? phone! : 'Number not provided',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        color:
+                            Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontStyle:
+                            hasPhone ? FontStyle.normal : FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (onCall != null) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton.icon(
+                onPressed: onCall,
+                icon: const Icon(Icons.call_rounded, size: 18),
+                label: Text('Call $roleLabel'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: color,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
+
+// ============================================================
+// SUPPORTING WIDGETS
+// ============================================================
 
 class _SectionCard extends StatelessWidget {
   final String title;
@@ -560,13 +965,13 @@ class _SectionCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(icon, color: AppColors.safetyBlue),
+                Icon(icon, color: AppColors.safetyBlue, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
               ],
             ),
@@ -579,53 +984,50 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _ReadOnlyFieldTile extends StatelessWidget {
-  final _FieldItem value;
+class _KeyValueRow extends StatelessWidget {
+  final String label;
+  final String value;
 
-  const _ReadOnlyFieldTile({required this.value});
+  const _KeyValueRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 240,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outlineVariant,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value.label,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
               style: TextStyle(
+                fontSize: 13,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 12,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 13.5,
                 fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              value.value,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _EditableFieldTile extends StatelessWidget {
+class _EditableRow extends StatelessWidget {
   final String label;
   final String value;
   final VoidCallback onEdit;
 
-  const _EditableFieldTile({
+  const _EditableRow({
     required this.label,
     required this.value,
     required this.onEdit,
@@ -633,44 +1035,38 @@ class _EditableFieldTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 260,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_note_rounded, size: 18),
-                  label: const Text('Edit'),
-                ),
-              ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
-            const SizedBox(height: 6),
-            Text(
+          ),
+          Expanded(
+            child: Text(
               value,
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ],
-        ),
+          ),
+          IconButton(
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            tooltip: 'Edit',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+        ],
       ),
     );
   }

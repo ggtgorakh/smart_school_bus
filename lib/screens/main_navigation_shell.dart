@@ -336,7 +336,13 @@ class _MainNavigationShellState extends State<MainNavigationShell>
   // question, "who is connected to my child?". Reaching 4 tabs keeps
   // the bar legible on narrow phones.
   // ============================================================
-  List<AuthorizedTab> _parentTabs() {
+    List<AuthorizedTab> _parentTabs() {
+    // Order: Map (live tracking), Children (child info + staff),
+    // Status (boarding protocol), Profile.
+    //
+    // Children is 2nd (not 3rd) because it now contains bus staff
+    // contact — a common parent need. Status is 3rd because it's
+    // informational, not actionable.
     return [
       AuthorizedTab(
         title: 'Live Bus Tracking',
@@ -350,17 +356,6 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         activeIcon: Icons.map,
       ),
       AuthorizedTab(
-        title: 'Child Boarding Status',
-        screen: const BoardingStatusScreen(),
-        navItem: const BottomNavigationBarItem(
-          icon: Icon(Icons.info_outlined),
-          activeIcon: Icon(Icons.info),
-          label: 'Status',
-        ),
-        icon: Icons.info_outlined,
-        activeIcon: Icons.info,
-      ),
-      AuthorizedTab(
         title: 'My Children',
         screen: const ParentPeopleScreen(),
         navItem: const BottomNavigationBarItem(
@@ -370,6 +365,17 @@ class _MainNavigationShellState extends State<MainNavigationShell>
         ),
         icon: Icons.family_restroom_outlined,
         activeIcon: Icons.family_restroom,
+      ),
+      AuthorizedTab(
+        title: 'Child Boarding Status',
+        screen: const BoardingStatusScreen(),
+        navItem: const BottomNavigationBarItem(
+          icon: Icon(Icons.info_outlined),
+          activeIcon: Icon(Icons.info),
+          label: 'Status',
+        ),
+        icon: Icons.info_outlined,
+        activeIcon: Icons.info,
       ),
       AuthorizedTab(
         title: 'Parent Profile',
