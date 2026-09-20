@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../models/student.dart';
 import '../models/app_notification.dart';
 import '../models/attendance_event.dart';
+import '../models/trip.dart';
 import '../services/firebase_service.dart';
 import '../services/notification_service.dart';
 import 'emergency_sos_sheet.dart';
@@ -103,50 +104,69 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
         .streamActiveTrip(widget.busId)
         .first;
     if (activeTrip != null) {
-      await FirebaseService.instance.recordAttendanceEvent(
-        studentId: student.id,
-        busId: widget.busId,
-        tripId: activeTrip.tripId,
-        status: eventStatus,
-        source: 'manual',
-        correctionReason: correctionReason,
-      );
+      try {
+        await FirebaseService.instance.recordAttendanceEvent(
+          studentId: student.id,
+          busId: widget.busId,
+          tripId: activeTrip.tripId,
+          status: eventStatus,
+          source: 'manual',
+          correctionReason: correctionReason,
+        );
+      } catch (error) {
+        if (mounted) _showAttendanceError(error, student);
+        return;
+      }
     } else {
-      await FirebaseService.instance.updateStudentStatus(
-        widget.busId,
-        student.id,
-        newStatus,
-        stopName: student.stopName,
-      );
+      try {
+        await FirebaseService.instance.updateStudentStatus(
+          widget.busId,
+          student.id,
+          newStatus,
+          stopName: student.stopName,
+        );
+      } catch (error) {
+        if (mounted) _showAttendanceError(error, student);
+        return;
+      }
     }
 
     if (student.parentUid != null && student.parentUid!.isNotEmpty) {
-      await NotificationService.instance.notifyStudentBoarding(
-        studentName: student.name,
-        busId: widget.busId,
-        busNumber: busNumber,
-        stopName: student.stopName,
-        isBoarding: newStatus == StudentStatus.boarded,
-        parentUid: student.parentUid,
-        studentId: student.id,
-      );
+      try {
+        await NotificationService.instance.notifyStudentBoarding(
+          studentName: student.name,
+          busId: widget.busId,
+          busNumber: busNumber,
+          stopName: student.stopName,
+          isBoarding: newStatus == StudentStatus.boarded,
+          parentUid: student.parentUid,
+          studentId: student.id,
+        );
+      } catch (_) {
+        // A failed parent notification must not fail the attendance
+        // record itself. The record is the source of truth.
+      }
     }
 
     final action = newStatus == StudentStatus.boarded ? 'Boarded' : 'Unboarded';
-    await NotificationService.instance.add(
-      kind: newStatus == StudentStatus.boarded
-          ? NotificationKind.boarding
-          : NotificationKind.info,
-      title: '${student.name} $action',
-      message: 'Updated at ${student.stopName} on $busNumber',
-      busId: widget.busId,
-      studentId: student.id,
-      metadata: {
-        'action': action,
-        'status': newStatus.name,
-        'conductor': FirebaseAuth.instance.currentUser?.uid,
-      },
-    );
+    try {
+      await NotificationService.instance.add(
+        kind: newStatus == StudentStatus.boarded
+            ? NotificationKind.boarding
+            : NotificationKind.info,
+        title: '${student.name} $action',
+        message: 'Updated at ${student.stopName} on $busNumber',
+        busId: widget.busId,
+        studentId: student.id,
+        metadata: {
+          'action': action,
+          'status': newStatus.name,
+          'conductor': FirebaseAuth.instance.currentUser?.uid,
+        },
+      );
+    } catch (_) {
+      // Local notification is informational; do not fail the flow.
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -179,6 +199,50 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
         ),
       );
     }
+  }
+
+  /// Shows a specific error message for attendance failures.
+  ///
+  /// The most important case after the Phase 1 rules change is
+  /// `permission-denied`, which now fires when:
+  ///   - the caller is not the assigned Driver/Conductor of this bus,
+  ///   - the student is not on this bus's roster,
+  ///   - the trip is missing, closed, or on a different bus,
+  ///   - the actorUid does not match the signed-in user.
+  ///
+  /// All of these are actionable: they mean a precondition is wrong,
+  /// not a transient network problem. The message tells the conductor
+  /// to check the trip state.
+  void _showAttendanceError(Object error, Student student) {
+    String message;
+    if (error is FirebaseException && error.code == 'permission-denied') {
+      message =
+          'Attendance was rejected. Please check that a trip is active for '
+          'this bus, and that ${student.name} is on this bus\'s roster.';
+    } else {
+      message = 'Could not record attendance for ${student.name}: $error';
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(
+              Icons.error_outline_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: AppColors.errorRed,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
   }
 
   Future<void> _showAttendanceActions(Student student) async {
@@ -216,10 +280,43 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
     final activeTrip = await FirebaseService.instance
         .streamActiveTrip(widget.busId)
         .first;
-    if (activeTrip != null) {
-      for (final student in students.where(
-        (student) => student.status != StudentStatus.boarded,
-      )) {
+
+    if (activeTrip == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'No attendance-eligible trip is active for this bus. '
+                    'Ask the driver to start the trip first.',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.alertOrange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
+    for (final student in students.where(
+      (student) => student.status != StudentStatus.boarded,
+    )) {
+      try {
         await FirebaseService.instance.recordAttendanceEvent(
           studentId: student.id,
           busId: widget.busId,
@@ -227,8 +324,12 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
           status: AttendanceEventStatus.boarded,
           source: 'bulk-confirm',
         );
+      } catch (error) {
+        if (mounted) _showAttendanceError(error, student);
+        return;
       }
     }
+
     await FirebaseService.instance.markAllStudentsStatus(
       widget.busId,
       StudentStatus.boarded,
@@ -241,16 +342,20 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
         ? (busSnapshot.value as Map)['busNumber']?.toString() ?? widget.busId
         : widget.busId;
 
-    await NotificationService.instance.add(
-      kind: NotificationKind.departure,
-      title: 'All Students Boarded - $busNumber',
-      message: 'Manifest confirmed. Route departing now.',
-      busId: widget.busId,
-      metadata: {
-        'totalStudents': students.length,
-        'departureTime': DateTime.now().toIso8601String(),
-      },
-    );
+    try {
+      await NotificationService.instance.add(
+        kind: NotificationKind.departure,
+        title: 'All Students Boarded - $busNumber',
+        message: 'Manifest confirmed. Route departing now.',
+        busId: widget.busId,
+        metadata: {
+          'totalStudents': students.length,
+          'departureTime': DateTime.now().toIso8601String(),
+        },
+      );
+    } catch (_) {
+      // Informational only.
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -296,11 +401,46 @@ class _ManualAttendanceScreenState extends State<ManualAttendanceScreen>
     return filtered;
   }
 
-  void _openSOS() {
+  /// Opens the SOS sheet with the correct actorRole and, when a trip
+  /// is active, its tripId.
+  ///
+  /// Before Phase 1, this method hardcoded 'Conductor' as the actorRole
+  /// and omitted the tripId entirely. On the Driver's "Students" tab,
+  /// a Driver pressing SOS was recorded as a Conductor and the event
+  /// had no trip association. Both are fixed here.
+  Future<void> _openSOS() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    String actorRole = 'Conductor';
+    if (uid != null) {
+      try {
+        final roleSnap =
+            await FirebaseDatabase.instance.ref('users/$uid/role').get();
+        final role = roleSnap.value?.toString();
+        if (role == 'Driver' || role == 'Conductor') {
+          actorRole = role!;
+        }
+      } catch (_) {
+        // Fall through with the default. The SOS must not be blocked
+        // by a role lookup failure.
+      }
+    }
+
+    String? activeTripId;
+    try {
+      final trip = await FirebaseService.instance
+          .streamActiveTrip(widget.busId)
+          .first;
+      activeTripId = trip?.tripId;
+    } catch (_) {
+      // No trip association is acceptable; the SOS still fires.
+    }
+
+    if (!mounted) return;
     EmergencySosSheet.show(
       context,
       busId: widget.busId,
-      actorRole: 'Conductor',
+      tripId: activeTripId,
+      actorRole: actorRole,
     );
   }
 
@@ -789,7 +929,6 @@ class _StudentCard extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
-                    // ── NEW: protocol chip ─────────────────────
                     if (latestEvent != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
@@ -1005,9 +1144,6 @@ class _ProtocolChip extends StatelessWidget {
           icon: Icons.person_pin_circle_rounded,
           color: AppColors.alertOrange,
         );
-      // The remaining statuses already have full visual treatment
-      // elsewhere (avatar ring, boarded-time text, etc.), so we don't
-      // duplicate them here.
       case AttendanceEventStatus.boarded:
       case AttendanceEventStatus.pending:
       case AttendanceEventStatus.notBoarded:

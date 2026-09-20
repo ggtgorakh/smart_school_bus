@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:schoolbus_safe/config/school_config.dart';
 import 'package:schoolbus_safe/screens/login_screen.dart';
 
 void main() {
@@ -10,7 +11,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Smart School Bus'), findsOneWidget);
+    expect(find.text(SchoolConfig.defaults.fullName), findsOneWidget);
     expect(find.text('Sign In'), findsOneWidget);
   });
 

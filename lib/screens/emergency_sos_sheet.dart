@@ -59,6 +59,7 @@ class _EmergencySosSheetState extends State<EmergencySosSheet> {
   double _progress = 0.0;
   bool _isSending = false;
   bool _sent = false;
+  EmergencySosResult? _result;
   String? _error;
 
   String _selectedAlert = 'General emergency';
@@ -109,7 +110,7 @@ class _EmergencySosSheetState extends State<EmergencySosSheet> {
     });
     HapticFeedback.heavyImpact();
     try {
-      await EmergencyService.instance.triggerSOS(
+      final result = await EmergencyService.instance.triggerSOS(
         actorRole: widget.actorRole,
         alertType: _selectedAlert,
         description: _noteController.text.trim().isEmpty
@@ -122,6 +123,7 @@ class _EmergencySosSheetState extends State<EmergencySosSheet> {
       setState(() {
         _isSending = false;
         _sent = true;
+        _result = result;
       });
       HapticFeedback.heavyImpact();
     } catch (e) {
@@ -360,6 +362,9 @@ class _EmergencySosSheetState extends State<EmergencySosSheet> {
   }
 
   Widget _buildSuccess(BuildContext context) {
+    final result = _result;
+    final noAdminReached = result != null && !result.anyAdminReached;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -388,11 +393,52 @@ class _EmergencySosSheetState extends State<EmergencySosSheet> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Dispatch and every Admin on duty have been notified with your '
-          'current location. Stay calm and stay on the line.',
+          noAdminReached
+              ? 'Your SOS has been recorded with your current location. '
+                  'No Admin was reachable in-app — call dispatch directly.'
+              : 'Dispatch and every Admin on duty have been notified with '
+                  'your current location. Stay calm and stay on the line.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium,
         ),
+
+        if (noAdminReached) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.amberSoft,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.alertOrange.withValues(alpha: 0.4),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  color: AppColors.alertOrangeDark,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'No Admin received this alert in the app. '
+                    'If this is a real emergency, use your phone to call '
+                    'the school transport desk or emergency services '
+                    'directly.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: Theme.of(context).colorScheme.onSurface,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         const SizedBox(height: 20),
         OutlinedButton.icon(
           onPressed: () => Navigator.of(context).pop(),

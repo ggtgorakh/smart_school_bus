@@ -14,7 +14,8 @@ import '../services/auth_service.dart';
 import '../services/firebase_service.dart';
 import 'admin/create_user_screen.dart';
 import 'admin/admin_operations_screen.dart';
-
+import 'about_screen.dart' show AboutScreen;
+import 'developers_screen.dart' show DevelopersScreen;
 /// Maximum raw image size (before base64 encoding) accepted for a profile
 /// image. The RTDB rule caps the base64 string at 400,000 characters
 /// (~300 KB binary); we cap the binary at 300 KB here to match.
@@ -117,15 +118,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     _animationController.dispose();
     super.dispose();
   }
-
-  // ============================================================
-  // EDIT PROFILE SHEET
-  //
-  // The sheet is bounded (ConstrainedBox) and scrollable
-  // (SingleChildScrollView) so the on-screen keyboard cannot cause a
-  // RenderFlex overflow. The viewInsets padding is applied outside the
-  // scroll view; the scroll view's own padding is visual margin.
-  // ============================================================
 
   void _openEditNameSheet(
     String currentName,
@@ -646,6 +638,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                                         const SizedBox(height: 16),
                                       ],
                                       _buildEmergencyContacts(context),
+                                      const SizedBox(height: 16),
+                                      _buildAboutTile(context),
+                                      const SizedBox(height: 8),
+                                      _buildDevelopersTile(context),
                                       const SizedBox(height: 20),
                                       _buildSignOutButton(context),
                                     ],
@@ -675,6 +671,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 ],
                                 const SizedBox(height: 16),
                                 _buildEmergencyContacts(context),
+                                const SizedBox(height: 16),
+                                _buildAboutTile(context),
+                                const SizedBox(height: 8),
+                                _buildDevelopersTile(context),
                                 const SizedBox(height: 20),
                                 _buildSignOutButton(context),
                               ],
@@ -689,10 +689,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
     );
   }
-
-  // ============================================================
-  // PROFILE HEADER
-  // ============================================================
 
   Widget _buildProfileHeader(
     BuildContext context,
@@ -1036,10 +1032,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  // ============================================================
-  // STATS ROW
-  // ============================================================
-
   Widget _buildStatsRow(BuildContext context, _ProfileData profile) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -1125,10 +1117,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       ],
     );
   }
-
-  // ============================================================
-  // PERMISSIONS CARD
-  // ============================================================
 
   Widget _buildPermissionsCard(BuildContext context, List<String> scopes) {
     return Container(
@@ -1232,16 +1220,10 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  // ============================================================
-  // ADMIN CARD — theme-aware
-  // ============================================================
-
   Widget _buildAdminCard(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // Light: keep the purple brand identity. Dark: fall back to the
-    // theme primary so the card reads as a surface, not a glowing panel.
     final accent = isDark ? scheme.primary : Colors.purple;
     final cardColor =
         isDark ? scheme.surfaceContainerHigh : AppColors.purpleSoft;
@@ -1379,10 +1361,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  // ============================================================
-  // EMERGENCY CONTACTS
-  // ============================================================
-
   Widget _buildEmergencyContacts(BuildContext context) {
     final cfg = SchoolConfigController.instance.config;
     return Container(
@@ -1507,6 +1485,32 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
     );
   }
+
+  Widget _buildAboutTile(BuildContext context) {
+  return _ContactTile(
+    icon: Icons.info_outline_rounded,
+    iconBg: AppColors.safetyBlue.withValues(alpha: 0.1),
+    iconColor: AppColors.safetyBlue,
+    title: 'About this app',
+    subtitle: 'Purpose, school details, and version',
+    onTap: () => Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AboutScreen()),
+    ),
+  );
+}
+
+Widget _buildDevelopersTile(BuildContext context) {
+  return _ContactTile(
+    icon: Icons.groups_rounded,
+    iconBg: AppColors.successGreen.withValues(alpha: 0.1),
+    iconColor: AppColors.successGreen,
+    title: 'Meet the team',
+    subtitle: 'The five people who built this app',
+    onTap: () => Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DevelopersScreen()),
+    ),
+  );
+}
 
   Future<void> _callNumber(String number) async {
     final clean = number.trim();
@@ -1637,10 +1641,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  // ============================================================
-  // SIGN OUT BUTTON
-  // ============================================================
-
   Widget _buildSignOutButton(BuildContext context) {
     return SizedBox(
       width: double.infinity,
@@ -1664,10 +1664,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 }
-
-// ============================================================
-// CONTACT TILE
-// ============================================================
 
 class _ContactTile extends StatelessWidget {
   final IconData icon;

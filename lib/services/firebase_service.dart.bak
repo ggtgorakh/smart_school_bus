@@ -74,26 +74,7 @@ class FirebaseService {
       return trips;
     });
   }
-
-  /// Returns the bus's currently attendance-eligible trip, or null.
-  ///
-  /// A trip is attendance-eligible when its status is one of
-  /// {preparing, active, paused}. This is derived directly from the
-  /// existing [Trip.canTransition] state machine: scheduled, completed
-  /// and cancelled trips are excluded because no student can legitimately
-  /// board or be marked against them.
-  ///
-  /// Before this change, the method returned the first trip where
-  /// [Trip.isOpen] was true — and `isOpen` includes `scheduled`. That
-  /// meant a conductor could open the attendance screen against a trip
-  /// that had not yet started, and any write would then be rejected by
-  /// the RTDB rules. The tightened filter matches the rules exactly.
-  ///
-  /// Callers that require specifically `active` (for example, GPS
-  /// tracking startup) MUST continue to check `trip.status ==
-  /// TripStatus.active` on the returned trip. This method does not
-  /// guarantee active status — only attendance-eligibility.
-  Stream<Trip?> streamActiveTrip(String busId) {
+Stream<Trip?> streamActiveTrip(String busId) {
     return streamTripsForBus(busId).map((trips) {
       for (final trip in trips) {
         if (trip.status == TripStatus.preparing ||
@@ -105,7 +86,6 @@ class FirebaseService {
       return null;
     });
   }
-
   Future<Trip> createTrip({
     required String busId,
     required String routeId,
@@ -218,7 +198,7 @@ class FirebaseService {
     });
   }
 
-  /// Streams attendance history for one child, read from the parentEvents
+   /// Streams attendance history for one child, read from the parentEvents
   /// index.
   ///
   /// Before Phase 1, this method read all of `/attendanceEvents/$busId`
@@ -292,12 +272,17 @@ class FirebaseService {
         });
       }
 
+      // Subscribe to any new event IDs.
       for (final id in nextIds) {
         if (!currentEventIds.contains(id)) {
           subscribeToEvent(id);
         }
       }
 
+      // Cancel subscriptions for event IDs that disappeared from the
+      // index. In practice this never fires — events are immutable and
+      // the index is write-only — but the logic keeps the stream
+      // correct under any future change that removes an index entry.
       final removed = currentEventIds.difference(nextIds);
       for (final id in removed) {
         eventSubs.remove(id)?.cancel();
@@ -332,7 +317,6 @@ class FirebaseService {
 
     return controller.stream;
   }
-
   /// Records a single attendance event.
   ///
   /// ATOMIC WRITE. The following paths are written together in one RTDB
@@ -370,9 +354,6 @@ class FirebaseService {
       throw StateError('Attendance updates require an authenticated user.');
     }
 
-    // Read the current parentUid so the parentEvents index can be
-    // written under the correct key. A null or empty parentUid means
-    // the student is unlinked; in that case, no index entry is written.
     String? parentUid;
     try {
       final parentSnap = await _root
@@ -384,10 +365,6 @@ class FirebaseService {
         if (trimmed.isNotEmpty) parentUid = trimmed;
       }
     } catch (e) {
-      // A failed read here is treated as "no parent": the event still
-      // records, the parent index entry is simply omitted. The event
-      // stream for staff is unaffected. This is the safer failure mode
-      // than throwing and losing the attendance record.
       debugPrint(
         'FirebaseService.recordAttendanceEvent: parentUid lookup failed '
         'for $busId/$studentId: $e',
@@ -427,8 +404,6 @@ class FirebaseService {
       '$studentPath/boardedAt': boardedAt,
     };
 
-    // Add the parentEvents index entry only when there is a parent to
-    // index against. This is part of the same atomic update.
     if (parentUid != null) {
       updates['parentEvents/$parentUid/$busId/$studentId/$eventId'] = true;
     }
@@ -455,165 +430,7 @@ class FirebaseService {
       rethrow;
     }
     return event;
-  }
-
-  /// One-shot backfill: builds the parentEvents index from existing
-  /// attendanceEvents records.
-  ///
-  /// For every event under /attendanceEvents/$busId/$eventId, this
-  /// method:
-  ///   1. Reads the event to find its studentId.
-  ///   2. Reads /studentRosters/$busId/$studentId/parentUid.
-  ///   3. If the parentUid is non-null and non-empty, writes
-  ///      /parentEvents/$parentUid/$busId/$studentId/$eventId = true.
-  ///
-  /// IDEMPOTENT. Running this method twice has no additional effect —
-  /// writing `true` over `true` is a no-op in RTDB. It is safe to run
-  /// while the app is live: it does not modify or delete
-  /// /attendanceEvents or /studentRosters.
-  ///
-  /// ADMIN-ONLY. The parentEvents write rule requires the caller to be
-  /// an Admin for cross-bus writes. A Driver/Conductor would only be
-  /// able to write entries for their own bus; running this from a
-  /// laptop Admin account covers the whole fleet in one pass.
-  ///
-  /// SKIPS STUDENTS WITHOUT A PARENT. A student with a null or empty
-  /// parentUid produces no index entry. This matches the behaviour of
-  /// recordAttendanceEvent.
-  ///
-  /// Returns a summary of what was done so the caller can display it.
-  Future<ParentEventsRebuildResult> rebuildParentEventsIndex() async {
-    final uid = currentUserUid;
-    if (uid == null) {
-      throw StateError(
-        'rebuildParentEventsIndex requires an authenticated user.',
-      );
-    }
-
-    // Verify the caller is an Admin. The rules would reject the writes
-    // anyway, but failing fast gives a clear error message.
-    final roleSnap = await _root.child('users/$uid/role').get();
-    final role = roleSnap.value?.toString();
-    if (role != 'Admin') {
-      throw StateError(
-        'rebuildParentEventsIndex is Admin-only. '
-        'Current role: ${role ?? "unknown"}.',
-      );
-    }
-
-    int processed = 0;
-    int indexed = 0;
-    int skipped = 0;
-    int failures = 0;
-    final List<String> errorSamples = <String>[];
-
-    // Read the whole roster once so parentUid lookups are local.
-    // Keyed by "$busId/$studentId".
-    final Map<String, String> parentByBusStudent = {};
-    try {
-      final rosterSnap = await _root.child('studentRosters').get();
-      final rosterRaw = rosterSnap.value;
-      if (rosterRaw is Map) {
-        rosterRaw.forEach((busId, studentsOnBus) {
-          if (studentsOnBus is! Map) return;
-          studentsOnBus.forEach((studentId, student) {
-            if (student is! Map) return;
-            final parentUid = student['parentUid']?.toString().trim();
-            if (parentUid != null && parentUid.isNotEmpty) {
-              parentByBusStudent['$busId/$studentId'] = parentUid;
-            }
-          });
-        });
-      }
-    } catch (e) {
-      debugPrint(
-        'FirebaseService.rebuildParentEventsIndex: roster read failed: $e',
-      );
-      rethrow;
-    }
-
-    // Read the whole attendanceEvents tree once. For this project's
-    // scale (10 buses, dozens of students, a few events per day per
-    // student) this is acceptable. If the tree ever grows past a few
-    // megabytes, split this into a per-bus iteration.
-    Map<dynamic, dynamic> attendanceByBus;
-    try {
-      final attendanceSnap = await _root.child('attendanceEvents').get();
-      final raw = attendanceSnap.value;
-      if (raw is! Map) {
-        return const ParentEventsRebuildResult(
-          processed: 0,
-          indexed: 0,
-          skipped: 0,
-          failures: 0,
-          errorSamples: [],
-        );
-      }
-      attendanceByBus = raw;
-    } catch (e) {
-      debugPrint(
-        'FirebaseService.rebuildParentEventsIndex: attendance read failed: $e',
-      );
-      rethrow;
-    }
-
-    for (final busEntry in attendanceByBus.entries) {
-      final busId = busEntry.key.toString();
-      final eventsOnBus = busEntry.value;
-      if (eventsOnBus is! Map) continue;
-
-      for (final eventEntry in eventsOnBus.entries) {
-        final eventId = eventEntry.key.toString();
-        final eventValue = eventEntry.value;
-        if (eventValue is! Map) continue;
-
-        processed++;
-        final studentId = eventValue['studentId']?.toString().trim();
-        if (studentId == null || studentId.isEmpty) {
-          skipped++;
-          continue;
-        }
-
-        final parentUid = parentByBusStudent['$busId/$studentId'];
-        if (parentUid == null) {
-          // Student has no linked parent, or the roster entry is gone.
-          skipped++;
-          continue;
-        }
-
-        try {
-          await _root
-              .child('parentEvents/$parentUid/$busId/$studentId/$eventId')
-              .set(true);
-          indexed++;
-        } catch (e) {
-          failures++;
-          if (errorSamples.length < 5) {
-            errorSamples.add('$busId/$studentId/$eventId: $e');
-          }
-          debugPrint(
-            'FirebaseService.rebuildParentEventsIndex: write failed for '
-            '$busId/$studentId/$eventId: $e',
-          );
-        }
-      }
-    }
-
-    debugPrint(
-      'FirebaseService.rebuildParentEventsIndex: processed=$processed '
-      'indexed=$indexed skipped=$skipped failures=$failures',
-    );
-
-    return ParentEventsRebuildResult(
-      processed: processed,
-      indexed: indexed,
-      skipped: skipped,
-      failures: failures,
-      errorSamples: errorSamples,
-    );
-  }
-
-  /// Returns the most recent event for a given student on a given bus.
+  } /// Returns the most recent event for a given student on a given bus.
   ///
   /// Used by the parent-facing protocol UI to know which state to render
   /// (coming / reached / picked / leaved / atStop / boarded / ...).
@@ -688,6 +505,7 @@ class FirebaseService {
       return latest;
     });
   }
+
 
   bool _shouldQueueWrite(Object error) {
     if (error is! FirebaseException) return true;
@@ -964,6 +782,7 @@ class FirebaseService {
     StreamSubscription<DatabaseEvent>? fleetSub;
     StreamSubscription<DatabaseEvent>? busesSub;
 
+    // Local cache so we don't rebuild from scratch on every emission.
     Set<String> assignedBusIds = <String>{};
     Map<String, BusLocation> allLocations = <String, BusLocation>{};
 
@@ -1756,32 +1575,4 @@ class FirebaseService {
       'driverPhone': phone.trim().isEmpty ? null : phone.trim(),
     });
   }
-}
-
-/// Summary of a rebuildParentEventsIndex run.
-class ParentEventsRebuildResult {
-  /// Total number of attendance events inspected.
-  final int processed;
-
-  /// Number of parentEvents entries written.
-  final int indexed;
-
-  /// Number of events skipped (no studentId, or student has no parent).
-  final int skipped;
-
-  /// Number of write failures.
-  final int failures;
-
-  /// Up to 5 sample error messages, for display.
-  final List<String> errorSamples;
-
-  const ParentEventsRebuildResult({
-    required this.processed,
-    required this.indexed,
-    required this.skipped,
-    required this.failures,
-    required this.errorSamples,
-  });
-
-  bool get hasFailures => failures > 0;
 }

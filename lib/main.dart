@@ -147,8 +147,16 @@ class _RoleResolutionShellState extends State<RoleResolutionShell> {
     await SessionService.instance.saveBusId(freshBusId);
 
     if (freshRole == 'Admin') {
-      // ignore: discarded_futures
-      EmergencyService.instance.registerAdminIndex(widget.user.uid);
+      // Best-effort registration. If it fails, the Admin will not
+      // receive SOS notifications until next launch, but sign-in
+      // must not be blocked by an index write.
+      try {
+        await EmergencyService.instance.registerAdminIndex(widget.user.uid);
+      } catch (e) {
+        debugPrint(
+          'RoleResolutionShell: admin index registration failed: $e',
+        );
+      }
     }
 
     if (mounted) {
@@ -160,12 +168,29 @@ class _RoleResolutionShellState extends State<RoleResolutionShell> {
     }
   }
 
+  /// Signs out the current user.
+  ///
+  /// Before signing out, if this user is an Admin, the Admin is
+  /// removed from /adminIndex. This is done BEFORE signOut so the
+  /// rule that requires role === 'Admin' still matches (the rule
+  /// checks the caller's role, which is only readable while signed in).
+  ///
+  /// If the unregister write fails (network, permissions), we log it
+  /// and continue with sign-out. A blocked sign-out is worse than a
+  /// stale adminIndex entry, which the SOS flow treats as best-effort.
   Future<void> _handleSignOut() async {
     final uid = widget.user.uid;
+
     await NotificationService.instance.clearAll();
+
     try {
       await EmergencyService.instance.unregisterAdminIndex(uid);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint(
+        'RoleResolutionShell: admin index unregister failed on sign-out: $e',
+      );
+    }
+
     await AuthService.instance.signOut();
     await SessionService.instance.clearSession();
   }

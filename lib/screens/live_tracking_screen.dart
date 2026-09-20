@@ -148,7 +148,7 @@ class _LiveTrackingScreenState extends State<LiveTrackingScreen>
         if (statusChanged && oldStatus != null) {
           await NotificationService.instance.notifyBusStatusChange(
             busId: widget.busId,
-            busNumber: location.busNumber,
+            busNumber: widget.busId.toUpperCase(),
             oldStatus: oldStatus.name,
             newStatus: location.status.name,
             stopLabel: location.currentStopLabel,

@@ -1,9 +1,10 @@
 // lib/screens/parent_attendance_history_screen.dart
 //
 // Read-only attendance history for one child, as required by SRS §10.7.
-// Parents are permitted to read /attendanceEvents/{busId}/{eventId}
-// records for their own children (see RTDB rules). No write UI exists.
+// Parents read the parentEvents index for their own children, which in
+// turn points at attendanceEvents records. No write UI exists here.
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/attendance_event.dart';
@@ -46,10 +47,24 @@ class _ParentAttendanceHistoryScreenState
       );
     }
 
+    final parentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (parentUid == null) {
+      return _scaffold(
+        context,
+        child: const _Empty(
+          icon: Icons.lock_outline_rounded,
+          title: 'Please sign in',
+          message:
+              'Attendance history requires a signed-in parent account.',
+        ),
+      );
+    }
+
     return _scaffold(
       context,
       child: StreamBuilder<List<AttendanceEvent>>(
         stream: FirebaseService.instance.streamAttendanceHistoryForParent(
+          parentUid: parentUid,
           busId: busId,
           studentId: widget.child.id,
         ),
@@ -470,12 +485,13 @@ class _ParentAttendanceHistoryScreenState
         return 'Recorded by conductor';
       case 'bulk-confirm':
         return 'Bulk confirmed';
-      case 'scan':
+      case 'auto':
         return 'Auto-recorded';
       default:
         return source;
     }
   }
+
   _StatusMeta _statusMeta(AttendanceEventStatus status) {
     switch (status) {
       case AttendanceEventStatus.boarded:
@@ -537,10 +553,10 @@ class _ParentAttendanceHistoryScreenState
           color: AppColors.alertOrange,
           icon: Icons.person_pin_circle_rounded,
         );
-
-    }
     }
   }
+}
+
 class _StatusMeta {
   final String label;
   final Color color;

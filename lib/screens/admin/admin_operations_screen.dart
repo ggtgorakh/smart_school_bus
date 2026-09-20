@@ -65,6 +65,12 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
         actions: [
           if (_laptop)
             IconButton(
+              tooltip: 'Rebuild parent attendance index',
+              icon: const Icon(Icons.sync_rounded),
+              onPressed: _confirmRebuildParentEvents,
+            ),
+          if (_laptop)
+            IconButton(
               tooltip: 'Add account',
               icon: const Icon(Icons.person_add_alt_1_rounded),
               onPressed: () => Navigator.of(context).push(
@@ -572,6 +578,233 @@ class _AdminOperationsScreenState extends State<AdminOperationsScreen> {
       uid: user.uid,
       name: name,
       phone: phone,
+    );
+  }
+
+  /// Rebuilds the parentEvents index from existing attendanceEvents
+  /// records. Admin-only. Idempotent. Safe to run while the app is
+  /// live — it only writes index entries, never modifies or deletes
+  /// attendance records or student data.
+  Future<void> _confirmRebuildParentEvents() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.sync_rounded, color: AppColors.safetyBlue),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Rebuild parent attendance index?',
+                style: TextStyle(fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+          'This scans every existing attendance event and writes a '
+          'matching index entry under each child\'s parent. It is safe '
+          'to run more than once. It does not modify or delete any '
+          'attendance records or student data.\n\n'
+          'Run this once after the parent-facing history update has been '
+          'deployed, so existing events become visible to parents.',
+          style: TextStyle(fontSize: 13.5, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            icon: const Icon(Icons.check_rounded, size: 18),
+            label: const Text('Rebuild'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.safetyBlue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Show a persistent, non-dismissible progress indicator while the
+    // rebuild runs. The operation is a few seconds at this scale, but
+    // could be longer if the attendance tree is large.
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: AppColors.safetyBlue,
+                  ),
+                ),
+                SizedBox(width: 16),
+                Text(
+                  'Rebuilding index…',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final result =
+          await FirebaseService.instance.rebuildParentEventsIndex();
+
+      // Close the progress dialog.
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+
+      if (!mounted) return;
+      _showRebuildResult(result);
+    } catch (error) {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: Text('Rebuild failed: $error')),
+            ],
+          ),
+          backgroundColor: AppColors.errorRed,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Shows the summary dialog after a rebuild completes.
+  void _showRebuildResult(ParentEventsRebuildResult result) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              result.hasFailures
+                  ? Icons.warning_amber_rounded
+                  : Icons.check_circle_rounded,
+              color: result.hasFailures
+                  ? AppColors.alertOrangeDark
+                  : AppColors.successGreen,
+            ),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Rebuild complete',
+                style: TextStyle(fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _resultRow('Events inspected', '${result.processed}'),
+              _resultRow('Index entries written', '${result.indexed}'),
+              _resultRow('Skipped (no parent)', '${result.skipped}'),
+              _resultRow(
+                'Failed writes',
+                '${result.failures}',
+                color: result.failures > 0
+                    ? AppColors.errorRed
+                    : AppColors.successGreen,
+              ),
+              if (result.errorSamples.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Sample errors:',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ...result.errorSamples.map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      '• $e',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.errorRed,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _resultRow(String label, String value, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w700,
+              color: color ??
+                  Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

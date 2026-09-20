@@ -13,6 +13,15 @@
 // Admin set without needing elevated privileges.
 //
 // The index is kept in sync by main.dart (RoleResolutionShell).
+//
+// IMPORTANT (Phase 1): the SOS-to-Admin notification path is NOT YET
+// enabled in the RTDB rules. The current notification rule requires the
+// target Admin to have a `busId` matching the sender's, which Admins do
+// not have. That rule change is scheduled for a later Phase 1 step
+// (Change 12). Until then, SOS fan-out will write to /emergencyEvents
+// and to /adminIndex, but the notification records for Admins will be
+// rejected by the rules, and adminsNotified will be 0. This is
+// surfaced to the sender so they know to call dispatch directly.
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -22,6 +31,26 @@ import 'package:geolocator/geolocator.dart';
 import '../models/app_notification.dart';
 import '../models/emergency_event.dart';
 import 'notification_service.dart';
+
+/// Result of a triggerSOS call.
+///
+/// [eventId] is always populated (the event record is written first).
+/// [adminsNotified] is the count of Admin UIDs that received the SOS
+/// notification successfully. If it is 0, the sender's UI should warn
+/// the user that no Admin was reachable in-app.
+class EmergencySosResult {
+  final String eventId;
+  final int adminsNotified;
+  final int adminsAttempted;
+
+  const EmergencySosResult({
+    required this.eventId,
+    required this.adminsNotified,
+    required this.adminsAttempted,
+  });
+
+  bool get anyAdminReached => adminsNotified > 0;
+}
 
 class EmergencyService {
   EmergencyService._();
@@ -72,15 +101,16 @@ class EmergencyService {
 
   // ─── Trigger SOS ─────────────────────────────────────────────
 
-  /// Triggers an emergency. Returns the created event's ID.
+  /// Triggers an emergency. Returns an [EmergencySosResult] with the
+  /// created event's ID and the number of Admins reached.
   ///
   /// Order of operations (best-effort; each step is independently
   /// try/caught so a failure later does not block earlier steps):
   ///   1. Capture the current GPS fix (short timeout; may be null).
-  ///   2. Write /emergencyEvents/{eventId}.
+  ///   2. Write /emergencyEvents/{eventId} with a server timestamp.
   ///   3. Send an in-app notification to the caller.
   ///   4. Fan out the same notification to every Admin UID.
-  Future<String> triggerSOS({
+  Future<EmergencySosResult> triggerSOS({
     required String actorRole,
     required String alertType,
     String? description,
@@ -114,6 +144,12 @@ class EmergencyService {
     if (eventId == null) {
       throw StateError('Unable to allocate an emergency event ID.');
     }
+
+    // Local time is used only for the in-memory EmergencyEvent object
+    // and for immediate display. The persisted `timestamp` field uses
+    // ServerValue.timestamp so that the audit record is server-trusted
+    // and consistent across devices.
+    final localNow = DateTime.now();
     final event = EmergencyEvent(
       eventId: eventId,
       actorUid: uid,
@@ -125,11 +161,14 @@ class EmergencyService {
       alertType: alertType,
       description: description,
       status: EmergencyStatus.active,
-      timestamp: DateTime.now(),
+      timestamp: localNow,
     );
 
+    final persistedMap = event.toMap();
+    persistedMap['timestamp'] = ServerValue.timestamp;
+
     try {
-      await ref.set(event.toMap());
+      await ref.set(persistedMap);
     } catch (error) {
       debugPrint('EmergencyService: event write failed: $error');
       // Continue — the notification is more urgent than the record.
@@ -155,6 +194,7 @@ class EmergencyService {
 
     // 4. Fan out to every Admin.
     final adminUids = await _fetchAdminUids();
+    int adminsNotified = 0;
     for (final adminUid in adminUids) {
       if (adminUid == uid) continue; // don't double-notify a self-Admin
       try {
@@ -173,6 +213,7 @@ class EmergencyService {
             'lng': lng,
           },
         );
+        adminsNotified++;
       } catch (error) {
         debugPrint('EmergencyService: admin notify $adminUid failed: $error');
       }
@@ -181,11 +222,15 @@ class EmergencyService {
     if (kDebugMode) {
       debugPrint(
         'EmergencyService: SOS $eventId triggered by $uid '
-        '(${adminUids.length} admins notified)',
+        '($adminsNotified of ${adminUids.length} admins notified)',
       );
     }
 
-    return eventId;
+    return EmergencySosResult(
+      eventId: eventId,
+      adminsNotified: adminsNotified,
+      adminsAttempted: adminUids.length,
+    );
   }
 
   // ─── Admin: acknowledge / resolve ─────────────────────────────
@@ -198,7 +243,7 @@ class EmergencyService {
     try {
       await _root.child('emergencyEvents/$eventId').update({
         'status': EmergencyStatus.acknowledged.name,
-        'acknowledgedAt': DateTime.now().millisecondsSinceEpoch,
+        'acknowledgedAt': ServerValue.timestamp,
         'acknowledgedByUid': uid,
       });
     } catch (error) {
@@ -216,7 +261,7 @@ class EmergencyService {
     try {
       await _root.child('emergencyEvents/$eventId').update({
         'status': EmergencyStatus.resolved.name,
-        'resolvedAt': DateTime.now().millisecondsSinceEpoch,
+        'resolvedAt': ServerValue.timestamp,
         'resolvedByUid': uid,
         'resolutionNote': resolutionNote.trim(),
       });
